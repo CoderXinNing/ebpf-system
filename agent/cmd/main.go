@@ -100,7 +100,6 @@ func (a *Agent) loadProbe(cmd *pb.ProbeCommand) error {
 		probeID := cmd.ProbeId
 		probeName := cmd.ProbeName
 		probe, err := loader.LoadExecMonitor(cmd.ProbeName, func(event loader.ExecEvent) {
-			// 放入上报队列
 			a.eventQueue <- &pb.ProbeEvent{
 				ProbeId:   probeID,
 				ProbeName: probeName,
@@ -115,6 +114,7 @@ func (a *Agent) loadProbe(cmd *pb.ProbeCommand) error {
 			return err
 		}
 		a.probes[cmd.ProbeId] = probe
+		log.Printf("✅ 探针已加载: %s", cmd.ProbeName)
 	default:
 		return fmt.Errorf("未知探针: %s", cmd.ProbeName)
 	}
@@ -131,6 +131,7 @@ func (a *Agent) unloadProbe(probeID string) error {
 	}
 	probe.Stop()
 	delete(a.probes, probeID)
+	log.Printf("✅ 探针已卸载: %s", probeID)
 	return nil
 }
 
@@ -144,7 +145,6 @@ func (a *Agent) activeProbeCount() int32 {
 func (a *Agent) eventReporter() {
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
-
 	batch := make([]*pb.ProbeEvent, 0, 100)
 
 	for {
@@ -168,18 +168,13 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 	if a.client == nil || a.token == "" {
 		return
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	_, err := a.client.ReportEvents(ctx, &pb.EventReport{
+	a.client.ReportEvents(ctx, &pb.EventReport{
 		AgentId:    a.id,
 		AgentToken: a.token,
 		Events:     events,
 	})
-	if err != nil {
-		log.Printf("⚠️ 上报事件失败: %v", err)
-	}
 }
 
 func (a *Agent) buildRegisterRequest() *pb.RegisterRequest {
@@ -222,41 +217,66 @@ func (a *Agent) Register() error {
 	return nil
 }
 
+// HeartbeatLoop 保持一个长连接心跳流
 func (a *Agent) HeartbeatLoop() {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		resp, err := a.client.Heartbeat(ctx)
+	for {
+		ctx := context.Background()
+		stream, err := a.client.Heartbeat(ctx)
 		if err != nil {
-			log.Printf("⚠️ 心跳失败: %v", err)
-			cancel()
+			log.Printf("⚠️ 心跳流建立失败: %v，%d秒后重试", err, int(retryDelay.Seconds()))
+			time.Sleep(retryDelay)
 			continue
 		}
-		resp.Send(&pb.HeartbeatRequest{
-			AgentId:      a.id,
-			AgentToken:   a.token,
-			Timestamp:    time.Now().Unix(),
-			ActiveProbes: a.activeProbeCount(),
-		})
-		resp.CloseSend()
-		cancel()
+
+		log.Println("💓 心跳流已建立")
+
+		// 发送心跳的goroutine
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for range ticker.C {
+				err := stream.Send(&pb.HeartbeatRequest{
+					AgentId:      a.id,
+					AgentToken:   a.token,
+					Timestamp:    time.Now().Unix(),
+					ActiveProbes: a.activeProbeCount(),
+				})
+				if err != nil {
+					log.Printf("⚠️ 发送心跳失败: %v", err)
+					return
+				}
+			}
+		}()
+
+		// 接收指令
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				log.Printf("⚠️ 心跳流断开: %v，%d秒后重连", err, int(retryDelay.Seconds()))
+				time.Sleep(retryDelay)
+				break
+			}
+			if resp.Success && len(resp.Commands) > 0 {
+				for _, cmd := range resp.Commands {
+					a.handleCommand(cmd)
+				}
+			}
+		}
 	}
 }
 
 func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 	switch cmd.Type {
 	case pb.ProbeCommand_LOAD:
-		log.Printf("📥 加载指令: %s", cmd.ProbeName)
+		log.Printf("📥 收到加载指令: %s (%s)", cmd.ProbeName, cmd.ProbeId)
 		if err := a.loadProbe(cmd); err != nil {
-			log.Printf("❌ 失败: %v", err)
-		} else {
-			log.Printf("✅ 成功: %s", cmd.ProbeName)
+			log.Printf("❌ 加载失败: %v", err)
 		}
 	case pb.ProbeCommand_UNLOAD:
-		log.Printf("📤 卸载: %s", cmd.ProbeId)
-		a.unloadProbe(cmd.ProbeId)
+		log.Printf("📤 收到卸载指令: %s", cmd.ProbeId)
+		if err := a.unloadProbe(cmd.ProbeId); err != nil {
+			log.Printf("❌ 卸载失败: %v", err)
+		}
 	}
 }
 
@@ -307,9 +327,7 @@ func (a *Agent) Start() {
 		break
 	}
 
-	// 启动事件上报
 	go a.eventReporter()
-
 	a.HeartbeatLoop()
 }
 

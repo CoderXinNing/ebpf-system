@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -25,6 +26,7 @@ type AgentInfo struct {
 	FirstSeen    int64             `json:"first_seen"`
 	Framework    *pb.FrameworkInfo `json:"framework"`
 	KernelInfo   *pb.KernelInfo    `json:"kernel_info"`
+	Commands     []*pb.ProbeCommand `json:"-"`
 }
 
 type ProbeEvent struct {
@@ -66,154 +68,153 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 	defer s.mu.Unlock()
 
 	now := time.Now().Unix()
-
 	if existing, exists := s.agents[req.AgentId]; exists {
 		existing.IPAddr = req.IpAddress
 		existing.LastSeen = now
-		if req.Framework != nil {
-			existing.Framework = req.Framework
-		}
-		if req.KernelInfo != nil {
-			existing.KernelInfo = req.KernelInfo
-		}
-		return &pb.RegisterResponse{
-			Success:    true,
-			Message:    "已更新",
-			AgentToken: existing.Token,
-		}, nil
+		if req.Framework != nil { existing.Framework = req.Framework }
+		if req.KernelInfo != nil { existing.KernelInfo = req.KernelInfo }
+		return &pb.RegisterResponse{Success: true, Message: "已更新", AgentToken: existing.Token}, nil
 	}
 
 	token := generateToken()
 	s.agents[req.AgentId] = &AgentInfo{
-		ID:        req.AgentId,
-		Hostname:  req.Hostname,
-		IPAddr:    req.IpAddress,
-		Token:     token,
-		FirstSeen: now,
-		LastSeen:  now,
-		Framework: req.Framework,
-		KernelInfo: req.KernelInfo,
+		ID: req.AgentId, Hostname: req.Hostname, IPAddr: req.IpAddress,
+		Token: token, FirstSeen: now, LastSeen: now,
+		Framework: req.Framework, KernelInfo: req.KernelInfo,
+		Commands: make([]*pb.ProbeCommand, 0),
 	}
-
 	log.Printf("✅ Agent注册: %s (%s)", req.Hostname, req.IpAddress)
-	return &pb.RegisterResponse{
-		Success:    true,
-		Message:    "注册成功",
-		AgentToken: token,
-	}, nil
+	return &pb.RegisterResponse{Success: true, Message: "注册成功", AgentToken: token}, nil
 }
 
 func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
-	for {
-		req, err := stream.Recv()
-		if err != nil {
-			return err
-		}
+	// 第一条消息认证
+	req, err := stream.Recv()
+	if err != nil {
+		return err
+	}
 
-		s.mu.Lock()
-		agent, exists := s.agents[req.AgentId]
-		if exists && agent.Token == req.AgentToken {
-			agent.ActiveProbes = req.ActiveProbes
-			agent.LastSeen = req.Timestamp
+	s.mu.Lock()
+	agent, exists := s.agents[req.AgentId]
+	if !exists || agent.Token != req.AgentToken {
+		s.mu.Unlock()
+		stream.Send(&pb.HeartbeatResponse{Success: false})
+		return fmt.Errorf("认证失败")
+	}
+	agent.LastSeen = req.Timestamp
+	agent.ActiveProbes = req.ActiveProbes
+	agentID := req.AgentId
+	s.mu.Unlock()
+
+	log.Printf("💓 心跳流建立: %s", agentID)
+
+	// 后台接收后续心跳
+	go func() {
+		for {
+			req, err := stream.Recv()
+			if err != nil {
+				return
+			}
+			s.mu.Lock()
+			if a, ok := s.agents[req.AgentId]; ok {
+				a.LastSeen = req.Timestamp
+				a.ActiveProbes = req.ActiveProbes
+			}
+			s.mu.Unlock()
 		}
+	}()
+
+	// 定期检查指令
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.mu.Lock()
+		cmds := agent.Commands
+		agent.Commands = make([]*pb.ProbeCommand, 0)
 		s.mu.Unlock()
 
-		if !exists {
-			continue
+		if len(cmds) > 0 {
+			if err := stream.Send(&pb.HeartbeatResponse{Success: true, Commands: cmds}); err != nil {
+				return err
+			}
+			log.Printf("📤 下发指令: %s (%d条)", agentID, len(cmds))
 		}
-
-		stream.Send(&pb.HeartbeatResponse{Success: true})
-		log.Printf("💓 心跳: %s (探针: %d)", req.AgentId, req.ActiveProbes)
 	}
+	return nil
 }
 
-// ReportEvents Agent上报探针事件
 func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.HeartbeatResponse, error) {
 	s.eventMu.Lock()
 	defer s.eventMu.Unlock()
-
 	for _, evt := range req.Events {
-		event := ProbeEvent{
-			ID:        hex.EncodeToString(make([]byte, 8)),
-			AgentID:   req.AgentId,
-			ProbeID:   evt.ProbeId,
-			ProbeName: evt.ProbeName,
-			Timestamp: evt.Timestamp,
-			EventType: evt.EventType,
-			PID:       evt.Pid,
-			Comm:      evt.Comm,
-			Filename:  evt.Filename,
-			Details:   evt.Details,
-		}
-		// 生成随机ID
 		b := make([]byte, 8)
 		rand.Read(b)
-		event.ID = hex.EncodeToString(b)
-
-		s.events = append(s.events, event)
-
-		log.Printf("📩 [%s] %s PID=%d COMM=%s FILE=%s",
-			req.AgentId, evt.ProbeName, evt.Pid, evt.Comm, evt.Filename)
-
-		// 限制最多存10000条
-		if len(s.events) > 10000 {
-			s.events = s.events[len(s.events)-1000:]
-		}
+		s.events = append(s.events, ProbeEvent{
+			ID: hex.EncodeToString(b), AgentID: req.AgentId,
+			ProbeID: evt.ProbeId, ProbeName: evt.ProbeName,
+			Timestamp: evt.Timestamp, EventType: evt.EventType,
+			PID: evt.Pid, Comm: trimNull(evt.Comm),
+			Filename: trimNull(evt.Filename), Details: evt.Details,
+		})
+		if len(s.events) > 10000 { s.events = s.events[len(s.events)-1000:] }
 	}
-
 	return &pb.HeartbeatResponse{Success: true}, nil
 }
 
-// === HTTP API ===
+func (s *Server) sendCommand(agentID string, cmd *pb.ProbeCommand) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	agent, exists := s.agents[agentID]
+	if !exists { keys := make([]string, 0, len(s.agents)); for k := range s.agents { keys = append(keys, k) }; return fmt.Errorf("Agent不存在: %s, 已知: %v", agentID, keys) }
+	agent.Commands = append(agent.Commands, cmd)
+	log.Printf("📋 指令已排队: %s -> %s (%s)", agentID, cmd.ProbeName, cmd.Type)
+	return nil
+}
+
+func trimNull(s string) string {
+	for i, c := range s { if c == 0 { return s[:i] } }
+	return s
+}
 
 func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
+	s.mu.RLock(); defer s.mu.RUnlock()
 	agents := make([]AgentInfo, 0, len(s.agents))
-	for _, a := range s.agents {
-		agents = append(agents, *a)
-	}
-
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"total":  len(agents),
-		"agents": agents,
-	})
+	for _, a := range s.agents { agents = append(agents, *a) }
+	json.NewEncoder(w).Encode(map[string]interface{}{"total": len(agents), "agents": agents})
 }
 
 func (s *Server) handleGetEvents(w http.ResponseWriter, r *http.Request) {
-	s.eventMu.RLock()
-	defer s.eventMu.RUnlock()
-
-	limit := 100
-	events := s.events
-	if len(events) > limit {
-		events = events[len(events)-limit:]
-	}
-
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"total":  len(s.events),
-		"events": events,
-	})
+	s.eventMu.RLock(); defer s.eventMu.RUnlock()
+	limit := 100; events := s.events
+	if len(events) > limit { events = events[len(events)-limit:] }
+	json.NewEncoder(w).Encode(map[string]interface{}{"total": len(s.events), "events": events})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.RLock(); defer s.mu.RUnlock()
+	now := time.Now().Unix(); online := 0
+	for _, a := range s.agents { if now-a.LastSeen < 30 { online++ } }
+	json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "online": online, "total": len(s.agents)})
+}
 
-	now := time.Now().Unix()
-	online := 0
-	for _, a := range s.agents {
-		if now-a.LastSeen < 30 {
-			online++
-		}
+func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" { http.Error(w, "only POST", http.StatusMethodNotAllowed); return }
+	var req struct {
+		AgentID string `json:"agent_id"`; ProbeID string `json:"probe_id"`; ProbeName string `json:"probe_name"`; Action string `json:"action"`
 	}
-
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "ok",
-		"online":  online,
-		"total":   len(s.agents),
-	})
+	json.NewDecoder(r.Body).Decode(&req)
+	var cmdType pb.ProbeCommand_CommandType
+	switch req.Action {
+	case "load": cmdType = pb.ProbeCommand_LOAD
+	case "unload": cmdType = pb.ProbeCommand_UNLOAD
+	default: json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "action must be load or unload"}); return
+	}
+	cmd := &pb.ProbeCommand{Type: cmdType, ProbeId: req.ProbeID, ProbeName: req.ProbeName}
+	if err := s.sendCommand(req.AgentID, cmd); err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": err.Error()}); return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "指令已排队"})
 }
 
 func (s *Server) startHTTP(addr string) {
@@ -221,32 +222,16 @@ func (s *Server) startHTTP(addr string) {
 	mux.HandleFunc("/api/agents", s.handleListAgents)
 	mux.HandleFunc("/api/events", s.handleGetEvents)
 	mux.HandleFunc("/api/health", s.handleHealth)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{
-			"service":   "eBPF Sentinel Server",
-			"endpoints": "/api/agents | /api/events | /api/health",
-		})
-	})
-
+	mux.HandleFunc("/api/command", s.handleCommand)
 	log.Printf("🌐 HTTP API: %s", addr)
 	http.ListenAndServe(addr, mux)
 }
 
 func main() {
-	lis, err := net.Listen("tcp", ":50051")
-	if err != nil {
-		log.Fatalf("监听失败: %v", err)
-	}
-
+	lis, _ := net.Listen("tcp", ":50051")
 	server := NewServer()
-
 	grpcServer := grpc.NewServer()
 	pb.RegisterSentinelServer(grpcServer, server)
-
-	go func() {
-		log.Println("🛡️  gRPC Server :50051")
-		grpcServer.Serve(lis)
-	}()
-
+	go func() { log.Println("🛡️  gRPC :50051"); grpcServer.Serve(lis) }()
 	server.startHTTP(":8080")
 }
