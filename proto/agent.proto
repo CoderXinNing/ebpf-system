@@ -20,35 +20,21 @@ message RegisterResponse {
 }
 
 message FrameworkInfo {
-    bool bcc_available = 1;
-    string bcc_version = 2;
-    bool python_bcc_available = 3;
-    bool libbpf_available = 4;
-    string libbpf_version = 5;
-    bool libbpf_core = 6;
-    bool bpftrace_available = 7;
-    string bpftrace_version = 8;
-    bool clang_available = 9;
-    string clang_version = 10;
-    bool llvm_available = 11;
-    string llvm_version = 12;
-    bool kernel_headers_available = 13;
-    bool go_ebpf_available = 14;
+    bool bcc_available = 1; string bcc_version = 2; bool python_bcc_available = 3;
+    bool libbpf_available = 4; string libbpf_version = 5; bool libbpf_core = 6;
+    bool bpftrace_available = 7; string bpftrace_version = 8;
+    bool clang_available = 9; string clang_version = 10;
+    bool llvm_available = 11; string llvm_version = 12;
+    bool kernel_headers_available = 13; bool go_ebpf_available = 14;
 }
 
 message KernelInfo {
-    string version = 1;
-    string arch = 2;
-    bool btf_enabled = 3;
+    string version = 1; string arch = 2; bool btf_enabled = 3;
 }
 
 message HeartbeatRequest {
-    string agent_id = 1;
-    string agent_token = 2;
-    int64 timestamp = 3;
-    int32 active_probes = 4;
-    double cpu_percent = 5;
-    int64 mem_bytes = 6;
+    string agent_id = 1; string agent_token = 2;
+    int64 timestamp = 3; int32 active_probes = 4;
 }
 
 message HeartbeatResponse {
@@ -58,32 +44,23 @@ message HeartbeatResponse {
 
 message ProbeCommand {
     enum CommandType {
-        LOAD = 0;
-        UNLOAD = 1;
-        UPDATE = 2;
+        LOAD = 0; UNLOAD = 1; RELOAD = 3; INSTALL = 4;
     }
     CommandType type = 1;
     string probe_id = 2;
     string probe_name = 3;
-    bytes probe_data = 4;
-    repeated string config_keys = 5;
-    repeated string config_values = 6;
+    bytes probe_data = 4;      // probe.bpf.o 内容
+    string probe_config = 5;   // probe.yaml 内容
 }
 
 message ProbeEvent {
-    string probe_id = 1;
-    string probe_name = 2;
-    int64 timestamp = 3;
-    string event_type = 4;
-    int32 pid = 5;
-    string comm = 6;
-    string filename = 7;
-    string details = 8;
+    string probe_id = 1; string probe_name = 2;
+    int64 timestamp = 3; string event_type = 4;
+    int32 pid = 5; string comm = 6; string filename = 7; string details = 8;
 }
 
 message EventReport {
-    string agent_id = 1;
-    string agent_token = 2;
+    string agent_id = 1; string agent_token = 2;
     repeated ProbeEvent events = 3;
 }
 

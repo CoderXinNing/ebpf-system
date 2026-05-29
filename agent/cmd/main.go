@@ -3,20 +3,19 @@ package main
 import (
 	"context"
 	"crypto/md5"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/guardian"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/loader"
-	"github.com/CoderXinNing/ebpf-system/agent/internal/loader/registry"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 	"google.golang.org/grpc"
@@ -26,12 +25,9 @@ import (
 var (
 	configPath = flag.String("config", "agent/configs/agent.yaml", "配置文件路径")
 	genConfig  = flag.Bool("gen-config", false, "生成默认配置文件")
-	listProbes = flag.Bool("list-probes", false, "列出所有可用探针")
 )
 
-func getHostname() string {
-	name, _ := os.Hostname(); return name
-}
+func getHostname() string { name, _ := os.Hostname(); return name }
 func getIPAddress() string {
 	conn, _ := net.Dial("udp", "8.8.8.8:80")
 	if conn != nil { defer conn.Close(); return conn.LocalAddr().(*net.UDPAddr).IP.String() }
@@ -44,14 +40,13 @@ func generateAgentID(hostname string) string {
 
 type Agent struct {
 	id, hostname, kernelVer, ipAddr, token string
-	cfg        *config.AgentConfig
+	cfg          *config.AgentConfig
 	capabilities *probe.AgentCapabilities
-	guardian   *guardian.Guardian
-	probes     map[string]registry.ProbeInstance
-	probesMu   sync.RWMutex
-	eventQueue chan *pb.ProbeEvent
-	conn       *grpc.ClientConn
-	client     pb.SentinelClient
+	guardian     *guardian.Guardian
+	pluginMgr    *loader.PluginManager
+	eventQueue   chan *pb.ProbeEvent
+	conn         *grpc.ClientConn
+	client       pb.SentinelClient
 }
 
 func NewAgent(cfg *config.AgentConfig) *Agent {
@@ -59,7 +54,7 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 	if cfg.Agent.Name != "" { hostname = cfg.Agent.Name }
 	return &Agent{
 		id: generateAgentID(hostname), hostname: hostname, ipAddr: getIPAddress(), cfg: cfg,
-		probes: make(map[string]registry.ProbeInstance), eventQueue: make(chan *pb.ProbeEvent, 1000),
+		eventQueue: make(chan *pb.ProbeEvent, 1000),
 	}
 }
 
@@ -77,45 +72,20 @@ func (a *Agent) startGuardian() error {
 	return a.guardian.Start()
 }
 
-func (a *Agent) autoLoadProbes() {
-	for _, pc := range a.cfg.Autoload {
-		if !pc.Enabled { continue }
-		a.loadProbeByName(pc.Name, pc.ID)
-	}
-}
-
-func (a *Agent) loadProbeByName(name, id string) {
-	a.probesMu.Lock()
-	defer a.probesMu.Unlock()
-	if _, exists := a.probes[id]; exists { return }
-	inst, err := loader.LoadByName(name, func(event registry.Event) {
+func (a *Agent) initPluginMgr() {
+	a.pluginMgr = loader.NewPluginManager("/opt/ebpf-sentinel/probes", func(name string, raw []byte) {
+		var pid uint32; var comm, filename string
+		if len(raw) >= 92 {
+			pid = binary.LittleEndian.Uint32(raw[0:4])
+			comm = cstring(raw[12:28])
+			filename = cstring(raw[28:92])
+		}
 		a.eventQueue <- &pb.ProbeEvent{
-			ProbeId: id, ProbeName: name, Timestamp: time.Now().Unix(),
-			EventType: name, Pid: int32(event.PID), Comm: event.Comm,
-			Filename: event.Filename, Details: event.Details,
+			ProbeId: name, ProbeName: name, Timestamp: time.Now().Unix(),
+			EventType: "plugin", Pid: int32(pid), Comm: comm, Filename: filename,
 		}
 	})
-	if err != nil { log.Printf("❌ 加载失败 [%s]: %v", name, err); return }
-	a.probes[id] = inst
-	log.Printf("✅ 探针已加载: %s (%s)", name, id)
-}
-
-func (a *Agent) loadProbe(cmd *pb.ProbeCommand) {
-	a.loadProbeByName(cmd.ProbeName, cmd.ProbeId)
-}
-
-func (a *Agent) unloadProbe(probeID string) {
-	a.probesMu.Lock(); defer a.probesMu.Unlock()
-	inst, exists := a.probes[probeID]
-	if !exists { return }
-	inst.Stop()
-	delete(a.probes, probeID)
-	log.Printf("✅ 探针已卸载: %s", probeID)
-}
-
-func (a *Agent) activeProbeCount() int32 {
-	a.probesMu.RLock(); defer a.probesMu.RUnlock()
-	return int32(len(a.probes))
+	a.pluginMgr.ScanAndLoad()
 }
 
 func (a *Agent) eventReporter() {
@@ -165,37 +135,69 @@ func (a *Agent) Register() error {
 func (a *Agent) HeartbeatLoop() {
 	for {
 		stream, err := a.client.Heartbeat(context.Background())
-		if err != nil { time.Sleep(a.cfg.Agent.RetryDelay); continue }
+		if err != nil {
+			log.Printf("⚠️ 心跳流建立失败: %v", err)
+			time.Sleep(a.cfg.Agent.RetryDelay)
+			continue
+		}
 		log.Println("💓 心跳流已建立")
+
+		done := make(chan struct{})
 		go func() {
-			ticker := time.NewTicker(a.cfg.Agent.HeartbeatInterval); defer ticker.Stop()
-			for range ticker.C {
-				stream.Send(&pb.HeartbeatRequest{AgentId: a.id, AgentToken: a.token, Timestamp: time.Now().Unix(), ActiveProbes: a.activeProbeCount()})
+			ticker := time.NewTicker(a.cfg.Agent.HeartbeatInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-done: return
+				case <-ticker.C:
+					stream.Send(&pb.HeartbeatRequest{
+						AgentId: a.id, AgentToken: a.token,
+						Timestamp: time.Now().Unix(),
+						ActiveProbes: int32(len(a.pluginMgr.ListPlugins())),
+					})
+				}
 			}
 		}()
+
 		for {
 			resp, err := stream.Recv()
-			if err != nil { time.Sleep(a.cfg.Agent.RetryDelay); break }
-			if resp.Success {
+			if err != nil { close(done); break }
+			if resp.Success && len(resp.Commands) > 0 {
 				for _, cmd := range resp.Commands {
 					a.handleCommand(cmd)
 				}
 			}
 		}
+		time.Sleep(a.cfg.Agent.RetryDelay)
 	}
 }
 
 func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 	switch cmd.Type {
-	case pb.ProbeCommand_LOAD: a.loadProbe(cmd)
-	case pb.ProbeCommand_UNLOAD: a.unloadProbe(cmd.ProbeId)
+	case pb.ProbeCommand_LOAD:
+		log.Printf("📥 Server指令: 加载 %s", cmd.ProbeName)
+		a.pluginMgr.LoadSingle(cmd.ProbeName)
+	case pb.ProbeCommand_UNLOAD:
+		log.Printf("📤 Server指令: 卸载 %s", cmd.ProbeName)
+		a.pluginMgr.Unload(cmd.ProbeName)
+	case pb.ProbeCommand_RELOAD:
+		log.Println("🔄 Server指令: 重新扫描")
+		a.pluginMgr.ScanAndLoad()
+	case pb.ProbeCommand_INSTALL:
+		log.Printf("📦 Server指令: 安装 %s", cmd.ProbeName)
+		a.pluginMgr.InstallProbe(cmd.ProbeName, cmd.ProbeData, cmd.ProbeConfig)
 	}
 }
 
 func (a *Agent) Connect() error {
-	conn, err := grpc.Dial(a.cfg.Agent.Server, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.Dial(a.cfg.Agent.Server,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
 	if err != nil { return err }
-	a.conn = conn; a.client = pb.NewSentinelClient(conn)
+	if a.conn != nil { a.conn.Close() }
+	a.conn = conn
+	a.client = pb.NewSentinelClient(conn)
 	log.Printf("🔗 已连接: %s", a.cfg.Agent.Server)
 	return nil
 }
@@ -204,25 +206,33 @@ func (a *Agent) Start() {
 	log.Printf("🛡️  eBPF Sentinel Agent  ID: %s", a.id)
 	if err := a.RunProbe(); err != nil { log.Fatalf("❌ %v", err) }
 	if err := a.startGuardian(); err != nil { log.Printf("⚠️ 守护: %v", err) }
-	a.autoLoadProbes()
+	a.initPluginMgr()
+
 	for { if err := a.Connect(); err != nil { time.Sleep(a.cfg.Agent.RetryDelay); continue }; break }
-	defer a.conn.Close()
 	for { if err := a.Register(); err != nil { time.Sleep(a.cfg.Agent.RetryDelay); continue }; break }
+
 	go a.eventReporter()
 	a.HeartbeatLoop()
 }
 
+func cstring(b []byte) string {
+	for i, c := range b { if c == 0 { return string(b[:i]) } }
+	return string(b)
+}
+
 func main() {
 	flag.Parse()
-	if *listProbes {
-		for _, m := range loader.ListProbes() { fmt.Printf("  %s - %s\n", m.Name, m.Description) }
-		return
-	}
 	if *genConfig { config.GenerateDefault(*configPath); return }
 	cfg, _ := config.Load(*configPath)
 	agent := NewAgent(cfg)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() { <-sigChan; if agent.guardian != nil { agent.guardian.Stop() }; os.Exit(0) }()
+	go func() {
+		<-sigChan
+		log.Println("\n🛑 退出...")
+		if agent.guardian != nil { agent.guardian.Stop() }
+		if agent.pluginMgr != nil { agent.pluginMgr.Close() }
+		os.Exit(0)
+	}()
 	agent.Start()
 }

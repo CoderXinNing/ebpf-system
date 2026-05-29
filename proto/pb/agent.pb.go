@@ -24,9 +24,10 @@ const (
 type ProbeCommand_CommandType int32
 
 const (
-	ProbeCommand_LOAD   ProbeCommand_CommandType = 0
-	ProbeCommand_UNLOAD ProbeCommand_CommandType = 1
-	ProbeCommand_UPDATE ProbeCommand_CommandType = 2
+	ProbeCommand_LOAD    ProbeCommand_CommandType = 0
+	ProbeCommand_UNLOAD  ProbeCommand_CommandType = 1
+	ProbeCommand_RELOAD  ProbeCommand_CommandType = 3
+	ProbeCommand_INSTALL ProbeCommand_CommandType = 4
 )
 
 // Enum value maps for ProbeCommand_CommandType.
@@ -34,12 +35,14 @@ var (
 	ProbeCommand_CommandType_name = map[int32]string{
 		0: "LOAD",
 		1: "UNLOAD",
-		2: "UPDATE",
+		3: "RELOAD",
+		4: "INSTALL",
 	}
 	ProbeCommand_CommandType_value = map[string]int32{
-		"LOAD":   0,
-		"UNLOAD": 1,
-		"UPDATE": 2,
+		"LOAD":    0,
+		"UNLOAD":  1,
+		"RELOAD":  3,
+		"INSTALL": 4,
 	}
 )
 
@@ -428,8 +431,6 @@ type HeartbeatRequest struct {
 	AgentToken    string                 `protobuf:"bytes,2,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
 	Timestamp     int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	ActiveProbes  int32                  `protobuf:"varint,4,opt,name=active_probes,json=activeProbes,proto3" json:"active_probes,omitempty"`
-	CpuPercent    float64                `protobuf:"fixed64,5,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"`
-	MemBytes      int64                  `protobuf:"varint,6,opt,name=mem_bytes,json=memBytes,proto3" json:"mem_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -492,20 +493,6 @@ func (x *HeartbeatRequest) GetActiveProbes() int32 {
 	return 0
 }
 
-func (x *HeartbeatRequest) GetCpuPercent() float64 {
-	if x != nil {
-		return x.CpuPercent
-	}
-	return 0
-}
-
-func (x *HeartbeatRequest) GetMemBytes() int64 {
-	if x != nil {
-		return x.MemBytes
-	}
-	return 0
-}
-
 type HeartbeatResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -563,9 +550,8 @@ type ProbeCommand struct {
 	Type          ProbeCommand_CommandType `protobuf:"varint,1,opt,name=type,proto3,enum=sentinel.ProbeCommand_CommandType" json:"type,omitempty"`
 	ProbeId       string                   `protobuf:"bytes,2,opt,name=probe_id,json=probeId,proto3" json:"probe_id,omitempty"`
 	ProbeName     string                   `protobuf:"bytes,3,opt,name=probe_name,json=probeName,proto3" json:"probe_name,omitempty"`
-	ProbeData     []byte                   `protobuf:"bytes,4,opt,name=probe_data,json=probeData,proto3" json:"probe_data,omitempty"`
-	ConfigKeys    []string                 `protobuf:"bytes,5,rep,name=config_keys,json=configKeys,proto3" json:"config_keys,omitempty"`
-	ConfigValues  []string                 `protobuf:"bytes,6,rep,name=config_values,json=configValues,proto3" json:"config_values,omitempty"`
+	ProbeData     []byte                   `protobuf:"bytes,4,opt,name=probe_data,json=probeData,proto3" json:"probe_data,omitempty"`       // probe.bpf.o 内容
+	ProbeConfig   string                   `protobuf:"bytes,5,opt,name=probe_config,json=probeConfig,proto3" json:"probe_config,omitempty"` // probe.yaml 内容
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -628,18 +614,11 @@ func (x *ProbeCommand) GetProbeData() []byte {
 	return nil
 }
 
-func (x *ProbeCommand) GetConfigKeys() []string {
+func (x *ProbeCommand) GetProbeConfig() string {
 	if x != nil {
-		return x.ConfigKeys
+		return x.ProbeConfig
 	}
-	return nil
-}
-
-func (x *ProbeCommand) GetConfigValues() []string {
-	if x != nil {
-		return x.ConfigValues
-	}
-	return nil
+	return ""
 }
 
 type ProbeEvent struct {
@@ -844,35 +823,31 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x12\n" +
 	"\x04arch\x18\x02 \x01(\tR\x04arch\x12\x1f\n" +
 	"\vbtf_enabled\x18\x03 \x01(\bR\n" +
-	"btfEnabled\"\xcf\x01\n" +
+	"btfEnabled\"\x91\x01\n" +
 	"\x10HeartbeatRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
 	"agentToken\x12\x1c\n" +
 	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x12#\n" +
-	"\ractive_probes\x18\x04 \x01(\x05R\factiveProbes\x12\x1f\n" +
-	"\vcpu_percent\x18\x05 \x01(\x01R\n" +
-	"cpuPercent\x12\x1b\n" +
-	"\tmem_bytes\x18\x06 \x01(\x03R\bmemBytes\"a\n" +
+	"\ractive_probes\x18\x04 \x01(\x05R\factiveProbes\"a\n" +
 	"\x11HeartbeatResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x122\n" +
-	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\x96\x02\n" +
+	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\x80\x02\n" +
 	"\fProbeCommand\x126\n" +
 	"\x04type\x18\x01 \x01(\x0e2\".sentinel.ProbeCommand.CommandTypeR\x04type\x12\x19\n" +
 	"\bprobe_id\x18\x02 \x01(\tR\aprobeId\x12\x1d\n" +
 	"\n" +
 	"probe_name\x18\x03 \x01(\tR\tprobeName\x12\x1d\n" +
 	"\n" +
-	"probe_data\x18\x04 \x01(\fR\tprobeData\x12\x1f\n" +
-	"\vconfig_keys\x18\x05 \x03(\tR\n" +
-	"configKeys\x12#\n" +
-	"\rconfig_values\x18\x06 \x03(\tR\fconfigValues\"/\n" +
+	"probe_data\x18\x04 \x01(\fR\tprobeData\x12!\n" +
+	"\fprobe_config\x18\x05 \x01(\tR\vprobeConfig\"<\n" +
 	"\vCommandType\x12\b\n" +
 	"\x04LOAD\x10\x00\x12\n" +
 	"\n" +
 	"\x06UNLOAD\x10\x01\x12\n" +
 	"\n" +
-	"\x06UPDATE\x10\x02\"\xdf\x01\n" +
+	"\x06RELOAD\x10\x03\x12\v\n" +
+	"\aINSTALL\x10\x04\"\xdf\x01\n" +
 	"\n" +
 	"ProbeEvent\x12\x19\n" +
 	"\bprobe_id\x18\x01 \x01(\tR\aprobeId\x12\x1d\n" +
