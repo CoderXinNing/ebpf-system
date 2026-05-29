@@ -19,9 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Sentinel_Register_FullMethodName  = "/sentinel.Sentinel/Register"
-	Sentinel_Heartbeat_FullMethodName = "/sentinel.Sentinel/Heartbeat"
-	Sentinel_Report_FullMethodName    = "/sentinel.Sentinel/Report"
+	Sentinel_Register_FullMethodName     = "/sentinel.Sentinel/Register"
+	Sentinel_Heartbeat_FullMethodName    = "/sentinel.Sentinel/Heartbeat"
+	Sentinel_ReportEvents_FullMethodName = "/sentinel.Sentinel/ReportEvents"
 )
 
 // SentinelClient is the client API for Sentinel service.
@@ -30,7 +30,7 @@ const (
 type SentinelClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 	Heartbeat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[HeartbeatRequest, HeartbeatResponse], error)
-	Report(ctx context.Context, in *AgentReport, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+	ReportEvents(ctx context.Context, in *EventReport, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 }
 
 type sentinelClient struct {
@@ -64,10 +64,10 @@ func (c *sentinelClient) Heartbeat(ctx context.Context, opts ...grpc.CallOption)
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Sentinel_HeartbeatClient = grpc.BidiStreamingClient[HeartbeatRequest, HeartbeatResponse]
 
-func (c *sentinelClient) Report(ctx context.Context, in *AgentReport, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
+func (c *sentinelClient) ReportEvents(ctx context.Context, in *EventReport, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HeartbeatResponse)
-	err := c.cc.Invoke(ctx, Sentinel_Report_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, Sentinel_ReportEvents_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (c *sentinelClient) Report(ctx context.Context, in *AgentReport, opts ...gr
 type SentinelServer interface {
 	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	Heartbeat(grpc.BidiStreamingServer[HeartbeatRequest, HeartbeatResponse]) error
-	Report(context.Context, *AgentReport) (*HeartbeatResponse, error)
+	ReportEvents(context.Context, *EventReport) (*HeartbeatResponse, error)
 	mustEmbedUnimplementedSentinelServer()
 }
 
@@ -97,8 +97,8 @@ func (UnimplementedSentinelServer) Register(context.Context, *RegisterRequest) (
 func (UnimplementedSentinelServer) Heartbeat(grpc.BidiStreamingServer[HeartbeatRequest, HeartbeatResponse]) error {
 	return status.Error(codes.Unimplemented, "method Heartbeat not implemented")
 }
-func (UnimplementedSentinelServer) Report(context.Context, *AgentReport) (*HeartbeatResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Report not implemented")
+func (UnimplementedSentinelServer) ReportEvents(context.Context, *EventReport) (*HeartbeatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportEvents not implemented")
 }
 func (UnimplementedSentinelServer) mustEmbedUnimplementedSentinelServer() {}
 func (UnimplementedSentinelServer) testEmbeddedByValue()                  {}
@@ -146,20 +146,20 @@ func _Sentinel_Heartbeat_Handler(srv interface{}, stream grpc.ServerStream) erro
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Sentinel_HeartbeatServer = grpc.BidiStreamingServer[HeartbeatRequest, HeartbeatResponse]
 
-func _Sentinel_Report_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AgentReport)
+func _Sentinel_ReportEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EventReport)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(SentinelServer).Report(ctx, in)
+		return srv.(SentinelServer).ReportEvents(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Sentinel_Report_FullMethodName,
+		FullMethod: Sentinel_ReportEvents_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SentinelServer).Report(ctx, req.(*AgentReport))
+		return srv.(SentinelServer).ReportEvents(ctx, req.(*EventReport))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -176,8 +176,8 @@ var Sentinel_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Sentinel_Register_Handler,
 		},
 		{
-			MethodName: "Report",
-			Handler:    _Sentinel_Report_Handler,
+			MethodName: "ReportEvents",
+			Handler:    _Sentinel_ReportEvents_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

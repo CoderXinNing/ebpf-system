@@ -4,7 +4,21 @@ package sentinel;
 
 option go_package = "github.com/CoderXinNing/ebpf-system/proto/pb";
 
-// 框架支持信息
+message RegisterRequest {
+    string agent_id = 1;
+    string hostname = 2;
+    string kernel_version = 3;
+    string ip_address = 4;
+    FrameworkInfo framework = 5;
+    KernelInfo kernel_info = 6;
+}
+
+message RegisterResponse {
+    bool success = 1;
+    string message = 2;
+    string agent_token = 3;
+}
+
 message FrameworkInfo {
     bool bcc_available = 1;
     string bcc_version = 2;
@@ -22,26 +36,10 @@ message FrameworkInfo {
     bool go_ebpf_available = 14;
 }
 
-// 内核特性信息
 message KernelInfo {
     string version = 1;
     string arch = 2;
     bool btf_enabled = 3;
-}
-
-message RegisterRequest {
-    string agent_id = 1;
-    string hostname = 2;
-    string kernel_version = 3;
-    string ip_address = 4;
-    FrameworkInfo framework = 5;
-    KernelInfo kernel_info = 6;
-}
-
-message RegisterResponse {
-    bool success = 1;
-    string message = 2;
-    string agent_token = 3;
 }
 
 message HeartbeatRequest {
@@ -72,43 +70,25 @@ message ProbeCommand {
     repeated string config_values = 6;
 }
 
-message ProbeStatus {
+message ProbeEvent {
     string probe_id = 1;
     string probe_name = 2;
-    enum Status {
-        LOADED = 0;
-        RUNNING = 1;
-        ERROR = 2;
-        UNLOADED = 3;
-    }
-    Status status = 3;
-    string error_message = 4;
-    int64 events_collected = 5;
+    int64 timestamp = 3;
+    string event_type = 4;
+    int32 pid = 5;
+    string comm = 6;
+    string filename = 7;
+    string details = 8;
 }
 
-message AlertEvent {
-    string alert_id = 1;
-    string probe_id = 2;
-    string probe_name = 3;
-    string severity = 4;
-    string title = 5;
-    string description = 6;
-    int64 timestamp = 7;
-    int32 pid = 8;
-    string process_name = 9;
-    repeated string metadata_keys = 10;
-    repeated string metadata_values = 11;
-}
-
-message AgentReport {
+message EventReport {
     string agent_id = 1;
     string agent_token = 2;
-    repeated ProbeStatus probe_statuses = 3;
-    repeated AlertEvent alerts = 4;
+    repeated ProbeEvent events = 3;
 }
 
 service Sentinel {
     rpc Register(RegisterRequest) returns (RegisterResponse);
     rpc Heartbeat(stream HeartbeatRequest) returns (stream HeartbeatResponse);
-    rpc Report(AgentReport) returns (HeartbeatResponse);
+    rpc ReportEvents(EventReport) returns (HeartbeatResponse);
 }

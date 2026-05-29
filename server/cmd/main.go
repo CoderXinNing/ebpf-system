@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -16,7 +15,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// AgentInfo Agent完整信息
 type AgentInfo struct {
 	ID           string            `json:"id"`
 	Hostname     string            `json:"hostname"`
@@ -29,21 +27,31 @@ type AgentInfo struct {
 	KernelInfo   *pb.KernelInfo    `json:"kernel_info"`
 }
 
-// AgentListResponse API响应
-type AgentListResponse struct {
-	Total  int         `json:"total"`
-	Agents []AgentInfo `json:"agents"`
+type ProbeEvent struct {
+	ID        string `json:"id"`
+	AgentID   string `json:"agent_id"`
+	ProbeID   string `json:"probe_id"`
+	ProbeName string `json:"probe_name"`
+	Timestamp int64  `json:"timestamp"`
+	EventType string `json:"event_type"`
+	PID       int32  `json:"pid"`
+	Comm      string `json:"comm"`
+	Filename  string `json:"filename"`
+	Details   string `json:"details"`
 }
 
 type Server struct {
 	pb.UnimplementedSentinelServer
-	mu     sync.RWMutex
-	agents map[string]*AgentInfo
+	mu      sync.RWMutex
+	agents  map[string]*AgentInfo
+	events  []ProbeEvent
+	eventMu sync.RWMutex
 }
 
 func NewServer() *Server {
 	return &Server{
 		agents: make(map[string]*AgentInfo),
+		events: make([]ProbeEvent, 0, 10000),
 	}
 }
 
@@ -57,10 +65,11 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	now := time.Now().Unix()
+
 	if existing, exists := s.agents[req.AgentId]; exists {
-		// 已存在，更新信息
 		existing.IPAddr = req.IpAddress
-		existing.LastSeen = time.Now().Unix()
+		existing.LastSeen = now
 		if req.Framework != nil {
 			existing.Framework = req.Framework
 		}
@@ -75,8 +84,6 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 	}
 
 	token := generateToken()
-	now := time.Now().Unix()
-
 	s.agents[req.AgentId] = &AgentInfo{
 		ID:        req.AgentId,
 		Hostname:  req.Hostname,
@@ -88,16 +95,7 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 		KernelInfo: req.KernelInfo,
 	}
 
-	log.Printf("✅ Agent注册: %s (%s) [%s]", req.Hostname, req.IpAddress, req.KernelVersion)
-	if req.Framework != nil {
-		log.Printf("   框架: BCC=%v libbpf=%v bpftrace=%v clang=%v Go=%v",
-			req.Framework.BccAvailable,
-			req.Framework.LibbpfAvailable,
-			req.Framework.BpftraceAvailable,
-			req.Framework.ClangAvailable,
-			req.Framework.GoEbpfAvailable)
-	}
-
+	log.Printf("✅ Agent注册: %s (%s)", req.Hostname, req.IpAddress)
 	return &pb.RegisterResponse{
 		Success:    true,
 		Message:    "注册成功",
@@ -121,32 +119,46 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 		s.mu.Unlock()
 
 		if !exists {
-			log.Printf("⚠️ 未知Agent心跳: %s", req.AgentId)
 			continue
 		}
 
-		err = stream.Send(&pb.HeartbeatResponse{
-			Success: true,
-		})
-		if err != nil {
-			return err
-		}
-
-		log.Printf("💓 心跳: %s (活跃探针: %d)", req.AgentId, req.ActiveProbes)
+		stream.Send(&pb.HeartbeatResponse{Success: true})
+		log.Printf("💓 心跳: %s (探针: %d)", req.AgentId, req.ActiveProbes)
 	}
 }
 
-func (s *Server) Report(ctx context.Context, req *pb.AgentReport) (*pb.HeartbeatResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// ReportEvents Agent上报探针事件
+func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.HeartbeatResponse, error) {
+	s.eventMu.Lock()
+	defer s.eventMu.Unlock()
 
-	if _, exists := s.agents[req.AgentId]; !exists {
-		return &pb.HeartbeatResponse{Success: false}, fmt.Errorf("未知Agent")
-	}
+	for _, evt := range req.Events {
+		event := ProbeEvent{
+			ID:        hex.EncodeToString(make([]byte, 8)),
+			AgentID:   req.AgentId,
+			ProbeID:   evt.ProbeId,
+			ProbeName: evt.ProbeName,
+			Timestamp: evt.Timestamp,
+			EventType: evt.EventType,
+			PID:       evt.Pid,
+			Comm:      evt.Comm,
+			Filename:  evt.Filename,
+			Details:   evt.Details,
+		}
+		// 生成随机ID
+		b := make([]byte, 8)
+		rand.Read(b)
+		event.ID = hex.EncodeToString(b)
 
-	for _, alert := range req.Alerts {
-		log.Printf("🚨 告警: [%s] %s - %s (PID:%d)",
-			alert.Severity, alert.Title, alert.ProcessName, alert.Pid)
+		s.events = append(s.events, event)
+
+		log.Printf("📩 [%s] %s PID=%d COMM=%s FILE=%s",
+			req.AgentId, evt.ProbeName, evt.Pid, evt.Comm, evt.Filename)
+
+		// 限制最多存10000条
+		if len(s.events) > 10000 {
+			s.events = s.events[len(s.events)-1000:]
+		}
 	}
 
 	return &pb.HeartbeatResponse{Success: true}, nil
@@ -159,37 +171,30 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.RUnlock()
 
 	agents := make([]AgentInfo, 0, len(s.agents))
-	for _, agent := range s.agents {
-		agents = append(agents, *agent)
+	for _, a := range s.agents {
+		agents = append(agents, *a)
 	}
 
-	resp := AgentListResponse{
-		Total:  len(agents),
-		Agents: agents,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"total":  len(agents),
+		"agents": agents,
+	})
 }
 
-func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request) {
-	agentID := r.URL.Query().Get("id")
-	if agentID == "" {
-		http.Error(w, "缺少agent id参数", http.StatusBadRequest)
-		return
+func (s *Server) handleGetEvents(w http.ResponseWriter, r *http.Request) {
+	s.eventMu.RLock()
+	defer s.eventMu.RUnlock()
+
+	limit := 100
+	events := s.events
+	if len(events) > limit {
+		events = events[len(events)-limit:]
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	agent, exists := s.agents[agentID]
-	if !exists {
-		http.Error(w, "Agent不存在", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(agent)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"total":  len(s.events),
+		"events": events,
+	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -198,50 +203,36 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().Unix()
 	online := 0
-	offline := 0
-
-	for _, agent := range s.agents {
-		if now-agent.LastSeen < 30 {
+	for _, a := range s.agents {
+		if now-a.LastSeen < 30 {
 			online++
-		} else {
-			offline++
 		}
 	}
 
-	resp := map[string]interface{}{
-		"status":   "ok",
-		"online":   online,
-		"offline":  offline,
-		"total":    len(s.agents),
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "ok",
+		"online":  online,
+		"total":   len(s.agents),
+	})
 }
 
 func (s *Server) startHTTP(addr string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/agents", s.handleListAgents)
-	mux.HandleFunc("/api/agent", s.handleGetAgent)
+	mux.HandleFunc("/api/events", s.handleGetEvents)
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
-			"service": "eBPF Sentinel Server",
-			"version": "0.1.0",
-			"endpoints": "/api/agents | /api/agent?id=xxx | /api/health",
+			"service":   "eBPF Sentinel Server",
+			"endpoints": "/api/agents | /api/events | /api/health",
 		})
 	})
 
-	log.Printf("🌐 HTTP API 启动在 %s", addr)
-	log.Printf("   试试: curl %s/api/agents", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("HTTP服务启动失败: %v", err)
-	}
+	log.Printf("🌐 HTTP API: %s", addr)
+	http.ListenAndServe(addr, mux)
 }
 
 func main() {
-	// 启动gRPC服务
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalf("监听失败: %v", err)
@@ -253,13 +244,9 @@ func main() {
 	pb.RegisterSentinelServer(grpcServer, server)
 
 	go func() {
-		log.Println("🛡️  eBPF Sentinel gRPC Server 启动在 :50051")
-		log.Println("   等待Agent连接...")
-		if err := grpcServer.Serve(lis); err != nil {
-			log.Fatalf("gRPC服务启动失败: %v", err)
-		}
+		log.Println("🛡️  gRPC Server :50051")
+		grpcServer.Serve(lis)
 	}()
 
-	// 启动HTTP API
 	server.startHTTP(":8080")
 }

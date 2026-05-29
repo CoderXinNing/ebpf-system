@@ -70,59 +70,150 @@ func (ProbeCommand_CommandType) EnumDescriptor() ([]byte, []int) {
 	return file_proto_agent_proto_rawDescGZIP(), []int{6, 0}
 }
 
-type ProbeStatus_Status int32
+type RegisterRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	KernelVersion string                 `protobuf:"bytes,3,opt,name=kernel_version,json=kernelVersion,proto3" json:"kernel_version,omitempty"`
+	IpAddress     string                 `protobuf:"bytes,4,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
+	Framework     *FrameworkInfo         `protobuf:"bytes,5,opt,name=framework,proto3" json:"framework,omitempty"`
+	KernelInfo    *KernelInfo            `protobuf:"bytes,6,opt,name=kernel_info,json=kernelInfo,proto3" json:"kernel_info,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
 
-const (
-	ProbeStatus_LOADED   ProbeStatus_Status = 0
-	ProbeStatus_RUNNING  ProbeStatus_Status = 1
-	ProbeStatus_ERROR    ProbeStatus_Status = 2
-	ProbeStatus_UNLOADED ProbeStatus_Status = 3
-)
+func (x *RegisterRequest) Reset() {
+	*x = RegisterRequest{}
+	mi := &file_proto_agent_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
 
-// Enum value maps for ProbeStatus_Status.
-var (
-	ProbeStatus_Status_name = map[int32]string{
-		0: "LOADED",
-		1: "RUNNING",
-		2: "ERROR",
-		3: "UNLOADED",
+func (x *RegisterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterRequest) ProtoMessage() {}
+
+func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
 	}
-	ProbeStatus_Status_value = map[string]int32{
-		"LOADED":   0,
-		"RUNNING":  1,
-		"ERROR":    2,
-		"UNLOADED": 3,
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
+func (*RegisterRequest) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *RegisterRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
 	}
-)
-
-func (x ProbeStatus_Status) Enum() *ProbeStatus_Status {
-	p := new(ProbeStatus_Status)
-	*p = x
-	return p
+	return ""
 }
 
-func (x ProbeStatus_Status) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+func (x *RegisterRequest) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
 }
 
-func (ProbeStatus_Status) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_agent_proto_enumTypes[1].Descriptor()
+func (x *RegisterRequest) GetKernelVersion() string {
+	if x != nil {
+		return x.KernelVersion
+	}
+	return ""
 }
 
-func (ProbeStatus_Status) Type() protoreflect.EnumType {
-	return &file_proto_agent_proto_enumTypes[1]
+func (x *RegisterRequest) GetIpAddress() string {
+	if x != nil {
+		return x.IpAddress
+	}
+	return ""
 }
 
-func (x ProbeStatus_Status) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
+func (x *RegisterRequest) GetFramework() *FrameworkInfo {
+	if x != nil {
+		return x.Framework
+	}
+	return nil
 }
 
-// Deprecated: Use ProbeStatus_Status.Descriptor instead.
-func (ProbeStatus_Status) EnumDescriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{7, 0}
+func (x *RegisterRequest) GetKernelInfo() *KernelInfo {
+	if x != nil {
+		return x.KernelInfo
+	}
+	return nil
 }
 
-// 框架支持信息
+type RegisterResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	AgentToken    string                 `protobuf:"bytes,3,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterResponse) Reset() {
+	*x = RegisterResponse{}
+	mi := &file_proto_agent_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterResponse) ProtoMessage() {}
+
+func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
+func (*RegisterResponse) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *RegisterResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *RegisterResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *RegisterResponse) GetAgentToken() string {
+	if x != nil {
+		return x.AgentToken
+	}
+	return ""
+}
+
 type FrameworkInfo struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
 	BccAvailable           bool                   `protobuf:"varint,1,opt,name=bcc_available,json=bccAvailable,proto3" json:"bcc_available,omitempty"`
@@ -145,7 +236,7 @@ type FrameworkInfo struct {
 
 func (x *FrameworkInfo) Reset() {
 	*x = FrameworkInfo{}
-	mi := &file_proto_agent_proto_msgTypes[0]
+	mi := &file_proto_agent_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -157,7 +248,7 @@ func (x *FrameworkInfo) String() string {
 func (*FrameworkInfo) ProtoMessage() {}
 
 func (x *FrameworkInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[0]
+	mi := &file_proto_agent_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -170,7 +261,7 @@ func (x *FrameworkInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrameworkInfo.ProtoReflect.Descriptor instead.
 func (*FrameworkInfo) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{0}
+	return file_proto_agent_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *FrameworkInfo) GetBccAvailable() bool {
@@ -271,7 +362,6 @@ func (x *FrameworkInfo) GetGoEbpfAvailable() bool {
 	return false
 }
 
-// 内核特性信息
 type KernelInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
@@ -283,7 +373,7 @@ type KernelInfo struct {
 
 func (x *KernelInfo) Reset() {
 	*x = KernelInfo{}
-	mi := &file_proto_agent_proto_msgTypes[1]
+	mi := &file_proto_agent_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -295,7 +385,7 @@ func (x *KernelInfo) String() string {
 func (*KernelInfo) ProtoMessage() {}
 
 func (x *KernelInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[1]
+	mi := &file_proto_agent_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -308,7 +398,7 @@ func (x *KernelInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KernelInfo.ProtoReflect.Descriptor instead.
 func (*KernelInfo) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{1}
+	return file_proto_agent_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *KernelInfo) GetVersion() string {
@@ -330,150 +420,6 @@ func (x *KernelInfo) GetBtfEnabled() bool {
 		return x.BtfEnabled
 	}
 	return false
-}
-
-type RegisterRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
-	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	KernelVersion string                 `protobuf:"bytes,3,opt,name=kernel_version,json=kernelVersion,proto3" json:"kernel_version,omitempty"`
-	IpAddress     string                 `protobuf:"bytes,4,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
-	Framework     *FrameworkInfo         `protobuf:"bytes,5,opt,name=framework,proto3" json:"framework,omitempty"`
-	KernelInfo    *KernelInfo            `protobuf:"bytes,6,opt,name=kernel_info,json=kernelInfo,proto3" json:"kernel_info,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RegisterRequest) Reset() {
-	*x = RegisterRequest{}
-	mi := &file_proto_agent_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RegisterRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RegisterRequest) ProtoMessage() {}
-
-func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
-func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *RegisterRequest) GetAgentId() string {
-	if x != nil {
-		return x.AgentId
-	}
-	return ""
-}
-
-func (x *RegisterRequest) GetHostname() string {
-	if x != nil {
-		return x.Hostname
-	}
-	return ""
-}
-
-func (x *RegisterRequest) GetKernelVersion() string {
-	if x != nil {
-		return x.KernelVersion
-	}
-	return ""
-}
-
-func (x *RegisterRequest) GetIpAddress() string {
-	if x != nil {
-		return x.IpAddress
-	}
-	return ""
-}
-
-func (x *RegisterRequest) GetFramework() *FrameworkInfo {
-	if x != nil {
-		return x.Framework
-	}
-	return nil
-}
-
-func (x *RegisterRequest) GetKernelInfo() *KernelInfo {
-	if x != nil {
-		return x.KernelInfo
-	}
-	return nil
-}
-
-type RegisterResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	AgentToken    string                 `protobuf:"bytes,3,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RegisterResponse) Reset() {
-	*x = RegisterResponse{}
-	mi := &file_proto_agent_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RegisterResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RegisterResponse) ProtoMessage() {}
-
-func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
-func (*RegisterResponse) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *RegisterResponse) GetSuccess() bool {
-	if x != nil {
-		return x.Success
-	}
-	return false
-}
-
-func (x *RegisterResponse) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-func (x *RegisterResponse) GetAgentToken() string {
-	if x != nil {
-		return x.AgentToken
-	}
-	return ""
 }
 
 type HeartbeatRequest struct {
@@ -696,31 +642,34 @@ func (x *ProbeCommand) GetConfigValues() []string {
 	return nil
 }
 
-type ProbeStatus struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ProbeId         string                 `protobuf:"bytes,1,opt,name=probe_id,json=probeId,proto3" json:"probe_id,omitempty"`
-	ProbeName       string                 `protobuf:"bytes,2,opt,name=probe_name,json=probeName,proto3" json:"probe_name,omitempty"`
-	Status          ProbeStatus_Status     `protobuf:"varint,3,opt,name=status,proto3,enum=sentinel.ProbeStatus_Status" json:"status,omitempty"`
-	ErrorMessage    string                 `protobuf:"bytes,4,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	EventsCollected int64                  `protobuf:"varint,5,opt,name=events_collected,json=eventsCollected,proto3" json:"events_collected,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+type ProbeEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProbeId       string                 `protobuf:"bytes,1,opt,name=probe_id,json=probeId,proto3" json:"probe_id,omitempty"`
+	ProbeName     string                 `protobuf:"bytes,2,opt,name=probe_name,json=probeName,proto3" json:"probe_name,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	EventType     string                 `protobuf:"bytes,4,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
+	Pid           int32                  `protobuf:"varint,5,opt,name=pid,proto3" json:"pid,omitempty"`
+	Comm          string                 `protobuf:"bytes,6,opt,name=comm,proto3" json:"comm,omitempty"`
+	Filename      string                 `protobuf:"bytes,7,opt,name=filename,proto3" json:"filename,omitempty"`
+	Details       string                 `protobuf:"bytes,8,opt,name=details,proto3" json:"details,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ProbeStatus) Reset() {
-	*x = ProbeStatus{}
+func (x *ProbeEvent) Reset() {
+	*x = ProbeEvent{}
 	mi := &file_proto_agent_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ProbeStatus) String() string {
+func (x *ProbeEvent) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ProbeStatus) ProtoMessage() {}
+func (*ProbeEvent) ProtoMessage() {}
 
-func (x *ProbeStatus) ProtoReflect() protoreflect.Message {
+func (x *ProbeEvent) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_agent_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -732,195 +681,91 @@ func (x *ProbeStatus) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ProbeStatus.ProtoReflect.Descriptor instead.
-func (*ProbeStatus) Descriptor() ([]byte, []int) {
+// Deprecated: Use ProbeEvent.ProtoReflect.Descriptor instead.
+func (*ProbeEvent) Descriptor() ([]byte, []int) {
 	return file_proto_agent_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *ProbeStatus) GetProbeId() string {
+func (x *ProbeEvent) GetProbeId() string {
 	if x != nil {
 		return x.ProbeId
 	}
 	return ""
 }
 
-func (x *ProbeStatus) GetProbeName() string {
+func (x *ProbeEvent) GetProbeName() string {
 	if x != nil {
 		return x.ProbeName
 	}
 	return ""
 }
 
-func (x *ProbeStatus) GetStatus() ProbeStatus_Status {
-	if x != nil {
-		return x.Status
-	}
-	return ProbeStatus_LOADED
-}
-
-func (x *ProbeStatus) GetErrorMessage() string {
-	if x != nil {
-		return x.ErrorMessage
-	}
-	return ""
-}
-
-func (x *ProbeStatus) GetEventsCollected() int64 {
-	if x != nil {
-		return x.EventsCollected
-	}
-	return 0
-}
-
-type AlertEvent struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	AlertId        string                 `protobuf:"bytes,1,opt,name=alert_id,json=alertId,proto3" json:"alert_id,omitempty"`
-	ProbeId        string                 `protobuf:"bytes,2,opt,name=probe_id,json=probeId,proto3" json:"probe_id,omitempty"`
-	ProbeName      string                 `protobuf:"bytes,3,opt,name=probe_name,json=probeName,proto3" json:"probe_name,omitempty"`
-	Severity       string                 `protobuf:"bytes,4,opt,name=severity,proto3" json:"severity,omitempty"`
-	Title          string                 `protobuf:"bytes,5,opt,name=title,proto3" json:"title,omitempty"`
-	Description    string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
-	Timestamp      int64                  `protobuf:"varint,7,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	Pid            int32                  `protobuf:"varint,8,opt,name=pid,proto3" json:"pid,omitempty"`
-	ProcessName    string                 `protobuf:"bytes,9,opt,name=process_name,json=processName,proto3" json:"process_name,omitempty"`
-	MetadataKeys   []string               `protobuf:"bytes,10,rep,name=metadata_keys,json=metadataKeys,proto3" json:"metadata_keys,omitempty"`
-	MetadataValues []string               `protobuf:"bytes,11,rep,name=metadata_values,json=metadataValues,proto3" json:"metadata_values,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *AlertEvent) Reset() {
-	*x = AlertEvent{}
-	mi := &file_proto_agent_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AlertEvent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AlertEvent) ProtoMessage() {}
-
-func (x *AlertEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AlertEvent.ProtoReflect.Descriptor instead.
-func (*AlertEvent) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *AlertEvent) GetAlertId() string {
-	if x != nil {
-		return x.AlertId
-	}
-	return ""
-}
-
-func (x *AlertEvent) GetProbeId() string {
-	if x != nil {
-		return x.ProbeId
-	}
-	return ""
-}
-
-func (x *AlertEvent) GetProbeName() string {
-	if x != nil {
-		return x.ProbeName
-	}
-	return ""
-}
-
-func (x *AlertEvent) GetSeverity() string {
-	if x != nil {
-		return x.Severity
-	}
-	return ""
-}
-
-func (x *AlertEvent) GetTitle() string {
-	if x != nil {
-		return x.Title
-	}
-	return ""
-}
-
-func (x *AlertEvent) GetDescription() string {
-	if x != nil {
-		return x.Description
-	}
-	return ""
-}
-
-func (x *AlertEvent) GetTimestamp() int64 {
+func (x *ProbeEvent) GetTimestamp() int64 {
 	if x != nil {
 		return x.Timestamp
 	}
 	return 0
 }
 
-func (x *AlertEvent) GetPid() int32 {
+func (x *ProbeEvent) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *ProbeEvent) GetPid() int32 {
 	if x != nil {
 		return x.Pid
 	}
 	return 0
 }
 
-func (x *AlertEvent) GetProcessName() string {
+func (x *ProbeEvent) GetComm() string {
 	if x != nil {
-		return x.ProcessName
+		return x.Comm
 	}
 	return ""
 }
 
-func (x *AlertEvent) GetMetadataKeys() []string {
+func (x *ProbeEvent) GetFilename() string {
 	if x != nil {
-		return x.MetadataKeys
+		return x.Filename
 	}
-	return nil
+	return ""
 }
 
-func (x *AlertEvent) GetMetadataValues() []string {
+func (x *ProbeEvent) GetDetails() string {
 	if x != nil {
-		return x.MetadataValues
+		return x.Details
 	}
-	return nil
+	return ""
 }
 
-type AgentReport struct {
+type EventReport struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	AgentToken    string                 `protobuf:"bytes,2,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
-	ProbeStatuses []*ProbeStatus         `protobuf:"bytes,3,rep,name=probe_statuses,json=probeStatuses,proto3" json:"probe_statuses,omitempty"`
-	Alerts        []*AlertEvent          `protobuf:"bytes,4,rep,name=alerts,proto3" json:"alerts,omitempty"`
+	Events        []*ProbeEvent          `protobuf:"bytes,3,rep,name=events,proto3" json:"events,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *AgentReport) Reset() {
-	*x = AgentReport{}
-	mi := &file_proto_agent_proto_msgTypes[9]
+func (x *EventReport) Reset() {
+	*x = EventReport{}
+	mi := &file_proto_agent_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *AgentReport) String() string {
+func (x *EventReport) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*AgentReport) ProtoMessage() {}
+func (*EventReport) ProtoMessage() {}
 
-func (x *AgentReport) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[9]
+func (x *EventReport) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -931,35 +776,28 @@ func (x *AgentReport) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use AgentReport.ProtoReflect.Descriptor instead.
-func (*AgentReport) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{9}
+// Deprecated: Use EventReport.ProtoReflect.Descriptor instead.
+func (*EventReport) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *AgentReport) GetAgentId() string {
+func (x *EventReport) GetAgentId() string {
 	if x != nil {
 		return x.AgentId
 	}
 	return ""
 }
 
-func (x *AgentReport) GetAgentToken() string {
+func (x *EventReport) GetAgentToken() string {
 	if x != nil {
 		return x.AgentToken
 	}
 	return ""
 }
 
-func (x *AgentReport) GetProbeStatuses() []*ProbeStatus {
+func (x *EventReport) GetEvents() []*ProbeEvent {
 	if x != nil {
-		return x.ProbeStatuses
-	}
-	return nil
-}
-
-func (x *AgentReport) GetAlerts() []*AlertEvent {
-	if x != nil {
-		return x.Alerts
+		return x.Events
 	}
 	return nil
 }
@@ -968,7 +806,21 @@ var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x11proto/agent.proto\x12\bsentinel\"\xd2\x04\n" +
+	"\x11proto/agent.proto\x12\bsentinel\"\xfc\x01\n" +
+	"\x0fRegisterRequest\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1a\n" +
+	"\bhostname\x18\x02 \x01(\tR\bhostname\x12%\n" +
+	"\x0ekernel_version\x18\x03 \x01(\tR\rkernelVersion\x12\x1d\n" +
+	"\n" +
+	"ip_address\x18\x04 \x01(\tR\tipAddress\x125\n" +
+	"\tframework\x18\x05 \x01(\v2\x17.sentinel.FrameworkInfoR\tframework\x125\n" +
+	"\vkernel_info\x18\x06 \x01(\v2\x14.sentinel.KernelInfoR\n" +
+	"kernelInfo\"g\n" +
+	"\x10RegisterResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1f\n" +
+	"\vagent_token\x18\x03 \x01(\tR\n" +
+	"agentToken\"\xd2\x04\n" +
 	"\rFrameworkInfo\x12#\n" +
 	"\rbcc_available\x18\x01 \x01(\bR\fbccAvailable\x12\x1f\n" +
 	"\vbcc_version\x18\x02 \x01(\tR\n" +
@@ -992,21 +844,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x12\n" +
 	"\x04arch\x18\x02 \x01(\tR\x04arch\x12\x1f\n" +
 	"\vbtf_enabled\x18\x03 \x01(\bR\n" +
-	"btfEnabled\"\xfc\x01\n" +
-	"\x0fRegisterRequest\x12\x19\n" +
-	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1a\n" +
-	"\bhostname\x18\x02 \x01(\tR\bhostname\x12%\n" +
-	"\x0ekernel_version\x18\x03 \x01(\tR\rkernelVersion\x12\x1d\n" +
-	"\n" +
-	"ip_address\x18\x04 \x01(\tR\tipAddress\x125\n" +
-	"\tframework\x18\x05 \x01(\v2\x17.sentinel.FrameworkInfoR\tframework\x125\n" +
-	"\vkernel_info\x18\x06 \x01(\v2\x14.sentinel.KernelInfoR\n" +
-	"kernelInfo\"g\n" +
-	"\x10RegisterResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1f\n" +
-	"\vagent_token\x18\x03 \x01(\tR\n" +
-	"agentToken\"\xcf\x01\n" +
+	"btfEnabled\"\xcf\x01\n" +
 	"\x10HeartbeatRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
@@ -1034,45 +872,28 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
 	"\x06UNLOAD\x10\x01\x12\n" +
 	"\n" +
-	"\x06UPDATE\x10\x02\"\x89\x02\n" +
-	"\vProbeStatus\x12\x19\n" +
+	"\x06UPDATE\x10\x02\"\xdf\x01\n" +
+	"\n" +
+	"ProbeEvent\x12\x19\n" +
 	"\bprobe_id\x18\x01 \x01(\tR\aprobeId\x12\x1d\n" +
 	"\n" +
-	"probe_name\x18\x02 \x01(\tR\tprobeName\x124\n" +
-	"\x06status\x18\x03 \x01(\x0e2\x1c.sentinel.ProbeStatus.StatusR\x06status\x12#\n" +
-	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x12)\n" +
-	"\x10events_collected\x18\x05 \x01(\x03R\x0feventsCollected\":\n" +
-	"\x06Status\x12\n" +
+	"probe_name\x18\x02 \x01(\tR\tprobeName\x12\x1c\n" +
+	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x12\x1d\n" +
 	"\n" +
-	"\x06LOADED\x10\x00\x12\v\n" +
-	"\aRUNNING\x10\x01\x12\t\n" +
-	"\x05ERROR\x10\x02\x12\f\n" +
-	"\bUNLOADED\x10\x03\"\xd6\x02\n" +
-	"\n" +
-	"AlertEvent\x12\x19\n" +
-	"\balert_id\x18\x01 \x01(\tR\aalertId\x12\x19\n" +
-	"\bprobe_id\x18\x02 \x01(\tR\aprobeId\x12\x1d\n" +
-	"\n" +
-	"probe_name\x18\x03 \x01(\tR\tprobeName\x12\x1a\n" +
-	"\bseverity\x18\x04 \x01(\tR\bseverity\x12\x14\n" +
-	"\x05title\x18\x05 \x01(\tR\x05title\x12 \n" +
-	"\vdescription\x18\x06 \x01(\tR\vdescription\x12\x1c\n" +
-	"\ttimestamp\x18\a \x01(\x03R\ttimestamp\x12\x10\n" +
-	"\x03pid\x18\b \x01(\x05R\x03pid\x12!\n" +
-	"\fprocess_name\x18\t \x01(\tR\vprocessName\x12#\n" +
-	"\rmetadata_keys\x18\n" +
-	" \x03(\tR\fmetadataKeys\x12'\n" +
-	"\x0fmetadata_values\x18\v \x03(\tR\x0emetadataValues\"\xb5\x01\n" +
-	"\vAgentReport\x12\x19\n" +
+	"event_type\x18\x04 \x01(\tR\teventType\x12\x10\n" +
+	"\x03pid\x18\x05 \x01(\x05R\x03pid\x12\x12\n" +
+	"\x04comm\x18\x06 \x01(\tR\x04comm\x12\x1a\n" +
+	"\bfilename\x18\a \x01(\tR\bfilename\x12\x18\n" +
+	"\adetails\x18\b \x01(\tR\adetails\"w\n" +
+	"\vEventReport\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
-	"agentToken\x12<\n" +
-	"\x0eprobe_statuses\x18\x03 \x03(\v2\x15.sentinel.ProbeStatusR\rprobeStatuses\x12,\n" +
-	"\x06alerts\x18\x04 \x03(\v2\x14.sentinel.AlertEventR\x06alerts2\xd5\x01\n" +
+	"agentToken\x12,\n" +
+	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events2\xdb\x01\n" +
 	"\bSentinel\x12A\n" +
 	"\bRegister\x12\x19.sentinel.RegisterRequest\x1a\x1a.sentinel.RegisterResponse\x12H\n" +
-	"\tHeartbeat\x12\x1a.sentinel.HeartbeatRequest\x1a\x1b.sentinel.HeartbeatResponse(\x010\x01\x12<\n" +
-	"\x06Report\x12\x15.sentinel.AgentReport\x1a\x1b.sentinel.HeartbeatResponseB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
+	"\tHeartbeat\x12\x1a.sentinel.HeartbeatRequest\x1a\x1b.sentinel.HeartbeatResponse(\x010\x01\x12B\n" +
+	"\fReportEvents\x12\x15.sentinel.EventReport\x1a\x1b.sentinel.HeartbeatResponseB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once
@@ -1086,41 +907,37 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 	return file_proto_agent_proto_rawDescData
 }
 
-var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_agent_proto_goTypes = []any{
 	(ProbeCommand_CommandType)(0), // 0: sentinel.ProbeCommand.CommandType
-	(ProbeStatus_Status)(0),       // 1: sentinel.ProbeStatus.Status
-	(*FrameworkInfo)(nil),         // 2: sentinel.FrameworkInfo
-	(*KernelInfo)(nil),            // 3: sentinel.KernelInfo
-	(*RegisterRequest)(nil),       // 4: sentinel.RegisterRequest
-	(*RegisterResponse)(nil),      // 5: sentinel.RegisterResponse
-	(*HeartbeatRequest)(nil),      // 6: sentinel.HeartbeatRequest
-	(*HeartbeatResponse)(nil),     // 7: sentinel.HeartbeatResponse
-	(*ProbeCommand)(nil),          // 8: sentinel.ProbeCommand
-	(*ProbeStatus)(nil),           // 9: sentinel.ProbeStatus
-	(*AlertEvent)(nil),            // 10: sentinel.AlertEvent
-	(*AgentReport)(nil),           // 11: sentinel.AgentReport
+	(*RegisterRequest)(nil),       // 1: sentinel.RegisterRequest
+	(*RegisterResponse)(nil),      // 2: sentinel.RegisterResponse
+	(*FrameworkInfo)(nil),         // 3: sentinel.FrameworkInfo
+	(*KernelInfo)(nil),            // 4: sentinel.KernelInfo
+	(*HeartbeatRequest)(nil),      // 5: sentinel.HeartbeatRequest
+	(*HeartbeatResponse)(nil),     // 6: sentinel.HeartbeatResponse
+	(*ProbeCommand)(nil),          // 7: sentinel.ProbeCommand
+	(*ProbeEvent)(nil),            // 8: sentinel.ProbeEvent
+	(*EventReport)(nil),           // 9: sentinel.EventReport
 }
 var file_proto_agent_proto_depIdxs = []int32{
-	2,  // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
-	3,  // 1: sentinel.RegisterRequest.kernel_info:type_name -> sentinel.KernelInfo
-	8,  // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
-	0,  // 3: sentinel.ProbeCommand.type:type_name -> sentinel.ProbeCommand.CommandType
-	1,  // 4: sentinel.ProbeStatus.status:type_name -> sentinel.ProbeStatus.Status
-	9,  // 5: sentinel.AgentReport.probe_statuses:type_name -> sentinel.ProbeStatus
-	10, // 6: sentinel.AgentReport.alerts:type_name -> sentinel.AlertEvent
-	4,  // 7: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
-	6,  // 8: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
-	11, // 9: sentinel.Sentinel.Report:input_type -> sentinel.AgentReport
-	5,  // 10: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
-	7,  // 11: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
-	7,  // 12: sentinel.Sentinel.Report:output_type -> sentinel.HeartbeatResponse
-	10, // [10:13] is the sub-list for method output_type
-	7,  // [7:10] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	3, // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
+	4, // 1: sentinel.RegisterRequest.kernel_info:type_name -> sentinel.KernelInfo
+	7, // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
+	0, // 3: sentinel.ProbeCommand.type:type_name -> sentinel.ProbeCommand.CommandType
+	8, // 4: sentinel.EventReport.events:type_name -> sentinel.ProbeEvent
+	1, // 5: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
+	5, // 6: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
+	9, // 7: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
+	2, // 8: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
+	6, // 9: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
+	6, // 10: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
+	8, // [8:11] is the sub-list for method output_type
+	5, // [5:8] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -1133,8 +950,8 @@ func file_proto_agent_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   10,
+			NumEnums:      1,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
