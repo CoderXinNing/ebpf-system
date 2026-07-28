@@ -250,6 +250,13 @@ func (a *Agent) Start() {
 			})
 		}
 		log.Printf("⏰ 定时任务: %d个", len(crons))
+		pkgs := collector.CollectAllPackages()
+		for _, p := range pkgs {
+			assetReq.Packages = append(assetReq.Packages, &pb.PackageAsset{
+				Name: p.Name, Version: p.Version, Manager: p.Manager,
+			})
+		}
+		log.Printf("📦 软件包: %d个 (%s)", len(pkgs), func() string { if len(pkgs) > 0 { return pkgs[0].Manager } else { return "未知" } }())
 		for _, p := range procs {
 			assetReq.Processes = append(assetReq.Processes, &pb.ProcessAsset{
 				Pid: int32(p.PID), Ppid: int32(p.PPID), Name: p.Name, Cmdline: p.Cmdline,

@@ -138,8 +138,9 @@ func (s *Server) ReportAssets(ctx context.Context, req *pb.AssetReport) (*pb.Hea
 	procJSON, _ := json.Marshal(req.Processes)
 	userJSON, _ := json.Marshal(req.Users)
 	sysData := map[string]interface{}{
-		"system": req.System,
-		"crons":  req.Crons,
+		"system":   req.System,
+		"crons":    req.Crons,
+		"packages": req.Packages,
 	}
 	sysJSON, _ := json.Marshal(sysData)
 	if err := s.store.SaveAsset(req.AgentId, procJSON, userJSON, sysJSON); err != nil {
