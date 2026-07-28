@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"context"
+	"encoding/json"
 	"fmt"
 	"encoding/hex"
 	"log"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
+	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
 )
@@ -45,21 +47,19 @@ type ProbeEvent struct {
 
 type Server struct {
 	pb.UnimplementedSentinelServer
-	mu      sync.RWMutex
-	agents  map[string]*AgentInfo
-	events  []ProbeEvent
-	assets  map[string][]*pb.ProcessAsset
-	userAssets map[string][]*pb.UserAsset
-	eventMu sync.RWMutex
-	auth    *auth.AuthManager
+	mu        sync.RWMutex
+	agents    map[string]*AgentInfo
+	events    []ProbeEvent
+	eventMu   sync.RWMutex
+	store     *store.Store
+	auth      *auth.AuthManager
 }
 
-func NewServer(am *auth.AuthManager) *Server {
+func NewServer(am *auth.AuthManager, s *store.Store) *Server {
 	return &Server{
 		agents: make(map[string]*AgentInfo),
 		events: make([]ProbeEvent, 0, 10000),
-		assets: make(map[string][]*pb.ProcessAsset),
-		userAssets: make(map[string][]*pb.UserAsset),
+		store:  s,
 		auth:   am,
 	}
 }
@@ -134,11 +134,13 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 }
 
 func (s *Server) ReportAssets(ctx context.Context, req *pb.AssetReport) (*pb.HeartbeatResponse, error) {
-	s.mu.Lock()
-	s.assets[req.AgentId] = req.Processes
-	s.userAssets[req.AgentId] = req.Users
-	s.mu.Unlock()
-	log.Printf("📊 收到资产: %s (%d个进程)", req.AgentId, len(req.Processes))
+	// 转JSON存数据库
+	procJSON, _ := json.Marshal(req.Processes)
+	userJSON, _ := json.Marshal(req.Users)
+	if err := s.store.SaveAsset(req.AgentId, procJSON, userJSON); err != nil {
+		log.Printf("⚠️ 资产存库失败: %v", err)
+	}
+	log.Printf("📊 收到资产: %s (%d进程, %d用户)", req.AgentId, len(req.Processes), len(req.Users))
 	return &pb.HeartbeatResponse{Success: true}, nil
 }
 
@@ -248,9 +250,11 @@ func (s *Server) setupRoutes(r *gin.Engine) {
 		})
 
 		api.GET("/assets", func(c *gin.Context) {
-			s.mu.RLock()
-			defer s.mu.RUnlock()
-			// 返回每个Agent的资产概览
+			data, err := s.store.GetAllLatestAssets()
+			if err != nil {
+				c.JSON(500, gin.H{"error": "查询失败"})
+				return
+			}
 			type AssetSummary struct {
 				AgentID      string `json:"agent_id"`
 				Hostname     string `json:"hostname"`
@@ -258,34 +262,39 @@ func (s *Server) setupRoutes(r *gin.Engine) {
 				UserCount    int    `json:"user_count"`
 				Online       bool   `json:"online"`
 			}
-			summaries := make([]AssetSummary, 0, len(s.assets))
+			summaries := make([]AssetSummary, 0, len(data))
 			now := time.Now().Unix()
-			for agentID, procs := range s.assets {
+			for agentID, counts := range data {
+				s.mu.RLock()
 				agent := s.agents[agentID]
+				s.mu.RUnlock()
 				hostname := ""
 				online := false
 				if agent != nil {
 					hostname = agent.Hostname
-					if now-agent.LastSeen < 60 {
-						online = true
-					}
+					if now-agent.LastSeen < 60 { online = true }
 				}
 				summaries = append(summaries, AssetSummary{
 					AgentID: agentID, Hostname: hostname,
-					ProcessCount: len(procs), UserCount: len(s.userAssets[agentID]), Online: online,
+					ProcessCount: counts["process_count"], UserCount: counts["user_count"], Online: online,
 				})
 			}
 			c.JSON(200, gin.H{"agents": summaries})
 		})
-
+		api.GET("/assets/:agent_id", func(c *gin.Context) {
 		api.GET("/assets/:agent_id", func(c *gin.Context) {
 			agentID := c.Param("agent_id")
-			s.mu.RLock()
-			defer s.mu.RUnlock()
-			c.JSON(200, gin.H{
-				"processes": s.assets[agentID],
-				"users": s.userAssets[agentID],
-			})
+			procJSON, userJSON, err := s.store.GetLatestAsset(agentID)
+			if err != nil {
+				c.JSON(404, gin.H{"error": "无资产数据"})
+				return
+			}
+			var procs interface{}
+			var users interface{}
+			json.Unmarshal(procJSON, &procs)
+			json.Unmarshal(userJSON, &users)
+			c.JSON(200, gin.H{"processes": procs, "users": users})
+		})
 		})
 		api.GET("/users", s.roleMiddleware("admin"), func(c *gin.Context) {
 			users, _ := s.auth.ListUsers()
@@ -297,12 +306,14 @@ func (s *Server) setupRoutes(r *gin.Engine) {
 // ====== main ======
 
 func main() {
-	am, err := auth.NewAuthManager("sentinel.db")
+	store, err := store.NewStore("sentinel.db")
 	if err != nil { log.Fatalf("数据库初始化失败: %v", err) }
-	defer am.Close()
+	defer store.Close()
 
-	server := NewServer(am)
+	am, err := auth.NewAuthManager(store.DB())
+	if err != nil { log.Fatalf("auth初始化失败: %v", err) }
 
+	server := NewServer(am, store)
 	// gRPC
 	lis, _ := net.Listen("tcp", ":50051")
 	grpcServer := grpc.NewServer()
