@@ -810,6 +810,11 @@ type UserAsset struct {
 	Home          string                 `protobuf:"bytes,4,opt,name=home,proto3" json:"home,omitempty"`
 	Shell         string                 `protobuf:"bytes,5,opt,name=shell,proto3" json:"shell,omitempty"`
 	HasShell      bool                   `protobuf:"varint,6,opt,name=has_shell,json=hasShell,proto3" json:"has_shell,omitempty"`
+	IsRoot        bool                   `protobuf:"varint,7,opt,name=is_root,json=isRoot,proto3" json:"is_root,omitempty"`
+	IsDisabled    bool                   `protobuf:"varint,8,opt,name=is_disabled,json=isDisabled,proto3" json:"is_disabled,omitempty"`
+	HasSudo       bool                   `protobuf:"varint,9,opt,name=has_sudo,json=hasSudo,proto3" json:"has_sudo,omitempty"`
+	LastLogin     string                 `protobuf:"bytes,10,opt,name=last_login,json=lastLogin,proto3" json:"last_login,omitempty"`
+	LastLoginIp   string                 `protobuf:"bytes,11,opt,name=last_login_ip,json=lastLoginIp,proto3" json:"last_login_ip,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -884,6 +889,41 @@ func (x *UserAsset) GetHasShell() bool {
 		return x.HasShell
 	}
 	return false
+}
+
+func (x *UserAsset) GetIsRoot() bool {
+	if x != nil {
+		return x.IsRoot
+	}
+	return false
+}
+
+func (x *UserAsset) GetIsDisabled() bool {
+	if x != nil {
+		return x.IsDisabled
+	}
+	return false
+}
+
+func (x *UserAsset) GetHasSudo() bool {
+	if x != nil {
+		return x.HasSudo
+	}
+	return false
+}
+
+func (x *UserAsset) GetLastLogin() string {
+	if x != nil {
+		return x.LastLogin
+	}
+	return ""
+}
+
+func (x *UserAsset) GetLastLoginIp() string {
+	if x != nil {
+		return x.LastLoginIp
+	}
+	return ""
 }
 
 type ProcessAsset struct {
@@ -1067,14 +1107,22 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
 	"agentToken\x124\n" +
-	"\tprocesses\x18\x03 \x03(\v2\x16.sentinel.ProcessAssetR\tprocesses\"\x92\x01\n" +
+	"\tprocesses\x18\x03 \x03(\v2\x16.sentinel.ProcessAssetR\tprocesses\"\xaa\x02\n" +
 	"\tUserAsset\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x10\n" +
 	"\x03uid\x18\x02 \x01(\x05R\x03uid\x12\x10\n" +
 	"\x03gid\x18\x03 \x01(\x05R\x03gid\x12\x12\n" +
 	"\x04home\x18\x04 \x01(\tR\x04home\x12\x14\n" +
 	"\x05shell\x18\x05 \x01(\tR\x05shell\x12\x1b\n" +
-	"\thas_shell\x18\x06 \x01(\bR\bhasShell\"\xd0\x01\n" +
+	"\thas_shell\x18\x06 \x01(\bR\bhasShell\x12\x17\n" +
+	"\ais_root\x18\a \x01(\bR\x06isRoot\x12\x1f\n" +
+	"\vis_disabled\x18\b \x01(\bR\n" +
+	"isDisabled\x12\x19\n" +
+	"\bhas_sudo\x18\t \x01(\bR\ahasSudo\x12\x1d\n" +
+	"\n" +
+	"last_login\x18\n" +
+	" \x01(\tR\tlastLogin\x12\"\n" +
+	"\rlast_login_ip\x18\v \x01(\tR\vlastLoginIp\"\xd0\x01\n" +
 	"\fProcessAsset\x12\x10\n" +
 	"\x03pid\x18\x01 \x01(\x05R\x03pid\x12\x12\n" +
 	"\x04ppid\x18\x02 \x01(\x05R\x04ppid\x12\x12\n" +

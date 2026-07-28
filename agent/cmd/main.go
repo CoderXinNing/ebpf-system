@@ -233,6 +233,8 @@ func (a *Agent) Start() {
 			assetReq.Users = append(assetReq.Users, &pb.UserAsset{
 				Username: u.Username, Uid: int32(u.UID), Gid: int32(u.GID),
 				Home: u.Home, Shell: u.Shell, HasShell: u.HasShell,
+				IsRoot: u.IsRoot, IsDisabled: u.IsDisabled, HasSudo: u.HasSudo,
+				LastLogin: u.LastLogin, LastLoginIp: u.LastLoginIP,
 			})
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

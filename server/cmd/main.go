@@ -282,7 +282,6 @@ func (s *Server) setupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"agents": summaries})
 		})
 		api.GET("/assets/:agent_id", func(c *gin.Context) {
-		api.GET("/assets/:agent_id", func(c *gin.Context) {
 			agentID := c.Param("agent_id")
 			procJSON, userJSON, err := s.store.GetLatestAsset(agentID)
 			if err != nil {
@@ -294,7 +293,6 @@ func (s *Server) setupRoutes(r *gin.Engine) {
 			json.Unmarshal(procJSON, &procs)
 			json.Unmarshal(userJSON, &users)
 			c.JSON(200, gin.H{"processes": procs, "users": users})
-		})
 		})
 		api.GET("/users", s.roleMiddleware("admin"), func(c *gin.Context) {
 			users, _ := s.auth.ListUsers()

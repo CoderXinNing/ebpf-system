@@ -34,6 +34,8 @@ message AssetReport {
 message UserAsset {
     string username = 1; int32 uid = 2; int32 gid = 3;
     string home = 4; string shell = 5; bool has_shell = 6;
+    bool is_root = 7; bool is_disabled = 8; bool has_sudo = 9;
+    string last_login = 10; string last_login_ip = 11;
 }
 
 message ProcessAsset {
