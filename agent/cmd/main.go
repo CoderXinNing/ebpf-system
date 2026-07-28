@@ -241,9 +241,15 @@ func (a *Agent) Start() {
 			for _, s := range sysInfo.Services {
 				assetReq.System.Services = append(assetReq.System.Services, &pb.ServiceAsset{Name: s.Name, Enabled: s.Enabled})
 			}
-			log.Printf("🖥️  系统采集: %s %s CPU=%d核 Mem=%dMB 磁盘=%d个 服务=%d个",
-				sysInfo.OS.Name, sysInfo.OS.Kernel, sysInfo.CPU.Cores, sysInfo.Memory.TotalMB, len(sysInfo.Disks), len(sysInfo.Services))
+			log.Printf("🖥️  系统采集: %s %s CPU=%d核 Mem=%dMB 磁盘=%d个 服务=%d个", sysInfo.OS.Name, sysInfo.OS.Kernel, sysInfo.CPU.Cores, sysInfo.Memory.TotalMB, len(sysInfo.Disks), len(sysInfo.Services))
 		}
+		crons := collector.CollectAllCronJobs()
+		for _, c := range crons {
+			assetReq.Crons = append(assetReq.Crons, &pb.CronAsset{
+				User: c.User, Schedule: c.Schedule, Command: c.Command, Source: c.Source,
+			})
+		}
+		log.Printf("⏰ 定时任务: %d个", len(crons))
 		for _, p := range procs {
 			assetReq.Processes = append(assetReq.Processes, &pb.ProcessAsset{
 				Pid: int32(p.PID), Ppid: int32(p.PPID), Name: p.Name, Cmdline: p.Cmdline,

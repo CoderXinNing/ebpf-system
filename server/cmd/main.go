@@ -137,7 +137,11 @@ func (s *Server) ReportAssets(ctx context.Context, req *pb.AssetReport) (*pb.Hea
 	// 转JSON存数据库
 	procJSON, _ := json.Marshal(req.Processes)
 	userJSON, _ := json.Marshal(req.Users)
-	sysJSON, _ := json.Marshal(req.System)
+	sysData := map[string]interface{}{
+		"system": req.System,
+		"crons":  req.Crons,
+	}
+	sysJSON, _ := json.Marshal(sysData)
 	if err := s.store.SaveAsset(req.AgentId, procJSON, userJSON, sysJSON); err != nil {
 		log.Printf("⚠️ 资产存库失败: %v", err)
 	}

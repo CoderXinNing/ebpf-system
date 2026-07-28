@@ -28,6 +28,7 @@ message EventReport { string agent_id = 1; string agent_token = 2; repeated Prob
 // 资产上报
 message AssetReport {
     SystemAsset system = 5;
+    repeated CronAsset crons = 6;
     repeated UserAsset users = 4;
     string agent_id = 1; string agent_token = 2;
     repeated ProcessAsset processes = 3;
@@ -48,6 +49,9 @@ message CPUAsset { string model = 1; int32 cores = 2; }
 message MemoryAsset { int32 total_mb = 1; int32 swap_total_mb = 2; }
 message DiskAsset { string mount_point = 1; string filesystem = 2; int32 total_mb = 3; }
 message NetworkAsset { string name = 1; string mac = 2; repeated string ips = 3; }
+message CronAsset {
+    string user = 1; string schedule = 2; string command = 3; string source = 4;
+}
 message ServiceAsset { string name = 1; bool enabled = 2; }
 
 message UserAsset {
