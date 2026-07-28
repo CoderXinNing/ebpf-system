@@ -209,26 +209,20 @@ func (a *Agent) Start() {
 	if err := a.startGuardian(); err != nil { log.Printf("⚠️ 守护: %v", err) }
 	a.initPluginMgr()
 
-	// 采集主机资产信息
+
+	for { if err := a.Connect(); err != nil { time.Sleep(a.cfg.Agent.RetryDelay); continue }; break }
+	for { if err := a.Register(); err != nil { time.Sleep(a.cfg.Agent.RetryDelay); continue }; break }
+
+	// 采集并上报主机资产
 	go func() {
-		time.Sleep(2 * time.Second)
 		procs, err := collector.CollectAllProcesses()
 		if err != nil {
 			log.Printf("⚠️ 进程采集失败: %v", err)
 			return
 		}
-		log.Printf("📊 资产采集: %d 个进程", len(procs))
-
-		users, err := collector.CollectAllUsers()
-		if err != nil {
-			log.Printf("⚠️ 用户采集失败: %v", err)
-		} else {
-			log.Printf("👤 资产采集: %d 个用户", len(users))
-		}
-
-		assetReq := &pb.AssetReport{
-			AgentId: a.id, AgentToken: a.token,
-		}
+		users, _ := collector.CollectAllUsers()
+		log.Printf("📊 资产采集: %d进程 %d用户", len(procs), len(users))
+		assetReq := &pb.AssetReport{AgentId: a.id, AgentToken: a.token}
 		for _, p := range procs {
 			assetReq.Processes = append(assetReq.Processes, &pb.ProcessAsset{
 				Pid: int32(p.PID), Ppid: int32(p.PPID), Name: p.Name, Cmdline: p.Cmdline,
@@ -241,28 +235,17 @@ func (a *Agent) Start() {
 				Home: u.Home, Shell: u.Shell, HasShell: u.HasShell,
 			})
 		}
-
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		_, err = a.client.ReportAssets(ctx, assetReq)
-		if err != nil {
-			log.Printf("⚠️ 资产上报失败: %v", err)
-		}
-
+		if err != nil { log.Printf("⚠️ 资产上报失败: %v", err) }
 		for _, p := range procs {
-			if len(p.Ports) > 0 {
-				log.Printf("   PID=%d %s 端口=%v", p.PID, p.Name, p.Ports)
-			}
+			if len(p.Ports) > 0 { log.Printf("   PID=%d %s 端口=%v", p.PID, p.Name, p.Ports) }
 		}
 		for _, u := range users {
-			if u.HasShell {
-				log.Printf("   👤 %s UID=%d Shell=%s", u.Username, u.UID, u.Shell)
-			}
+			if u.HasShell { log.Printf("   👤 %s UID=%d Shell=%s", u.Username, u.UID, u.Shell) }
 		}
 	}()
-
-	for { if err := a.Connect(); err != nil { time.Sleep(a.cfg.Agent.RetryDelay); continue }; break }
-	for { if err := a.Register(); err != nil { time.Sleep(a.cfg.Agent.RetryDelay); continue }; break }
 
 	go a.eventReporter()
 	a.HeartbeatLoop()

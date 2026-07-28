@@ -49,6 +49,7 @@ type Server struct {
 	agents  map[string]*AgentInfo
 	events  []ProbeEvent
 	assets  map[string][]*pb.ProcessAsset
+	userAssets map[string][]*pb.UserAsset
 	eventMu sync.RWMutex
 	auth    *auth.AuthManager
 }
@@ -58,6 +59,7 @@ func NewServer(am *auth.AuthManager) *Server {
 		agents: make(map[string]*AgentInfo),
 		events: make([]ProbeEvent, 0, 10000),
 		assets: make(map[string][]*pb.ProcessAsset),
+		userAssets: make(map[string][]*pb.UserAsset),
 		auth:   am,
 	}
 }
@@ -134,6 +136,7 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 func (s *Server) ReportAssets(ctx context.Context, req *pb.AssetReport) (*pb.HeartbeatResponse, error) {
 	s.mu.Lock()
 	s.assets[req.AgentId] = req.Processes
+	s.userAssets[req.AgentId] = req.Users
 	s.mu.Unlock()
 	log.Printf("📊 收到资产: %s (%d个进程)", req.AgentId, len(req.Processes))
 	return &pb.HeartbeatResponse{Success: true}, nil
@@ -245,14 +248,44 @@ func (s *Server) setupRoutes(r *gin.Engine) {
 		})
 
 		api.GET("/assets", func(c *gin.Context) {
-			agentID := c.Query("agent_id")
 			s.mu.RLock()
 			defer s.mu.RUnlock()
-			if agentID != "" {
-				c.JSON(200, gin.H{"processes": s.assets[agentID]})
-				return
+			// 返回每个Agent的资产概览
+			type AssetSummary struct {
+				AgentID      string `json:"agent_id"`
+				Hostname     string `json:"hostname"`
+				ProcessCount int    `json:"process_count"`
+				UserCount    int    `json:"user_count"`
+				Online       bool   `json:"online"`
 			}
-			c.JSON(200, gin.H{"agents": func() []string { keys := make([]string, 0, len(s.assets)); for k := range s.assets { keys = append(keys, k) }; return keys }()})
+			summaries := make([]AssetSummary, 0, len(s.assets))
+			now := time.Now().Unix()
+			for agentID, procs := range s.assets {
+				agent := s.agents[agentID]
+				hostname := ""
+				online := false
+				if agent != nil {
+					hostname = agent.Hostname
+					if now-agent.LastSeen < 60 {
+						online = true
+					}
+				}
+				summaries = append(summaries, AssetSummary{
+					AgentID: agentID, Hostname: hostname,
+					ProcessCount: len(procs), UserCount: len(s.userAssets[agentID]), Online: online,
+				})
+			}
+			c.JSON(200, gin.H{"agents": summaries})
+		})
+
+		api.GET("/assets/:agent_id", func(c *gin.Context) {
+			agentID := c.Param("agent_id")
+			s.mu.RLock()
+			defer s.mu.RUnlock()
+			c.JSON(200, gin.H{
+				"processes": s.assets[agentID],
+				"users": s.userAssets[agentID],
+			})
 		})
 		api.GET("/users", s.roleMiddleware("admin"), func(c *gin.Context) {
 			users, _ := s.auth.ListUsers()
