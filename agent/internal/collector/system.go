@@ -8,17 +8,16 @@ import (
 	"strings"
 )
 
-// SystemInfo 系统静态信息
 type SystemInfo struct {
-	OS       OSInfo       `json:"os"`
-	CPU      CPUInfo      `json:"cpu"`
-	Memory   MemoryInfo   `json:"memory"`
-	Disks    []DiskInfo   `json:"disks"`
+	OS       OSInfo        `json:"os"`
+	CPU      CPUInfo       `json:"cpu"`
+	Memory   MemoryInfo    `json:"memory"`
+	Disks    []DiskInfo    `json:"disks"`
 	Networks []NetworkInfo `json:"networks"`
-	Modules  []string     `json:"kernel_modules"`
+	Modules  []string      `json:"kernel_modules"`
 	Services []ServiceInfo `json:"services"`
-	Locale   string       `json:"locale"`
-	Timezone string       `json:"timezone"`
+	Locale   string        `json:"locale"`
+	Timezone string        `json:"timezone"`
 }
 
 type OSInfo struct {
@@ -33,7 +32,7 @@ type CPUInfo struct {
 }
 
 type MemoryInfo struct {
-	TotalMB  int `json:"total_mb"`
+	TotalMB     int `json:"total_mb"`
 	SwapTotalMB int `json:"swap_total_mb"`
 }
 
@@ -44,9 +43,9 @@ type DiskInfo struct {
 }
 
 type NetworkInfo struct {
-	Name    string `json:"name"`
-	MAC     string `json:"mac"`
-	IPs     []string `json:"ips"`
+	Name string   `json:"name"`
+	MAC  string   `json:"mac"`
+	IPs  []string `json:"ips"`
 }
 
 type ServiceInfo struct {
@@ -54,7 +53,6 @@ type ServiceInfo struct {
 	Enabled bool   `json:"enabled"`
 }
 
-// CollectSystemInfo 采集系统静态信息
 func CollectSystemInfo() (*SystemInfo, error) {
 	info := &SystemInfo{}
 
@@ -74,7 +72,6 @@ func CollectSystemInfo() (*SystemInfo, error) {
 func collectOSInfo() OSInfo {
 	osInfo := OSInfo{}
 
-	// /etc/os-release
 	data, err := os.ReadFile("/etc/os-release")
 	if err == nil {
 		for _, line := range strings.Split(string(data), "\n") {
@@ -87,15 +84,27 @@ func collectOSInfo() OSInfo {
 		}
 	}
 
-	// 内核版本
+	if osInfo.Name == "" {
+		data, err = os.ReadFile("/etc/redhat-release")
+		if err == nil {
+			osInfo.Name = strings.TrimSpace(string(data))
+		}
+	}
+
+	if osInfo.Name == "" {
+		osInfo.Name = "Linux"
+	}
+
 	kernel, _ := os.ReadFile("/proc/version")
-	osInfo.Kernel = strings.Fields(string(kernel))[2]
+	if len(kernel) > 0 {
+		osInfo.Kernel = strings.Fields(string(kernel))[2]
+	}
 
 	return osInfo
 }
 
 func collectCPUInfo() CPUInfo {
-	cpu := CPUInfo{Cores: 0}
+	cpu := CPUInfo{}
 
 	data, err := os.ReadFile("/proc/cpuinfo")
 	if err != nil {
@@ -151,14 +160,13 @@ func collectDiskInfo() []DiskInfo {
 	}
 
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	scanner.Scan() // 跳过表头
+	scanner.Scan()
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
 		if len(fields) < 6 {
 			continue
 		}
 
-		// 只采集真实磁盘（排除tmpfs/devtmpfs/squashfs）
 		fsType := fields[0]
 		if strings.HasPrefix(fsType, "/dev/") || strings.HasPrefix(fsType, "overlay") {
 			totalStr := strings.TrimSuffix(fields[1], "M")
@@ -177,7 +185,6 @@ func collectDiskInfo() []DiskInfo {
 func collectNetworkInfo() []NetworkInfo {
 	var networks []NetworkInfo
 
-	// 读 /sys/class/net/ 目录
 	entries, err := os.ReadDir("/sys/class/net")
 	if err != nil {
 		return networks
@@ -191,13 +198,11 @@ func collectNetworkInfo() []NetworkInfo {
 
 		netInfo := NetworkInfo{Name: name}
 
-		// MAC地址
 		macData, err := os.ReadFile(fmt.Sprintf("/sys/class/net/%s/address", name))
 		if err == nil {
 			netInfo.MAC = strings.TrimSpace(string(macData))
 		}
 
-		// IP地址（用ip addr命令）
 		cmd := exec.Command("ip", "-4", "addr", "show", name)
 		output, err := cmd.Output()
 		if err == nil {
@@ -241,17 +246,16 @@ func collectKernelModules() []string {
 func collectServices() []ServiceInfo {
 	var services []ServiceInfo
 
-	// 只采集enabled的service
-	cmd := exec.Command("systemctl", "list-unit-files", "--type=service", "--state=enabled")
+	// 尝试systemd
+	cmd := exec.Command("systemctl", "list-unit-files", "--type=service", "--state=enabled", "--no-legend")
 	output, err := cmd.Output()
 	if err != nil {
-		return services
+		// systemd不可用，尝试读取/etc/init.d（SysV）
+		return collectSysVServices()
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, ".service") && strings.Contains(line, "enabled") {
+	for _, line := range strings.Split(string(output), "\n") {
+		if strings.Contains(line, ".service") {
 			fields := strings.Fields(line)
 			if len(fields) > 0 {
 				services = append(services, ServiceInfo{
@@ -265,27 +269,77 @@ func collectServices() []ServiceInfo {
 	return services
 }
 
+// collectSysVServices 兼容SysV init系统
+func collectSysVServices() []ServiceInfo {
+	var services []ServiceInfo
+
+	// 读 /etc/rc*.d/ 下的启动脚本
+	entries, err := os.ReadDir("/etc/init.d")
+	if err != nil {
+		return services
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// 检查是否在某个runlevel启用
+		enabled := false
+		for _, rc := range []string{"rc2.d", "rc3.d", "rc4.d", "rc5.d"} {
+			rcDir := "/etc/" + rc
+			rcEntries, err := os.ReadDir(rcDir)
+			if err != nil {
+				continue
+			}
+			for _, rcEntry := range rcEntries {
+				if strings.HasPrefix(rcEntry.Name(), "S") && strings.Contains(rcEntry.Name(), name) {
+					enabled = true
+					break
+				}
+			}
+			if enabled {
+				break
+			}
+		}
+
+		services = append(services, ServiceInfo{
+			Name:    name,
+			Enabled: enabled,
+		})
+	}
+
+	return services
+}
+
 func collectLocale() string {
 	data, err := os.ReadFile("/etc/default/locale")
-	if err != nil {
-		return "unknown"
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, "LANG=") {
-			return strings.TrimPrefix(line, "LANG=")
+	if err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(line, "LANG=") {
+				return strings.TrimPrefix(line, "LANG=")
+			}
 		}
 	}
+
+	data, err = os.ReadFile("/etc/locale.conf")
+	if err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(line, "LANG=") {
+				return strings.TrimPrefix(line, "LANG=")
+			}
+		}
+	}
+
 	return "unknown"
 }
 
 func collectTimezone() string {
-	// 读 /etc/timezone 或 /etc/localtime 软链接
 	data, err := os.ReadFile("/etc/timezone")
 	if err == nil {
 		return strings.TrimSpace(string(data))
 	}
 
-	// 读软链接
 	link, err := os.Readlink("/etc/localtime")
 	if err == nil {
 		parts := strings.Split(link, "/")
