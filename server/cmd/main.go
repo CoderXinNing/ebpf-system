@@ -137,7 +137,8 @@ func (s *Server) ReportAssets(ctx context.Context, req *pb.AssetReport) (*pb.Hea
 	// 转JSON存数据库
 	procJSON, _ := json.Marshal(req.Processes)
 	userJSON, _ := json.Marshal(req.Users)
-	if err := s.store.SaveAsset(req.AgentId, procJSON, userJSON); err != nil {
+	sysJSON, _ := json.Marshal(req.System)
+	if err := s.store.SaveAsset(req.AgentId, procJSON, userJSON, sysJSON); err != nil {
 		log.Printf("⚠️ 资产存库失败: %v", err)
 	}
 	log.Printf("📊 收到资产: %s (%d进程, %d用户)", req.AgentId, len(req.Processes), len(req.Users))
@@ -283,7 +284,7 @@ func (s *Server) setupRoutes(r *gin.Engine) {
 		})
 		api.GET("/assets/:agent_id", func(c *gin.Context) {
 			agentID := c.Param("agent_id")
-			procJSON, userJSON, err := s.store.GetLatestAsset(agentID)
+			procJSON, userJSON, sysJSON, err := s.store.GetLatestAsset(agentID)
 			if err != nil {
 				c.JSON(404, gin.H{"error": "无资产数据"})
 				return
@@ -291,8 +292,8 @@ func (s *Server) setupRoutes(r *gin.Engine) {
 			var procs interface{}
 			var users interface{}
 			json.Unmarshal(procJSON, &procs)
-			json.Unmarshal(userJSON, &users)
-			c.JSON(200, gin.H{"processes": procs, "users": users})
+			json.Unmarshal(userJSON, &users); var sys interface{}; json.Unmarshal(sysJSON, &sys)
+			c.JSON(200, gin.H{"processes": procs, "users": users, "system": sys})
 		})
 		api.GET("/users", s.roleMiddleware("admin"), func(c *gin.Context) {
 			users, _ := s.auth.ListUsers()

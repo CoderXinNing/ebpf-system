@@ -223,6 +223,27 @@ func (a *Agent) Start() {
 		users, _ := collector.CollectAllUsers()
 		log.Printf("📊 资产采集: %d进程 %d用户", len(procs), len(users))
 		assetReq := &pb.AssetReport{AgentId: a.id, AgentToken: a.token}
+		sysInfo, _ := collector.CollectSystemInfo()
+		if sysInfo != nil {
+			assetReq.System = &pb.SystemAsset{
+				Os: &pb.OSAsset{Name: sysInfo.OS.Name, Version: sysInfo.OS.Version, Kernel: sysInfo.OS.Kernel},
+				Cpu: &pb.CPUAsset{Model: sysInfo.CPU.Model, Cores: int32(sysInfo.CPU.Cores)},
+				Memory: &pb.MemoryAsset{TotalMb: int32(sysInfo.Memory.TotalMB), SwapTotalMb: int32(sysInfo.Memory.SwapTotalMB)},
+				Locale: sysInfo.Locale, Timezone: sysInfo.Timezone,
+			}
+			for _, d := range sysInfo.Disks {
+				assetReq.System.Disks = append(assetReq.System.Disks, &pb.DiskAsset{MountPoint: d.MountPoint, Filesystem: d.Filesystem, TotalMb: int32(d.TotalMB)})
+			}
+			for _, n := range sysInfo.Networks {
+				assetReq.System.Networks = append(assetReq.System.Networks, &pb.NetworkAsset{Name: n.Name, Mac: n.MAC, Ips: n.IPs})
+			}
+			assetReq.System.KernelModules = sysInfo.Modules
+			for _, s := range sysInfo.Services {
+				assetReq.System.Services = append(assetReq.System.Services, &pb.ServiceAsset{Name: s.Name, Enabled: s.Enabled})
+			}
+			log.Printf("🖥️  系统采集: %s %s CPU=%d核 Mem=%dMB 磁盘=%d个 服务=%d个",
+				sysInfo.OS.Name, sysInfo.OS.Kernel, sysInfo.CPU.Cores, sysInfo.Memory.TotalMB, len(sysInfo.Disks), len(sysInfo.Services))
+		}
 		for _, p := range procs {
 			assetReq.Processes = append(assetReq.Processes, &pb.ProcessAsset{
 				Pid: int32(p.PID), Ppid: int32(p.PPID), Name: p.Name, Cmdline: p.Cmdline,

@@ -36,7 +36,8 @@ func NewStore(dbPath string) (*Store, error) {
 			agent_id TEXT NOT NULL,
 			created_at INTEGER NOT NULL,
 			processes_json TEXT,
-			users_json TEXT
+			users_json TEXT,
+			system_json TEXT
 		)`,
 		// 索引：按Agent+时间查最新
 		`CREATE INDEX IF NOT EXISTS idx_asset_agent_time ON asset_snapshots(agent_id, created_at DESC)`,
@@ -53,25 +54,25 @@ func NewStore(dbPath string) (*Store, error) {
 }
 
 // SaveAsset 保存资产快照
-func (s *Store) SaveAsset(agentID string, processesJSON, usersJSON []byte) error {
+func (s *Store) SaveAsset(agentID string, processesJSON, usersJSON, systemJSON []byte) error {
 	_, err := s.db.Exec(
-		"INSERT INTO asset_snapshots (agent_id, created_at, processes_json, users_json) VALUES (?, ?, ?, ?)",
-		agentID, time.Now().Unix(), string(processesJSON), string(usersJSON),
+		"INSERT INTO asset_snapshots (agent_id, created_at, processes_json, users_json, system_json) VALUES (?, ?, ?, ?, ?)",
+		agentID, time.Now().Unix(), string(processesJSON), string(usersJSON), string(systemJSON),
 	)
 	return err
 }
 
 // GetLatestAsset 获取最新资产快照
-func (s *Store) GetLatestAsset(agentID string) (processesJSON, usersJSON []byte, err error) {
-	var p, u sql.NullString
+func (s *Store) GetLatestAsset(agentID string) (processesJSON, usersJSON, systemJSON []byte, err error) {
+	var p, u, sys sql.NullString
 	err = s.db.QueryRow(
-		"SELECT processes_json, users_json FROM asset_snapshots WHERE agent_id = ? ORDER BY created_at DESC LIMIT 1",
+		"SELECT processes_json, users_json, system_json FROM asset_snapshots WHERE agent_id = ? ORDER BY created_at DESC LIMIT 1",
 		agentID,
-	).Scan(&p, &u)
+	).Scan(&p, &u, &sys)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return []byte(p.String), []byte(u.String), nil
+	return []byte(p.String), []byte(u.String), []byte(sys.String), nil
 }
 
 // GetAllLatestAssets 获取所有Agent的最新资产（用于概览）

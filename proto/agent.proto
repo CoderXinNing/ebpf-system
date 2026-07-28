@@ -27,10 +27,29 @@ message EventReport { string agent_id = 1; string agent_token = 2; repeated Prob
 
 // 资产上报
 message AssetReport {
+    SystemAsset system = 5;
     repeated UserAsset users = 4;
     string agent_id = 1; string agent_token = 2;
     repeated ProcessAsset processes = 3;
 }
+message SystemAsset {
+    OSAsset os = 1;
+    CPUAsset cpu = 2;
+    MemoryAsset memory = 3;
+    repeated DiskAsset disks = 4;
+    repeated NetworkAsset networks = 5;
+    repeated string kernel_modules = 6;
+    repeated ServiceAsset services = 7;
+    string locale = 8;
+    string timezone = 9;
+}
+message OSAsset { string name = 1; string version = 2; string kernel = 3; }
+message CPUAsset { string model = 1; int32 cores = 2; }
+message MemoryAsset { int32 total_mb = 1; int32 swap_total_mb = 2; }
+message DiskAsset { string mount_point = 1; string filesystem = 2; int32 total_mb = 3; }
+message NetworkAsset { string name = 1; string mac = 2; repeated string ips = 3; }
+message ServiceAsset { string name = 1; bool enabled = 2; }
+
 message UserAsset {
     string username = 1; int32 uid = 2; int32 gid = 3;
     string home = 4; string shell = 5; bool has_shell = 6;
