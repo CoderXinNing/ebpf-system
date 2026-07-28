@@ -22,6 +22,7 @@ const (
 	Sentinel_Register_FullMethodName     = "/sentinel.Sentinel/Register"
 	Sentinel_Heartbeat_FullMethodName    = "/sentinel.Sentinel/Heartbeat"
 	Sentinel_ReportEvents_FullMethodName = "/sentinel.Sentinel/ReportEvents"
+	Sentinel_ReportAssets_FullMethodName = "/sentinel.Sentinel/ReportAssets"
 )
 
 // SentinelClient is the client API for Sentinel service.
@@ -31,6 +32,7 @@ type SentinelClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 	Heartbeat(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[HeartbeatRequest, HeartbeatResponse], error)
 	ReportEvents(ctx context.Context, in *EventReport, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+	ReportAssets(ctx context.Context, in *AssetReport, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 }
 
 type sentinelClient struct {
@@ -74,6 +76,16 @@ func (c *sentinelClient) ReportEvents(ctx context.Context, in *EventReport, opts
 	return out, nil
 }
 
+func (c *sentinelClient) ReportAssets(ctx context.Context, in *AssetReport, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HeartbeatResponse)
+	err := c.cc.Invoke(ctx, Sentinel_ReportAssets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SentinelServer is the server API for Sentinel service.
 // All implementations must embed UnimplementedSentinelServer
 // for forward compatibility.
@@ -81,6 +93,7 @@ type SentinelServer interface {
 	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	Heartbeat(grpc.BidiStreamingServer[HeartbeatRequest, HeartbeatResponse]) error
 	ReportEvents(context.Context, *EventReport) (*HeartbeatResponse, error)
+	ReportAssets(context.Context, *AssetReport) (*HeartbeatResponse, error)
 	mustEmbedUnimplementedSentinelServer()
 }
 
@@ -99,6 +112,9 @@ func (UnimplementedSentinelServer) Heartbeat(grpc.BidiStreamingServer[HeartbeatR
 }
 func (UnimplementedSentinelServer) ReportEvents(context.Context, *EventReport) (*HeartbeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportEvents not implemented")
+}
+func (UnimplementedSentinelServer) ReportAssets(context.Context, *AssetReport) (*HeartbeatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportAssets not implemented")
 }
 func (UnimplementedSentinelServer) mustEmbedUnimplementedSentinelServer() {}
 func (UnimplementedSentinelServer) testEmbeddedByValue()                  {}
@@ -164,6 +180,24 @@ func _Sentinel_ReportEvents_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Sentinel_ReportAssets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AssetReport)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SentinelServer).ReportAssets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Sentinel_ReportAssets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SentinelServer).ReportAssets(ctx, req.(*AssetReport))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Sentinel_ServiceDesc is the grpc.ServiceDesc for Sentinel service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -178,6 +212,10 @@ var Sentinel_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportEvents",
 			Handler:    _Sentinel_ReportEvents_Handler,
+		},
+		{
+			MethodName: "ReportAssets",
+			Handler:    _Sentinel_ReportAssets_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

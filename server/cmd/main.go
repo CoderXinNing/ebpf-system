@@ -48,6 +48,7 @@ type Server struct {
 	mu      sync.RWMutex
 	agents  map[string]*AgentInfo
 	events  []ProbeEvent
+	assets  map[string][]*pb.ProcessAsset
 	eventMu sync.RWMutex
 	auth    *auth.AuthManager
 }
@@ -56,6 +57,7 @@ func NewServer(am *auth.AuthManager) *Server {
 	return &Server{
 		agents: make(map[string]*AgentInfo),
 		events: make([]ProbeEvent, 0, 10000),
+		assets: make(map[string][]*pb.ProcessAsset),
 		auth:   am,
 	}
 }
@@ -127,6 +129,14 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 		}
 	}
 	return nil
+}
+
+func (s *Server) ReportAssets(ctx context.Context, req *pb.AssetReport) (*pb.HeartbeatResponse, error) {
+	s.mu.Lock()
+	s.assets[req.AgentId] = req.Processes
+	s.mu.Unlock()
+	log.Printf("📊 收到资产: %s (%d个进程)", req.AgentId, len(req.Processes))
+	return &pb.HeartbeatResponse{Success: true}, nil
 }
 
 func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.HeartbeatResponse, error) {
@@ -234,6 +244,16 @@ func (s *Server) setupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"success": true, "message": "指令已排队"})
 		})
 
+		api.GET("/assets", func(c *gin.Context) {
+			agentID := c.Query("agent_id")
+			s.mu.RLock()
+			defer s.mu.RUnlock()
+			if agentID != "" {
+				c.JSON(200, gin.H{"processes": s.assets[agentID]})
+				return
+			}
+			c.JSON(200, gin.H{"agents": func() []string { keys := make([]string, 0, len(s.assets)); for k := range s.assets { keys = append(keys, k) }; return keys }()})
+		})
 		api.GET("/users", s.roleMiddleware("admin"), func(c *gin.Context) {
 			users, _ := s.auth.ListUsers()
 			c.JSON(200, gin.H{"users": users})

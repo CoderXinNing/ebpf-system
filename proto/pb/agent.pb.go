@@ -220,19 +220,13 @@ func (x *RegisterResponse) GetAgentToken() string {
 type FrameworkInfo struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
 	BccAvailable           bool                   `protobuf:"varint,1,opt,name=bcc_available,json=bccAvailable,proto3" json:"bcc_available,omitempty"`
-	BccVersion             string                 `protobuf:"bytes,2,opt,name=bcc_version,json=bccVersion,proto3" json:"bcc_version,omitempty"`
-	PythonBccAvailable     bool                   `protobuf:"varint,3,opt,name=python_bcc_available,json=pythonBccAvailable,proto3" json:"python_bcc_available,omitempty"`
-	LibbpfAvailable        bool                   `protobuf:"varint,4,opt,name=libbpf_available,json=libbpfAvailable,proto3" json:"libbpf_available,omitempty"`
-	LibbpfVersion          string                 `protobuf:"bytes,5,opt,name=libbpf_version,json=libbpfVersion,proto3" json:"libbpf_version,omitempty"`
-	LibbpfCore             bool                   `protobuf:"varint,6,opt,name=libbpf_core,json=libbpfCore,proto3" json:"libbpf_core,omitempty"`
-	BpftraceAvailable      bool                   `protobuf:"varint,7,opt,name=bpftrace_available,json=bpftraceAvailable,proto3" json:"bpftrace_available,omitempty"`
-	BpftraceVersion        string                 `protobuf:"bytes,8,opt,name=bpftrace_version,json=bpftraceVersion,proto3" json:"bpftrace_version,omitempty"`
-	ClangAvailable         bool                   `protobuf:"varint,9,opt,name=clang_available,json=clangAvailable,proto3" json:"clang_available,omitempty"`
-	ClangVersion           string                 `protobuf:"bytes,10,opt,name=clang_version,json=clangVersion,proto3" json:"clang_version,omitempty"`
-	LlvmAvailable          bool                   `protobuf:"varint,11,opt,name=llvm_available,json=llvmAvailable,proto3" json:"llvm_available,omitempty"`
-	LlvmVersion            string                 `protobuf:"bytes,12,opt,name=llvm_version,json=llvmVersion,proto3" json:"llvm_version,omitempty"`
-	KernelHeadersAvailable bool                   `protobuf:"varint,13,opt,name=kernel_headers_available,json=kernelHeadersAvailable,proto3" json:"kernel_headers_available,omitempty"`
-	GoEbpfAvailable        bool                   `protobuf:"varint,14,opt,name=go_ebpf_available,json=goEbpfAvailable,proto3" json:"go_ebpf_available,omitempty"`
+	LibbpfAvailable        bool                   `protobuf:"varint,2,opt,name=libbpf_available,json=libbpfAvailable,proto3" json:"libbpf_available,omitempty"`
+	LibbpfCore             bool                   `protobuf:"varint,3,opt,name=libbpf_core,json=libbpfCore,proto3" json:"libbpf_core,omitempty"`
+	BpftraceAvailable      bool                   `protobuf:"varint,4,opt,name=bpftrace_available,json=bpftraceAvailable,proto3" json:"bpftrace_available,omitempty"`
+	ClangAvailable         bool                   `protobuf:"varint,5,opt,name=clang_available,json=clangAvailable,proto3" json:"clang_available,omitempty"`
+	LlvmAvailable          bool                   `protobuf:"varint,6,opt,name=llvm_available,json=llvmAvailable,proto3" json:"llvm_available,omitempty"`
+	KernelHeadersAvailable bool                   `protobuf:"varint,7,opt,name=kernel_headers_available,json=kernelHeadersAvailable,proto3" json:"kernel_headers_available,omitempty"`
+	GoEbpfAvailable        bool                   `protobuf:"varint,8,opt,name=go_ebpf_available,json=goEbpfAvailable,proto3" json:"go_ebpf_available,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -274,32 +268,11 @@ func (x *FrameworkInfo) GetBccAvailable() bool {
 	return false
 }
 
-func (x *FrameworkInfo) GetBccVersion() string {
-	if x != nil {
-		return x.BccVersion
-	}
-	return ""
-}
-
-func (x *FrameworkInfo) GetPythonBccAvailable() bool {
-	if x != nil {
-		return x.PythonBccAvailable
-	}
-	return false
-}
-
 func (x *FrameworkInfo) GetLibbpfAvailable() bool {
 	if x != nil {
 		return x.LibbpfAvailable
 	}
 	return false
-}
-
-func (x *FrameworkInfo) GetLibbpfVersion() string {
-	if x != nil {
-		return x.LibbpfVersion
-	}
-	return ""
 }
 
 func (x *FrameworkInfo) GetLibbpfCore() bool {
@@ -316,13 +289,6 @@ func (x *FrameworkInfo) GetBpftraceAvailable() bool {
 	return false
 }
 
-func (x *FrameworkInfo) GetBpftraceVersion() string {
-	if x != nil {
-		return x.BpftraceVersion
-	}
-	return ""
-}
-
 func (x *FrameworkInfo) GetClangAvailable() bool {
 	if x != nil {
 		return x.ClangAvailable
@@ -330,25 +296,11 @@ func (x *FrameworkInfo) GetClangAvailable() bool {
 	return false
 }
 
-func (x *FrameworkInfo) GetClangVersion() string {
-	if x != nil {
-		return x.ClangVersion
-	}
-	return ""
-}
-
 func (x *FrameworkInfo) GetLlvmAvailable() bool {
 	if x != nil {
 		return x.LlvmAvailable
 	}
 	return false
-}
-
-func (x *FrameworkInfo) GetLlvmVersion() string {
-	if x != nil {
-		return x.LlvmVersion
-	}
-	return ""
 }
 
 func (x *FrameworkInfo) GetKernelHeadersAvailable() bool {
@@ -550,8 +502,8 @@ type ProbeCommand struct {
 	Type          ProbeCommand_CommandType `protobuf:"varint,1,opt,name=type,proto3,enum=sentinel.ProbeCommand_CommandType" json:"type,omitempty"`
 	ProbeId       string                   `protobuf:"bytes,2,opt,name=probe_id,json=probeId,proto3" json:"probe_id,omitempty"`
 	ProbeName     string                   `protobuf:"bytes,3,opt,name=probe_name,json=probeName,proto3" json:"probe_name,omitempty"`
-	ProbeData     []byte                   `protobuf:"bytes,4,opt,name=probe_data,json=probeData,proto3" json:"probe_data,omitempty"`       // probe.bpf.o 内容
-	ProbeConfig   string                   `protobuf:"bytes,5,opt,name=probe_config,json=probeConfig,proto3" json:"probe_config,omitempty"` // probe.yaml 内容
+	ProbeData     []byte                   `protobuf:"bytes,4,opt,name=probe_data,json=probeData,proto3" json:"probe_data,omitempty"`
+	ProbeConfig   string                   `protobuf:"bytes,5,opt,name=probe_config,json=probeConfig,proto3" json:"probe_config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -781,6 +733,259 @@ func (x *EventReport) GetEvents() []*ProbeEvent {
 	return nil
 }
 
+// 资产上报
+type AssetReport struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Users         []*UserAsset           `protobuf:"bytes,4,rep,name=users,proto3" json:"users,omitempty"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	AgentToken    string                 `protobuf:"bytes,2,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
+	Processes     []*ProcessAsset        `protobuf:"bytes,3,rep,name=processes,proto3" json:"processes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AssetReport) Reset() {
+	*x = AssetReport{}
+	mi := &file_proto_agent_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AssetReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AssetReport) ProtoMessage() {}
+
+func (x *AssetReport) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AssetReport.ProtoReflect.Descriptor instead.
+func (*AssetReport) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *AssetReport) GetUsers() []*UserAsset {
+	if x != nil {
+		return x.Users
+	}
+	return nil
+}
+
+func (x *AssetReport) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *AssetReport) GetAgentToken() string {
+	if x != nil {
+		return x.AgentToken
+	}
+	return ""
+}
+
+func (x *AssetReport) GetProcesses() []*ProcessAsset {
+	if x != nil {
+		return x.Processes
+	}
+	return nil
+}
+
+type UserAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	Uid           int32                  `protobuf:"varint,2,opt,name=uid,proto3" json:"uid,omitempty"`
+	Gid           int32                  `protobuf:"varint,3,opt,name=gid,proto3" json:"gid,omitempty"`
+	Home          string                 `protobuf:"bytes,4,opt,name=home,proto3" json:"home,omitempty"`
+	Shell         string                 `protobuf:"bytes,5,opt,name=shell,proto3" json:"shell,omitempty"`
+	HasShell      bool                   `protobuf:"varint,6,opt,name=has_shell,json=hasShell,proto3" json:"has_shell,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserAsset) Reset() {
+	*x = UserAsset{}
+	mi := &file_proto_agent_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserAsset) ProtoMessage() {}
+
+func (x *UserAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserAsset.ProtoReflect.Descriptor instead.
+func (*UserAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *UserAsset) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *UserAsset) GetUid() int32 {
+	if x != nil {
+		return x.Uid
+	}
+	return 0
+}
+
+func (x *UserAsset) GetGid() int32 {
+	if x != nil {
+		return x.Gid
+	}
+	return 0
+}
+
+func (x *UserAsset) GetHome() string {
+	if x != nil {
+		return x.Home
+	}
+	return ""
+}
+
+func (x *UserAsset) GetShell() string {
+	if x != nil {
+		return x.Shell
+	}
+	return ""
+}
+
+func (x *UserAsset) GetHasShell() bool {
+	if x != nil {
+		return x.HasShell
+	}
+	return false
+}
+
+type ProcessAsset struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Pid            int32                  `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
+	Ppid           int32                  `protobuf:"varint,2,opt,name=ppid,proto3" json:"ppid,omitempty"`
+	Name           string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Cmdline        string                 `protobuf:"bytes,4,opt,name=cmdline,proto3" json:"cmdline,omitempty"`
+	ExePath        string                 `protobuf:"bytes,5,opt,name=exe_path,json=exePath,proto3" json:"exe_path,omitempty"`
+	User           string                 `protobuf:"bytes,6,opt,name=user,proto3" json:"user,omitempty"`
+	State          string                 `protobuf:"bytes,7,opt,name=state,proto3" json:"state,omitempty"`
+	ListeningPorts []string               `protobuf:"bytes,8,rep,name=listening_ports,json=listeningPorts,proto3" json:"listening_ports,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ProcessAsset) Reset() {
+	*x = ProcessAsset{}
+	mi := &file_proto_agent_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcessAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcessAsset) ProtoMessage() {}
+
+func (x *ProcessAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcessAsset.ProtoReflect.Descriptor instead.
+func (*ProcessAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ProcessAsset) GetPid() int32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
+}
+
+func (x *ProcessAsset) GetPpid() int32 {
+	if x != nil {
+		return x.Ppid
+	}
+	return 0
+}
+
+func (x *ProcessAsset) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ProcessAsset) GetCmdline() string {
+	if x != nil {
+		return x.Cmdline
+	}
+	return ""
+}
+
+func (x *ProcessAsset) GetExePath() string {
+	if x != nil {
+		return x.ExePath
+	}
+	return ""
+}
+
+func (x *ProcessAsset) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *ProcessAsset) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *ProcessAsset) GetListeningPorts() []string {
+	if x != nil {
+		return x.ListeningPorts
+	}
+	return nil
+}
+
 var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
@@ -799,25 +1004,17 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1f\n" +
 	"\vagent_token\x18\x03 \x01(\tR\n" +
-	"agentToken\"\xd2\x04\n" +
+	"agentToken\"\xe5\x02\n" +
 	"\rFrameworkInfo\x12#\n" +
-	"\rbcc_available\x18\x01 \x01(\bR\fbccAvailable\x12\x1f\n" +
-	"\vbcc_version\x18\x02 \x01(\tR\n" +
-	"bccVersion\x120\n" +
-	"\x14python_bcc_available\x18\x03 \x01(\bR\x12pythonBccAvailable\x12)\n" +
-	"\x10libbpf_available\x18\x04 \x01(\bR\x0flibbpfAvailable\x12%\n" +
-	"\x0elibbpf_version\x18\x05 \x01(\tR\rlibbpfVersion\x12\x1f\n" +
-	"\vlibbpf_core\x18\x06 \x01(\bR\n" +
+	"\rbcc_available\x18\x01 \x01(\bR\fbccAvailable\x12)\n" +
+	"\x10libbpf_available\x18\x02 \x01(\bR\x0flibbpfAvailable\x12\x1f\n" +
+	"\vlibbpf_core\x18\x03 \x01(\bR\n" +
 	"libbpfCore\x12-\n" +
-	"\x12bpftrace_available\x18\a \x01(\bR\x11bpftraceAvailable\x12)\n" +
-	"\x10bpftrace_version\x18\b \x01(\tR\x0fbpftraceVersion\x12'\n" +
-	"\x0fclang_available\x18\t \x01(\bR\x0eclangAvailable\x12#\n" +
-	"\rclang_version\x18\n" +
-	" \x01(\tR\fclangVersion\x12%\n" +
-	"\x0ellvm_available\x18\v \x01(\bR\rllvmAvailable\x12!\n" +
-	"\fllvm_version\x18\f \x01(\tR\vllvmVersion\x128\n" +
-	"\x18kernel_headers_available\x18\r \x01(\bR\x16kernelHeadersAvailable\x12*\n" +
-	"\x11go_ebpf_available\x18\x0e \x01(\bR\x0fgoEbpfAvailable\"[\n" +
+	"\x12bpftrace_available\x18\x04 \x01(\bR\x11bpftraceAvailable\x12'\n" +
+	"\x0fclang_available\x18\x05 \x01(\bR\x0eclangAvailable\x12%\n" +
+	"\x0ellvm_available\x18\x06 \x01(\bR\rllvmAvailable\x128\n" +
+	"\x18kernel_headers_available\x18\a \x01(\bR\x16kernelHeadersAvailable\x12*\n" +
+	"\x11go_ebpf_available\x18\b \x01(\bR\x0fgoEbpfAvailable\"[\n" +
 	"\n" +
 	"KernelInfo\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x12\n" +
@@ -864,11 +1061,34 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
 	"agentToken\x12,\n" +
-	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events2\xdb\x01\n" +
+	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"\xaa\x01\n" +
+	"\vAssetReport\x12)\n" +
+	"\x05users\x18\x04 \x03(\v2\x13.sentinel.UserAssetR\x05users\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
+	"\vagent_token\x18\x02 \x01(\tR\n" +
+	"agentToken\x124\n" +
+	"\tprocesses\x18\x03 \x03(\v2\x16.sentinel.ProcessAssetR\tprocesses\"\x92\x01\n" +
+	"\tUserAsset\x12\x1a\n" +
+	"\busername\x18\x01 \x01(\tR\busername\x12\x10\n" +
+	"\x03uid\x18\x02 \x01(\x05R\x03uid\x12\x10\n" +
+	"\x03gid\x18\x03 \x01(\x05R\x03gid\x12\x12\n" +
+	"\x04home\x18\x04 \x01(\tR\x04home\x12\x14\n" +
+	"\x05shell\x18\x05 \x01(\tR\x05shell\x12\x1b\n" +
+	"\thas_shell\x18\x06 \x01(\bR\bhasShell\"\xd0\x01\n" +
+	"\fProcessAsset\x12\x10\n" +
+	"\x03pid\x18\x01 \x01(\x05R\x03pid\x12\x12\n" +
+	"\x04ppid\x18\x02 \x01(\x05R\x04ppid\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x18\n" +
+	"\acmdline\x18\x04 \x01(\tR\acmdline\x12\x19\n" +
+	"\bexe_path\x18\x05 \x01(\tR\aexePath\x12\x12\n" +
+	"\x04user\x18\x06 \x01(\tR\x04user\x12\x14\n" +
+	"\x05state\x18\a \x01(\tR\x05state\x12'\n" +
+	"\x0flistening_ports\x18\b \x03(\tR\x0elisteningPorts2\x9f\x02\n" +
 	"\bSentinel\x12A\n" +
 	"\bRegister\x12\x19.sentinel.RegisterRequest\x1a\x1a.sentinel.RegisterResponse\x12H\n" +
 	"\tHeartbeat\x12\x1a.sentinel.HeartbeatRequest\x1a\x1b.sentinel.HeartbeatResponse(\x010\x01\x12B\n" +
-	"\fReportEvents\x12\x15.sentinel.EventReport\x1a\x1b.sentinel.HeartbeatResponseB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
+	"\fReportEvents\x12\x15.sentinel.EventReport\x1a\x1b.sentinel.HeartbeatResponse\x12B\n" +
+	"\fReportAssets\x12\x15.sentinel.AssetReport\x1a\x1b.sentinel.HeartbeatResponseB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once
@@ -883,7 +1103,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_proto_agent_proto_goTypes = []any{
 	(ProbeCommand_CommandType)(0), // 0: sentinel.ProbeCommand.CommandType
 	(*RegisterRequest)(nil),       // 1: sentinel.RegisterRequest
@@ -895,24 +1115,31 @@ var file_proto_agent_proto_goTypes = []any{
 	(*ProbeCommand)(nil),          // 7: sentinel.ProbeCommand
 	(*ProbeEvent)(nil),            // 8: sentinel.ProbeEvent
 	(*EventReport)(nil),           // 9: sentinel.EventReport
+	(*AssetReport)(nil),           // 10: sentinel.AssetReport
+	(*UserAsset)(nil),             // 11: sentinel.UserAsset
+	(*ProcessAsset)(nil),          // 12: sentinel.ProcessAsset
 }
 var file_proto_agent_proto_depIdxs = []int32{
-	3, // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
-	4, // 1: sentinel.RegisterRequest.kernel_info:type_name -> sentinel.KernelInfo
-	7, // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
-	0, // 3: sentinel.ProbeCommand.type:type_name -> sentinel.ProbeCommand.CommandType
-	8, // 4: sentinel.EventReport.events:type_name -> sentinel.ProbeEvent
-	1, // 5: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
-	5, // 6: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
-	9, // 7: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
-	2, // 8: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
-	6, // 9: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
-	6, // 10: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
-	8, // [8:11] is the sub-list for method output_type
-	5, // [5:8] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	3,  // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
+	4,  // 1: sentinel.RegisterRequest.kernel_info:type_name -> sentinel.KernelInfo
+	7,  // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
+	0,  // 3: sentinel.ProbeCommand.type:type_name -> sentinel.ProbeCommand.CommandType
+	8,  // 4: sentinel.EventReport.events:type_name -> sentinel.ProbeEvent
+	11, // 5: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
+	12, // 6: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
+	1,  // 7: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
+	5,  // 8: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
+	9,  // 9: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
+	10, // 10: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
+	2,  // 11: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
+	6,  // 12: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
+	6,  // 13: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
+	6,  // 14: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
+	11, // [11:15] is the sub-list for method output_type
+	7,  // [7:11] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -926,7 +1153,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
