@@ -110,6 +110,11 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 	h := s.handler
 	h.Mu.Lock()
 	agent, ok := h.Agents[req.AgentId]
+	if !ok || agent == nil {
+		h.Mu.Unlock()
+		stream.Send(&pb.HeartbeatResponse{Success: false})
+		return nil
+	}
 	if !ok || agent.Token != req.AgentToken {
 		h.Mu.Unlock()
 		stream.Send(&pb.HeartbeatResponse{Success: false})
@@ -182,6 +187,7 @@ func (s *Server) ReportAssets(ctx context.Context, req *pb.AssetReport) (*pb.Hea
 		"system":   req.System,
 		"crons":    req.Crons,
 		"packages": req.Packages,
+		"services": req.Services,
 	}
 	sysJSON, _ := json.Marshal(sysData)
 	s.handler.Store.SaveAsset(req.AgentId, procJSON, userJSON, sysJSON)

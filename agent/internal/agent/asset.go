@@ -48,6 +48,15 @@ func (a *Agent) collectAndReportAssets() {
 			Name: p.Name, Version: p.Version, Manager: p.Manager,
 		})
 	}
+	svcs := collector.IdentifyServices()
+	for _, s := range svcs {
+		assetReq.Services = append(assetReq.Services, &pb.IdentifiedService{
+			Name: s.Name, Version: s.Version, Type: s.Type,
+			Pid: int32(s.PID), ExePath: s.ExePath, ConfigPath: s.ConfigPath,
+			ListenPort: s.ListenPort,
+		})
+	}
+	log.Printf("🔍 服务识别: %d个", len(svcs))
 
 	if sysInfo != nil {
 		assetReq.System = &pb.SystemAsset{

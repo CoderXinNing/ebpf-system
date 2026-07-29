@@ -739,6 +739,7 @@ type AssetReport struct {
 	System        *SystemAsset           `protobuf:"bytes,5,opt,name=system,proto3" json:"system,omitempty"`
 	Crons         []*CronAsset           `protobuf:"bytes,6,rep,name=crons,proto3" json:"crons,omitempty"`
 	Packages      []*PackageAsset        `protobuf:"bytes,7,rep,name=packages,proto3" json:"packages,omitempty"`
+	Services      []*IdentifiedService   `protobuf:"bytes,8,rep,name=services,proto3" json:"services,omitempty"`
 	Users         []*UserAsset           `protobuf:"bytes,4,rep,name=users,proto3" json:"users,omitempty"`
 	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	AgentToken    string                 `protobuf:"bytes,2,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
@@ -794,6 +795,13 @@ func (x *AssetReport) GetCrons() []*CronAsset {
 func (x *AssetReport) GetPackages() []*PackageAsset {
 	if x != nil {
 		return x.Packages
+	}
+	return nil
+}
+
+func (x *AssetReport) GetServices() []*IdentifiedService {
+	if x != nil {
+		return x.Services
 	}
 	return nil
 }
@@ -1218,6 +1226,98 @@ func (x *NetworkAsset) GetIps() []string {
 	return nil
 }
 
+type IdentifiedService struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Type          string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	Pid           int32                  `protobuf:"varint,4,opt,name=pid,proto3" json:"pid,omitempty"`
+	ExePath       string                 `protobuf:"bytes,5,opt,name=exe_path,json=exePath,proto3" json:"exe_path,omitempty"`
+	ConfigPath    string                 `protobuf:"bytes,6,opt,name=config_path,json=configPath,proto3" json:"config_path,omitempty"`
+	ListenPort    []string               `protobuf:"bytes,7,rep,name=listen_port,json=listenPort,proto3" json:"listen_port,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentifiedService) Reset() {
+	*x = IdentifiedService{}
+	mi := &file_proto_agent_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentifiedService) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentifiedService) ProtoMessage() {}
+
+func (x *IdentifiedService) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentifiedService.ProtoReflect.Descriptor instead.
+func (*IdentifiedService) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *IdentifiedService) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *IdentifiedService) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *IdentifiedService) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *IdentifiedService) GetPid() int32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
+}
+
+func (x *IdentifiedService) GetExePath() string {
+	if x != nil {
+		return x.ExePath
+	}
+	return ""
+}
+
+func (x *IdentifiedService) GetConfigPath() string {
+	if x != nil {
+		return x.ConfigPath
+	}
+	return ""
+}
+
+func (x *IdentifiedService) GetListenPort() []string {
+	if x != nil {
+		return x.ListenPort
+	}
+	return nil
+}
+
 type PackageAsset struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -1229,7 +1329,7 @@ type PackageAsset struct {
 
 func (x *PackageAsset) Reset() {
 	*x = PackageAsset{}
-	mi := &file_proto_agent_proto_msgTypes[16]
+	mi := &file_proto_agent_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1241,7 +1341,7 @@ func (x *PackageAsset) String() string {
 func (*PackageAsset) ProtoMessage() {}
 
 func (x *PackageAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[16]
+	mi := &file_proto_agent_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1254,7 +1354,7 @@ func (x *PackageAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageAsset.ProtoReflect.Descriptor instead.
 func (*PackageAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{16}
+	return file_proto_agent_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PackageAsset) GetName() string {
@@ -1290,7 +1390,7 @@ type CronAsset struct {
 
 func (x *CronAsset) Reset() {
 	*x = CronAsset{}
-	mi := &file_proto_agent_proto_msgTypes[17]
+	mi := &file_proto_agent_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1302,7 +1402,7 @@ func (x *CronAsset) String() string {
 func (*CronAsset) ProtoMessage() {}
 
 func (x *CronAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[17]
+	mi := &file_proto_agent_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1315,7 +1415,7 @@ func (x *CronAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CronAsset.ProtoReflect.Descriptor instead.
 func (*CronAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{17}
+	return file_proto_agent_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CronAsset) GetUser() string {
@@ -1356,7 +1456,7 @@ type ServiceAsset struct {
 
 func (x *ServiceAsset) Reset() {
 	*x = ServiceAsset{}
-	mi := &file_proto_agent_proto_msgTypes[18]
+	mi := &file_proto_agent_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1368,7 +1468,7 @@ func (x *ServiceAsset) String() string {
 func (*ServiceAsset) ProtoMessage() {}
 
 func (x *ServiceAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[18]
+	mi := &file_proto_agent_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1381,7 +1481,7 @@ func (x *ServiceAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceAsset.ProtoReflect.Descriptor instead.
 func (*ServiceAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{18}
+	return file_proto_agent_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ServiceAsset) GetName() string {
@@ -1417,7 +1517,7 @@ type UserAsset struct {
 
 func (x *UserAsset) Reset() {
 	*x = UserAsset{}
-	mi := &file_proto_agent_proto_msgTypes[19]
+	mi := &file_proto_agent_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1429,7 +1529,7 @@ func (x *UserAsset) String() string {
 func (*UserAsset) ProtoMessage() {}
 
 func (x *UserAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[19]
+	mi := &file_proto_agent_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1442,7 +1542,7 @@ func (x *UserAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserAsset.ProtoReflect.Descriptor instead.
 func (*UserAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{19}
+	return file_proto_agent_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *UserAsset) GetUsername() string {
@@ -1538,7 +1638,7 @@ type ProcessAsset struct {
 
 func (x *ProcessAsset) Reset() {
 	*x = ProcessAsset{}
-	mi := &file_proto_agent_proto_msgTypes[20]
+	mi := &file_proto_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1550,7 +1650,7 @@ func (x *ProcessAsset) String() string {
 func (*ProcessAsset) ProtoMessage() {}
 
 func (x *ProcessAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[20]
+	mi := &file_proto_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1563,7 +1663,7 @@ func (x *ProcessAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessAsset.ProtoReflect.Descriptor instead.
 func (*ProcessAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{20}
+	return file_proto_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ProcessAsset) GetPid() int32 {
@@ -1697,11 +1797,12 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
 	"agentToken\x12,\n" +
-	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"\xb8\x02\n" +
+	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"\xf1\x02\n" +
 	"\vAssetReport\x12-\n" +
 	"\x06system\x18\x05 \x01(\v2\x15.sentinel.SystemAssetR\x06system\x12)\n" +
 	"\x05crons\x18\x06 \x03(\v2\x13.sentinel.CronAssetR\x05crons\x122\n" +
-	"\bpackages\x18\a \x03(\v2\x16.sentinel.PackageAssetR\bpackages\x12)\n" +
+	"\bpackages\x18\a \x03(\v2\x16.sentinel.PackageAssetR\bpackages\x127\n" +
+	"\bservices\x18\b \x03(\v2\x1b.sentinel.IdentifiedServiceR\bservices\x12)\n" +
 	"\x05users\x18\x04 \x03(\v2\x13.sentinel.UserAssetR\x05users\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
@@ -1737,7 +1838,17 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\fNetworkAsset\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03mac\x18\x02 \x01(\tR\x03mac\x12\x10\n" +
-	"\x03ips\x18\x03 \x03(\tR\x03ips\"V\n" +
+	"\x03ips\x18\x03 \x03(\tR\x03ips\"\xc4\x01\n" +
+	"\x11IdentifiedService\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\x12\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12\x10\n" +
+	"\x03pid\x18\x04 \x01(\x05R\x03pid\x12\x19\n" +
+	"\bexe_path\x18\x05 \x01(\tR\aexePath\x12\x1f\n" +
+	"\vconfig_path\x18\x06 \x01(\tR\n" +
+	"configPath\x12\x1f\n" +
+	"\vlisten_port\x18\a \x03(\tR\n" +
+	"listenPort\"V\n" +
 	"\fPackageAsset\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x18\n" +
@@ -1793,7 +1904,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_proto_agent_proto_goTypes = []any{
 	(ProbeCommand_CommandType)(0), // 0: sentinel.ProbeCommand.CommandType
 	(*RegisterRequest)(nil),       // 1: sentinel.RegisterRequest
@@ -1812,11 +1923,12 @@ var file_proto_agent_proto_goTypes = []any{
 	(*MemoryAsset)(nil),           // 14: sentinel.MemoryAsset
 	(*DiskAsset)(nil),             // 15: sentinel.DiskAsset
 	(*NetworkAsset)(nil),          // 16: sentinel.NetworkAsset
-	(*PackageAsset)(nil),          // 17: sentinel.PackageAsset
-	(*CronAsset)(nil),             // 18: sentinel.CronAsset
-	(*ServiceAsset)(nil),          // 19: sentinel.ServiceAsset
-	(*UserAsset)(nil),             // 20: sentinel.UserAsset
-	(*ProcessAsset)(nil),          // 21: sentinel.ProcessAsset
+	(*IdentifiedService)(nil),     // 17: sentinel.IdentifiedService
+	(*PackageAsset)(nil),          // 18: sentinel.PackageAsset
+	(*CronAsset)(nil),             // 19: sentinel.CronAsset
+	(*ServiceAsset)(nil),          // 20: sentinel.ServiceAsset
+	(*UserAsset)(nil),             // 21: sentinel.UserAsset
+	(*ProcessAsset)(nil),          // 22: sentinel.ProcessAsset
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	3,  // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
@@ -1825,29 +1937,30 @@ var file_proto_agent_proto_depIdxs = []int32{
 	0,  // 3: sentinel.ProbeCommand.type:type_name -> sentinel.ProbeCommand.CommandType
 	8,  // 4: sentinel.EventReport.events:type_name -> sentinel.ProbeEvent
 	11, // 5: sentinel.AssetReport.system:type_name -> sentinel.SystemAsset
-	18, // 6: sentinel.AssetReport.crons:type_name -> sentinel.CronAsset
-	17, // 7: sentinel.AssetReport.packages:type_name -> sentinel.PackageAsset
-	20, // 8: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
-	21, // 9: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
-	12, // 10: sentinel.SystemAsset.os:type_name -> sentinel.OSAsset
-	13, // 11: sentinel.SystemAsset.cpu:type_name -> sentinel.CPUAsset
-	14, // 12: sentinel.SystemAsset.memory:type_name -> sentinel.MemoryAsset
-	15, // 13: sentinel.SystemAsset.disks:type_name -> sentinel.DiskAsset
-	16, // 14: sentinel.SystemAsset.networks:type_name -> sentinel.NetworkAsset
-	19, // 15: sentinel.SystemAsset.services:type_name -> sentinel.ServiceAsset
-	1,  // 16: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
-	5,  // 17: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
-	9,  // 18: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
-	10, // 19: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
-	2,  // 20: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
-	6,  // 21: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
-	6,  // 22: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
-	6,  // 23: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
-	20, // [20:24] is the sub-list for method output_type
-	16, // [16:20] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	19, // 6: sentinel.AssetReport.crons:type_name -> sentinel.CronAsset
+	18, // 7: sentinel.AssetReport.packages:type_name -> sentinel.PackageAsset
+	17, // 8: sentinel.AssetReport.services:type_name -> sentinel.IdentifiedService
+	21, // 9: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
+	22, // 10: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
+	12, // 11: sentinel.SystemAsset.os:type_name -> sentinel.OSAsset
+	13, // 12: sentinel.SystemAsset.cpu:type_name -> sentinel.CPUAsset
+	14, // 13: sentinel.SystemAsset.memory:type_name -> sentinel.MemoryAsset
+	15, // 14: sentinel.SystemAsset.disks:type_name -> sentinel.DiskAsset
+	16, // 15: sentinel.SystemAsset.networks:type_name -> sentinel.NetworkAsset
+	20, // 16: sentinel.SystemAsset.services:type_name -> sentinel.ServiceAsset
+	1,  // 17: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
+	5,  // 18: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
+	9,  // 19: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
+	10, // 20: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
+	2,  // 21: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
+	6,  // 22: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
+	6,  // 23: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
+	6,  // 24: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
+	21, // [21:25] is the sub-list for method output_type
+	17, // [17:21] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -1861,7 +1974,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   21,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
