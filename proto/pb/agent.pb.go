@@ -28,6 +28,7 @@ const (
 	ProbeCommand_UNLOAD  ProbeCommand_CommandType = 1
 	ProbeCommand_RELOAD  ProbeCommand_CommandType = 3
 	ProbeCommand_INSTALL ProbeCommand_CommandType = 4
+	ProbeCommand_COLLECT ProbeCommand_CommandType = 5
 )
 
 // Enum value maps for ProbeCommand_CommandType.
@@ -37,12 +38,14 @@ var (
 		1: "UNLOAD",
 		3: "RELOAD",
 		4: "INSTALL",
+		5: "COLLECT",
 	}
 	ProbeCommand_CommandType_value = map[string]int32{
 		"LOAD":    0,
 		"UNLOAD":  1,
 		"RELOAD":  3,
 		"INSTALL": 4,
+		"COLLECT": 5,
 	}
 )
 
@@ -1857,7 +1860,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\ractive_probes\x18\x04 \x01(\x05R\factiveProbes\"a\n" +
 	"\x11HeartbeatResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x122\n" +
-	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\x80\x02\n" +
+	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\x8d\x02\n" +
 	"\fProbeCommand\x126\n" +
 	"\x04type\x18\x01 \x01(\x0e2\".sentinel.ProbeCommand.CommandTypeR\x04type\x12\x19\n" +
 	"\bprobe_id\x18\x02 \x01(\tR\aprobeId\x12\x1d\n" +
@@ -1865,14 +1868,15 @@ const file_proto_agent_proto_rawDesc = "" +
 	"probe_name\x18\x03 \x01(\tR\tprobeName\x12\x1d\n" +
 	"\n" +
 	"probe_data\x18\x04 \x01(\fR\tprobeData\x12!\n" +
-	"\fprobe_config\x18\x05 \x01(\tR\vprobeConfig\"<\n" +
+	"\fprobe_config\x18\x05 \x01(\tR\vprobeConfig\"I\n" +
 	"\vCommandType\x12\b\n" +
 	"\x04LOAD\x10\x00\x12\n" +
 	"\n" +
 	"\x06UNLOAD\x10\x01\x12\n" +
 	"\n" +
 	"\x06RELOAD\x10\x03\x12\v\n" +
-	"\aINSTALL\x10\x04\"\xdf\x01\n" +
+	"\aINSTALL\x10\x04\x12\v\n" +
+	"\aCOLLECT\x10\x05\"\xdf\x01\n" +
 	"\n" +
 	"ProbeEvent\x12\x19\n" +
 	"\bprobe_id\x18\x01 \x01(\tR\aprobeId\x12\x1d\n" +

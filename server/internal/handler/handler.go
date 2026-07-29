@@ -136,6 +136,8 @@ func (h *Handler) Command(c *gin.Context) {
 		cmdType = pb.ProbeCommand_UNLOAD
 	case "install":
 		cmdType = pb.ProbeCommand_INSTALL
+	case "collect":
+		cmdType = pb.ProbeCommand_COLLECT
 	case "reload":
 		cmdType = pb.ProbeCommand_RELOAD
 	default:

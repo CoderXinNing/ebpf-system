@@ -64,6 +64,9 @@ func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 	case pb.ProbeCommand_RELOAD:
 		log.Println("🔄 Server指令: 重新扫描")
 		a.pluginMgr.ScanAndLoad()
+	case pb.ProbeCommand_COLLECT:
+		log.Println("🔄 手动触发: 全量资产采集")
+		a.collectAndReportAssets()
 	case pb.ProbeCommand_INSTALL:
 		log.Printf("📦 Server指令: 安装 %s", cmd.ProbeName)
 		a.pluginMgr.InstallProbe(cmd.ProbeName, cmd.ProbeData, cmd.ProbeConfig)

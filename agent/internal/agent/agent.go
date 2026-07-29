@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"time"
-	"os"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/guardian"
