@@ -68,6 +68,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.POST("/command", h.roleMiddleware("admin", "operator"), h.Command)
 		api.GET("/assets", h.AssetsOverview)
 		api.GET("/assets/:agent_id", h.AssetDetail)
+		api.GET("/assets/category", h.AssetsByCategory)
 		api.GET("/users", h.roleMiddleware("admin"), h.ListUsers)
 	}
 }
@@ -206,6 +207,110 @@ func (h *Handler) AssetDetail(c *gin.Context) {
 	json.Unmarshal(userJSON, &users)
 	json.Unmarshal(sysJSON, &sys)
 	c.JSON(200, gin.H{"processes": procs, "users": users, "system": sys})
+}
+
+func (h *Handler) AssetsByCategory(c *gin.Context) {
+	category := c.Query("type") // 数据库/Web服务器/中间件/运行时/Web组件/所有
+	agentID := c.Query("agent_id")
+
+	// 遍历所有Agent的资产，按类型筛选
+	type AssetItem struct {
+		AgentID     string `json:"agent_id"`
+		Hostname    string `json:"hostname"`
+		ServiceName string `json:"service_name"`
+		Type        string   `json:"type"`
+		Version     string `json:"version"`
+		PID         int32  `json:"pid"`
+		ListenPort  []string `json:"listen_port"`
+		ExePath     string `json:"exe_path"`
+		ConfigPath  string `json:"config_path"`
+	}
+
+	var items []AssetItem
+	h.Mu.RLock()
+	defer h.Mu.RUnlock()
+
+	for aid, agent := range h.Agents {
+		if agentID != "" && aid != agentID {
+			continue
+		}
+
+		// 从store获取该Agent最新资产的services
+		_, _, sysJSON, err := h.Store.GetLatestAsset(aid)
+		if err != nil {
+			continue
+		}
+
+		var sysData map[string]interface{}
+		json.Unmarshal(sysJSON, &sysData)
+
+		// 解析识别的服务
+		if svcs, ok := sysData["services"].([]interface{}); ok {
+			for _, svc := range svcs {
+				s := svc.(map[string]interface{})
+				svcType := getString(s, "type")
+				if category != "" && category != "所有" && svcType != category {
+					continue
+				}
+				ports := []string{}
+				if p, ok := s["listen_port"].([]interface{}); ok {
+					for _, pp := range p {
+						ports = append(ports, pp.(string))
+					}
+				}
+				items = append(items, AssetItem{
+					Type:        svcType,
+					AgentID:     aid,
+					Hostname:    agent.Hostname,
+					ServiceName: s["name"].(string),
+					Version:     getString(s, "version"),
+					PID:         int32(getFloat(s, "pid")),
+					ListenPort:  ports,
+					ExePath:     getString(s, "exe_path"),
+					ConfigPath:  getString(s, "config_path"),
+				})
+			}
+		}
+
+		// 解析Web组件
+		if wcs, ok := sysData["web_components"].([]interface{}); ok {
+			for _, wc := range wcs {
+				w := wc.(map[string]interface{})
+				wcType := getString(w, "type")
+				if category != "" && category != "所有" && wcType != category {
+					continue
+				}
+				items = append(items, AssetItem{
+					Type:        wcType,
+					AgentID:     aid,
+					Hostname:    agent.Hostname,
+					ServiceName: w["name"].(string),
+					Version:     getString(w, "version"),
+					PID:         int32(getFloat(w, "pid")),
+					ExePath:     getString(w, "base_path"),
+					ConfigPath:  getString(w, "config_path"),
+				})
+			}
+		}
+	}
+
+	c.JSON(200, gin.H{"total": len(items), "items": items})
+}
+
+func getString(m map[string]interface{}, key string) string {
+	if v, ok := m[key]; ok && v != nil {
+		return v.(string)
+	}
+	return ""
+}
+
+func getFloat(m map[string]interface{}, key string) float64 {
+	if v, ok := m[key]; ok && v != nil {
+		if f, ok := v.(float64); ok {
+			return f
+		}
+	}
+	return 0
 }
 
 func (h *Handler) ListUsers(c *gin.Context) {
