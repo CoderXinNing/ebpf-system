@@ -1,60 +1,54 @@
 <template>
-  <n-card title="事件流">
-    <template #header-extra>
-      <n-space>
-        <n-input v-model:value="filter" placeholder="筛选PID/进程/文件" size="small" clearable style="width:200px" />
-        <n-button size="small" @click="refresh">🔄 刷新</n-button>
-      </n-space>
-    </template>
-    <n-spin :show="loading">
-      <n-data-table :columns="columns" :data="filteredEvents" :bordered="false" size="small" max-height="500" />
-    </n-spin>
-  </n-card>
+  <Layout>
+    <n-card title="事件流" size="small" :bordered="false">
+      <n-data-table
+        :columns="cols"
+        :data="events"
+        :bordered="false"
+        size="small"
+        :pagination="pagination"
+        :row-key="(row) => row.id"
+      />
+      <n-button @click="load" size="small" style="margin-top:12px">🔄 刷新</n-button>
+    </n-card>
+  </Layout>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { api } from '../utils/api'
+import { ref, reactive, onMounted } from 'vue'
+import { api } from '../api'
+import Layout from '../layouts/MainLayout.vue'
 
-const loading = ref(true)
-const events = ref([])
-const filter = ref('')
-const agents = ref([])
-
-const columns = [
-  { title: '时间', key: 'timestamp', width: 90, render: (row) => new Date(row.timestamp*1000).toLocaleTimeString() },
-  { title: 'Agent', key: 'agent_id', width: 80, render: (row) => getAgentIP(row.agent_id) },
+const events = ref([]), agents = ref([])
+const cols = [
+  { title: '时间', key: 'timestamp', width: 90, render: (r) => new Date(r.timestamp*1000).toLocaleTimeString() },
+  { title: '主机', key: 'hostname', width: 120, render: (r) => {
+    const a = agents.value.find(a => a.id === r.agent_id)
+    return a ? a.hostname : (r.agent_id || '').slice(0,12)
+  }},
+  { title: 'IP', key: 'ip', width: 120, render: (r) => {
+    const a = agents.value.find(a => a.id === r.agent_id)
+    return a ? a.ip_addr : '-'
+  }},
   { title: '探针', key: 'probe_name', width: 130 },
   { title: 'PID', key: 'pid', width: 60 },
   { title: '进程', key: 'comm', width: 100 },
-  { title: '文件', key: 'filename', ellipsis: { tooltip: true } },
+  { title: '文件', key: 'filename', ellipsis: { tooltip: true } }
 ]
 
-function getAgentIP(agentId) {
-  const a = agents.value.find(a => a.id === agentId)
-  return a ? a.ip_addr : agentId?.slice(0,10)
-}
-
-const filteredEvents = computed(() => {
-  if (!filter.value) return events.value
-  const f = filter.value.toLowerCase()
-  return events.value.filter(e =>
-    String(e.pid).includes(f) ||
-    (e.comm||'').toLowerCase().includes(f) ||
-    (e.filename||'').toLowerCase().includes(f) ||
-    (e.probe_name||"").toLowerCase().includes(f) ||
-    getAgentIP(e.agent_id).toLowerCase().includes(f)
-  )
+const pagination = reactive({
+  page: 1, pageSize: 20, showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (p) => { pagination.page = p },
+  onUpdatePageSize: (s) => { pagination.pageSize = s; pagination.page = 1 }
 })
 
-async function refresh() {
-  loading.value = true
+async function load() {
   try {
-    const [evtData, agtData] = await Promise.all([api.getEvents(), api.getAgents()])
-    events.value = evtData.events || []
-    agents.value = agtData.agents || []
+    const [evt, agt] = await Promise.all([api.getEvents(), api.getAgents()])
+    agents.value = agt.agents || []
+    events.value = evt.events || []
   } catch(e) {}
-  loading.value = false
 }
-onMounted(refresh)
+onMounted(load)
 </script>

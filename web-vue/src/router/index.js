@@ -1,21 +1,28 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import DashboardView from '../views/DashboardView.vue'
-import EventsView from '../views/EventsView.vue'
-import DeployView from '../views/DeployView.vue'
-import UsersView from '../views/UsersView.vue'
-import LoginView from '../views/LoginView.vue'
 
 const routes = [
-  { path: '/', component: DashboardView },
-  { path: '/events', component: EventsView },
-  { path: '/deploy', component: DeployView },
-  { path: '/users', component: UsersView },
-  { path: '/login', component: LoginView },
+  { path: '/login', component: () => import('../views/LoginView.vue') },
+  { path: '/', component: () => import('../views/DashboardView.vue') },
+  { path: '/host/:id', component: () => import('../views/HostDetail.vue') },
+  { path: '/processes', component: () => import('../views/ProcessesView.vue') },
+  { path: '/web', component: () => import('../views/WebAssetsView.vue') },
+  { path: '/packages', component: () => import('../views/PackagesView.vue') },
+  { path: '/events', component: () => import('../views/EventsView.vue') },
+  { path: '/probes', component: () => import('../views/ProbesView.vue') },
 ]
 
 const router = createRouter({
   history: createWebHashHistory(),
-  routes,
+  routes
+})
+
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token')
+  if (to.path !== '/login' && !token) {
+    next('/login')
+  } else {
+    next()
+  }
 })
 
 export default router

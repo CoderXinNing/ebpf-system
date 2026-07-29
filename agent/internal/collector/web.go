@@ -62,10 +62,10 @@ var knownWebComponents = []webPattern{
 	{name: "Envoy", compType: "服务器", procKeywords: []string{"envoy"}},
 
 	// 静态资源/CDN
-	{name: "Vue.js", compType: "静态资源", pathKeywords: []string{"vue", "vue.js"}},
-	{name: "React", compType: "静态资源", pathKeywords: []string{"react"}},
-	{name: "jQuery", compType: "静态资源", pathKeywords: []string{"jquery"}},
-	{name: "Bootstrap", compType: "静态资源", pathKeywords: []string{"bootstrap"}},
+	{name: "Vue.js", compType: "框架", pathKeywords: []string{"vue", "vue.js"}},
+	{name: "React", compType: "框架", pathKeywords: []string{"react"}},
+	{name: "jQuery", compType: "框架", pathKeywords: []string{"jquery"}},
+	{name: "Bootstrap", compType: "框架", pathKeywords: []string{"bootstrap"}},
 }
 
 // IdentifyWebComponents 识别Web组件

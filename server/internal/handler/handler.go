@@ -168,6 +168,7 @@ func (h *Handler) AssetsOverview(c *gin.Context) {
 	type AssetSummary struct {
 		AgentID      string `json:"agent_id"`
 		Hostname     string `json:"hostname"`
+		OS           string `json:"os"`
 		ProcessCount int    `json:"process_count"`
 		UserCount    int    `json:"user_count"`
 		Online       bool   `json:"online"`
@@ -187,6 +188,7 @@ func (h *Handler) AssetsOverview(c *gin.Context) {
 			}
 		}
 		summaries = append(summaries, AssetSummary{
+				OS:           h.getOS(agentID),
 			AgentID:      agentID,
 			Hostname:     hostname,
 			ProcessCount: counts["process_count"],
@@ -297,6 +299,19 @@ func (h *Handler) AssetsByCategory(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"total": len(items), "items": items})
+}
+
+func (h *Handler) getOS(agentID string) string {
+	_, _, sysJSON, err := h.Store.GetLatestAsset(agentID)
+	if err != nil { return "-" }
+	var sysData map[string]interface{}
+	json.Unmarshal(sysJSON, &sysData)
+	if s, ok := sysData["system"].(map[string]interface{}); ok {
+		if os, ok := s["os"].(map[string]interface{}); ok {
+			if name, ok := os["name"].(string); ok { return name }
+		}
+	}
+	return "-"
 }
 
 func getString(m map[string]interface{}, key string) string {
