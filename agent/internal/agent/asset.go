@@ -57,6 +57,14 @@ func (a *Agent) collectAndReportAssets() {
 		})
 	}
 	log.Printf("🔍 服务识别: %d个", len(svcs))
+	wcs := collector.IdentifyWebComponents()
+	for _, w := range wcs {
+		assetReq.WebComponents = append(assetReq.WebComponents, &pb.WebComponentAsset{
+			Name: w.Name, Type: w.Type, Version: w.Version,
+			BasePath: w.BasePath, ConfigPath: w.ConfigPath, Pid: int32(w.PID),
+		})
+	}
+	log.Printf("🌐 Web组件: %d个", len(wcs))
 
 	if sysInfo != nil {
 		assetReq.System = &pb.SystemAsset{
