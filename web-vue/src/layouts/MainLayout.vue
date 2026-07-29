@@ -1,25 +1,28 @@
 <template>
   <div style="display:flex;height:100vh;overflow:hidden">
-    <!-- 侧边栏：固定不动 -->
-    <div style="width:200px;flex-shrink:0;background:#161b22;border-right:1px solid #30363d;display:flex;flex-direction:column;overflow-y:auto">
-      <div class="logo">Sentinel</div>
-      <n-menu :value="path" :options="menu" @update:value="go" style="flex:1" />
+    <!-- 侧边栏 -->
+    <div :style="{width: collapsed ? '64px' : '220px', flexShrink:0, background:'linear-gradient(180deg, #001529 0%, #002140 100%)', display:'flex', flexDirection:'column', transition:'width .2s'}">
+      <div style="padding:16px 16px;display:flex;align-items:center;gap:8px;cursor:pointer" @click="collapsed=!collapsed">
+        <div style="width:32px;height:32px;background:#1e6fff;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;flex-shrink:0">🛡</div>
+        <span v-if="!collapsed" style="color:#fff;font-size:16px;font-weight:600;white-space:nowrap">Sentinel</span>
+      </div>
+      <n-menu :value="path" :options="menu" @update:value="go" :collapsed="collapsed"
+        :theme-overrides="{ itemColorActive: 'rgba(30,111,255,0.2)', itemTextColor: '#b8c7d9', itemTextColorActive: '#fff' }" />
     </div>
 
-    <!-- 右侧：顶栏固定 + 内容区滚动 -->
-    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#0d1117">
-      <!-- 顶栏：固定不动 -->
-      <div class="topbar">
-        <div class="topbar-left">{{ pageTitle }}</div>
-        <div class="topbar-right">
-          <n-button text size="small" style="font-size:18px;margin-right:12px" @click="showNotify=true">🔔</n-button>
-          <n-avatar round size="small" style="background:#58a6ff;margin-right:6px">{{ initial }}</n-avatar>
-          <span style="font-size:13px;color:#c9d1d9;margin-right:12px">{{ username }}</span>
-          <n-button text size="small" @click="logout">退出</n-button>
+    <!-- 右侧 -->
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#f0f2f5;min-width:0">
+      <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:#fff;border-bottom:1px solid #e4e7ed;flex-shrink:0">
+        <div style="font-size:15px;font-weight:600;color:#1d2129">{{ pageTitle }}</div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <span style="cursor:pointer;font-size:18px;color:#86909c" @click="showNotify=true">🔔</span>
+          <n-avatar round size="small" style="background:#1e6fff;flex-shrink:0">{{ initial }}</n-avatar>
+          <span style="font-size:13px;color:#4e5969" class="hide-mobile">{{ username }}</span>
+          <span style="color:#e4e7ed" class="hide-mobile">|</span>
+          <span style="cursor:pointer;font-size:13px;color:#86909c" class="hide-mobile" @click="logout">退出</span>
         </div>
       </div>
-      <!-- 内容区：独立滚动，不影响侧边栏和顶栏 -->
-      <div style="flex:1;overflow-y:auto;padding:20px">
+      <div style="flex:1;overflow-y:auto;padding:20px 24px">
         <slot />
       </div>
     </div>
@@ -37,20 +40,21 @@ import { useRouter, useRoute } from 'vue-router'
 const router = useRouter()
 const route = useRoute()
 const path = computed(() => route.path)
+const collapsed = ref(false)
 const showNotify = ref(false)
 
 const menu = [
   { label: '资产清点', key: '/' },
   { label: '进程端口', key: '/processes' },
   { label: 'Web资产', key: '/web' },
-    { label: '软件应用', key: '/packages' },
+  { label: '软件应用', key: '/packages' },
   { label: '事件流', key: '/events' },
   { label: '探针管理', key: '/probes' },
 ]
 
 const titleMap = {
   '/': '资产清点', '/processes': '进程端口', '/web': 'Web资产',
-  '/events': '事件流', '/probes': '探针管理'
+  '/packages': '软件应用', '/events': '事件流', '/probes': '探针管理'
 }
 const pageTitle = computed(() => {
   if (route.path.startsWith('/host')) return '主机详情'
@@ -66,11 +70,7 @@ function logout() { localStorage.clear(); router.push('/login') }
 </script>
 
 <style>
-.logo { padding: 18px 20px; font-size: 17px; font-weight: 700; color: #58a6ff; border-bottom: 1px solid #30363d; }
-.topbar {
-  height: 48px; display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px; background: #161b22; border-bottom: 1px solid #30363d; flex-shrink: 0;
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
 }
-.topbar-left { font-size: 15px; font-weight: 600; color: #c9d1d9; }
-.topbar-right { display: flex; align-items: center; }
 </style>

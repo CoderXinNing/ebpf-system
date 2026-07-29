@@ -1,12 +1,21 @@
 <template>
-  <div class="login">
-    <n-card style="width:380px">
-      <h2 style="color:#18c08c;text-align:center">eBPF Sentinel</h2>
-      <n-input v-model:value="u" placeholder="用户名" style="margin:12px 0" />
-      <n-input v-model:value="p" type="password" placeholder="密码" @keyup.enter="login" />
-      <n-button type="primary" block @click="login" :loading="loading" style="margin-top:16px">登录</n-button>
-      <p v-if="err" style="color:#e04a5a;text-align:center;margin-top:8px">{{ err }}</p>
-    </n-card>
+  <div class="login-page">
+    <div class="login-left">
+      <div class="login-left-content">
+        <h1>eBPF Sentinel</h1>
+        <p>主机安全资产管理平台</p>
+      </div>
+    </div>
+    <div class="login-right">
+      <div class="login-card">
+        <h2>欢迎登录</h2>
+        <p style="color:#86909c;margin-bottom:24px">请输入账号密码</p>
+        <n-input v-model:value="u" placeholder="用户名" size="large" style="margin-bottom:16px" />
+        <n-input v-model:value="p" type="password" placeholder="密码" size="large" @keyup.enter="login" />
+        <n-button type="primary" block size="large" @click="login" :loading="loading" style="margin-top:24px">登 录</n-button>
+        <p v-if="err" style="color:#e04a5a;text-align:center;margin-top:12px">{{ err }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -33,5 +42,21 @@ async function login() {
 </script>
 
 <style scoped>
-.login { height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-page { display: flex; height: 100vh; }
+.login-left {
+  flex: 1; background: linear-gradient(135deg, #001529 0%, #003a70 50%, #1e6fff 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+.login-left-content { text-align: center; color: #fff; padding: 40px; }
+.login-left-content h1 { font-size: clamp(28px, 4vw, 48px); font-weight: 700; margin-bottom: 8px; }
+.login-left-content p { font-size: clamp(14px, 1.5vw, 18px); opacity: 0.8; }
+.login-right {
+  width: 480px; display: flex; align-items: center; justify-content: center; background: #fff; padding: 40px;
+}
+.login-card { width: 100%; max-width: 360px; }
+.login-card h2 { font-size: 24px; font-weight: 600; color: #1d2129; margin-bottom: 4px; }
+@media (max-width: 768px) {
+  .login-left { display: none; }
+  .login-right { width: 100%; }
+}
 </style>

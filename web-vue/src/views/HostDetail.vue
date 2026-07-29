@@ -15,21 +15,15 @@
         </n-card>
       </n-tab-pane>
       <n-tab-pane name="svc" tab="服务">
-        <n-data-table :columns="svcCols" :data="svcItems" size="small" :bordered="false" v-if="svcItems.length" />
-            :pagination="pagination_svcItems"
-            :row-key="(row) => svcItems === 'svcItems' ? row.name : svcItems === 'portItems' ? row.pid : row.username"
+        <n-data-table v-if="svcItems.length" :columns="svcCols" :data="svcItems" size="small" :bordered="false" :pagination="pagination" :row-key="(row) => row.name" />
         <n-empty v-else description="无" />
       </n-tab-pane>
       <n-tab-pane name="port" tab="端口">
-        <n-data-table :columns="portCols" :data="portItems" size="small" :bordered="false" v-if="portItems.length" />
-            :pagination="pagination_portItems"
-            :row-key="(row) => portItems === 'svcItems' ? row.name : portItems === 'portItems' ? row.pid : row.username"
+        <n-data-table v-if="portItems.length" :columns="portCols" :data="portItems" size="small" :bordered="false" :pagination="pagination" :row-key="(row) => row.pid" />
         <n-empty v-else description="无" />
       </n-tab-pane>
       <n-tab-pane name="user" tab="用户">
-        <n-data-table :columns="userCols" :data="userItems" size="small" :bordered="false" v-if="userItems.length" />
-            :pagination="pagination_userItems"
-            :row-key="(row) => userItems === 'svcItems' ? row.name : userItems === 'portItems' ? row.pid : row.username"
+        <n-data-table v-if="userItems.length" :columns="userCols" :data="userItems" size="small" :bordered="false" :pagination="pagination" :row-key="(row) => row.username" />
         <n-empty v-else description="无" />
       </n-tab-pane>
     </n-tabs>
@@ -45,28 +39,26 @@ import Layout from '../layouts/MainLayout.vue'
 const route = useRoute()
 const sys = ref(null), svcItems = ref([]), portItems = ref([]), userItems = ref([])
 
+const pagination = reactive({ page: 1, pageSize: 10, showSizePicker: true, pageSizes: [10, 20, 50] })
+
 const disks = computed(() => {
   const d = sys.value?.disks || []
   return d.map(d => `${d.mount_point} ${d.total_mb}MB`).join(', ')
 })
 
-const pagination_svcItems = reactive({ page: 1, pageSize: 10, showSizePicker: true, pageSizes: [10, 20, 50] })
-const pagination_portItems = reactive({ page: 1, pageSize: 10, showSizePicker: true, pageSizes: [10, 20, 50] })
-const pagination_userItems = reactive({ page: 1, pageSize: 10, showSizePicker: true, pageSizes: [10, 20, 50] })
-
 const svcCols = [
-  { title: '名称', key: 'name', width: 130 }, { title: '类型', key: 'type', width: 80 },
-  { title: '版本', key: 'version', width: 100 }, { title: 'PID', key: 'pid', width: 60 },
+  { title: '名称', key: 'name', minWidth: 130 }, { title: '类型', key: 'type', minWidth: 80 },
+  { title: '版本', key: 'version', minWidth: 100 }, { title: 'PID', key: 'pid', minWidth: 60 },
   { title: '端口', key: 'listen_port', render: (r) => (r.listen_port||[]).join(',') }
 ]
 const portCols = [
-  { title: 'PID', key: 'pid', width: 60 }, { title: '进程', key: 'name', width: 200 },
+  { title: 'PID', key: 'pid', minWidth: 60 }, { title: '进程', key: 'name', minWidth: 200 },
   { title: '端口', key: 'ports', render: (r) => (r.ports||[]).join(',') }
 ]
 const userCols = [
-  { title: '用户名', key: 'username' }, { title: 'UID', key: 'uid', width: 60 },
-  { title: 'Shell', key: 'shell' }, { title: 'root', key: 'is_root', render: (r) => r.is_root ? '✅' : '', width: 50 },
-  { title: 'sudo', key: 'has_sudo', render: (r) => r.has_sudo ? '✅' : '', width: 50 }
+  { title: '用户名', key: 'username' }, { title: 'UID', key: 'uid', minWidth: 60 },
+  { title: 'Shell', key: 'shell' }, { title: 'root', key: 'is_root', render: (r) => r.is_root ? '✅' : '', minWidth: 50 },
+  { title: 'sudo', key: 'has_sudo', render: (r) => r.has_sudo ? '✅' : '', minWidth: 50 }
 ]
 
 onMounted(async () => {

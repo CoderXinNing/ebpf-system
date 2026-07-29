@@ -31,15 +31,15 @@ const filtered = computed(() => {
 })
 
 const cols = [
-  { title: '软件名', key: 'name', width: 220 },
-  { title: '版本', key: 'version', width: 140 },
-  { title: '包管理器', key: 'manager', width: 90 },
-  { title: '主机数', key: 'count', width: 80 },
-  { title: '操作', key: 'name', width: 100, render: (r) => h('a', { href: 'javascript:void(0)', onClick: () => showDetail(r.name), style: 'color:#58a6ff' }, '查看主机') }
+  { title: '软件名', key: 'name', minWidth: 80 },
+  { title: '版本', key: 'version', minWidth: 80 },
+  { title: '包管理器', key: 'manager', minWidth: 80 },
+  { title: '主机数', key: 'count', minWidth: 80 },
+  { title: '操作', key: 'name', minWidth: 80, render: (r) => h('a', { href: 'javascript:void(0)', onClick: () => showDetail(r.name), style: 'color:#58a6ff' }, '查看主机') }
 ]
 const detailCols = [
   { title: '主机名', key: 'hostname' }, { title: 'IP', key: 'ip_addr' },
-  { title: '版本', key: 'version' }, { title: '操作', key: 'agent_id', width: 60, render: (r) => h('a', { href: '#/host/' + r.agent_id }, '详情') }
+  { title: '版本', key: 'version' }, { title: '操作', key: 'agent_id', minWidth: 80, render: (r) => h('a', { href: '#/host/' + r.agent_id }, '详情') }
 ]
 
 function showDetail(name) {

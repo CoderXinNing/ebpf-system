@@ -26,16 +26,16 @@ const pagination = reactive({
 })
 
 const cols = [
-  { title: '服务/进程名', key: 'name', width: 200 },
-  { title: '主机数', key: 'count', width: 80 },
-  { title: '类型', key: 'type', width: 100 },
-  { title: '操作', key: 'name', width: 100, render: (r) => h('a', { href: 'javascript:void(0)', onClick: () => showDetail(r.name), style: 'color:#58a6ff' }, '查看主机') }
+  { title: '服务/进程名', key: 'name', minWidth: 80 },
+  { title: '主机数', key: 'count', minWidth: 80 },
+  { title: '类型', key: 'type', minWidth: 80 },
+  { title: '操作', key: 'name', minWidth: 80, render: (r) => h('a', { href: 'javascript:void(0)', onClick: () => showDetail(r.name), style: 'color:#58a6ff' }, '查看主机') }
 ]
 
 const detailCols = [
   { title: '主机名', key: 'hostname' }, { title: 'IP', key: 'ip_addr' },
-  { title: 'PID', key: 'pid', width: 60 }, { title: '端口', key: 'ports', width: 120 },
-  { title: '操作', key: 'agent_id', width: 60, render: (r) => h('a', { href: '#/host/' + r.agent_id }, '详情') }
+  { title: 'PID', key: 'pid', minWidth: 80 }, { title: '端口', key: 'ports', minWidth: 80 },
+  { title: '操作', key: 'agent_id', minWidth: 80, render: (r) => h('a', { href: '#/host/' + r.agent_id }, '详情') }
 ]
 
 function showDetail(name) {
