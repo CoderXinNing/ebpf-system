@@ -21,6 +21,7 @@ type AgentSection struct {
 	Server            string        `yaml:"server"`
 	RetryDelay        time.Duration `yaml:"retry_delay"`
 	HeartbeatInterval time.Duration `yaml:"heartbeat_interval"`
+	CollectInterval   time.Duration `yaml:"collect_interval"`
 }
 
 // GuardianSection 守护探针配置
@@ -43,6 +44,7 @@ func DefaultConfig() *AgentConfig {
 			Server:            "127.0.0.1:50051",
 			RetryDelay:        5 * time.Second,
 			HeartbeatInterval: 10 * time.Second,
+		CollectInterval:   300 * time.Second,
 		},
 		Guardian: GuardianSection{
 			Enabled: true,

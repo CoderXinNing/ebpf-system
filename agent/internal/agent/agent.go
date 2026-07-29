@@ -80,9 +80,18 @@ func (a *Agent) Run() {
 
 	a.connectAndRegister()
 	go a.eventReporter()
+	// 首次采集
 	go func() {
 		time.Sleep(3 * time.Second)
 		a.collectAndReportAssets()
+	}()
+	// 定期采集
+	go func() {
+		ticker := time.NewTicker(a.cfg.Agent.CollectInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			a.collectAndReportAssets()
+		}
 	}()
 
 	a.HeartbeatLoop()
