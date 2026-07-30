@@ -15,15 +15,15 @@
         </n-card>
       </n-tab-pane>
       <n-tab-pane name="svc" tab="服务">
-        <n-data-table v-if="svcItems.length" :columns="svcCols" :data="svcItems" size="small" :bordered="false" :pagination="pagination" :row-key="(row) => row.name" />
+        <n-data-table v-if="svcItems.length" :columns="svcCols" :data="svcItems" size="small" :bordered="false" :pagination="paginationSvc" :row-key="(row) => row.name" />
         <n-empty v-else description="无" />
       </n-tab-pane>
       <n-tab-pane name="port" tab="端口">
-        <n-data-table v-if="portItems.length" :columns="portCols" :data="portItems" size="small" :bordered="false" :pagination="pagination" :row-key="(row) => row.pid" />
+        <n-data-table v-if="portItems.length" :columns="portCols" :data="portItems" size="small" :bordered="false" :pagination="paginationPort" :row-key="(row) => row.pid" />
         <n-empty v-else description="无" />
       </n-tab-pane>
       <n-tab-pane name="user" tab="用户">
-        <n-data-table v-if="userItems.length" :columns="userCols" :data="userItems" size="small" :bordered="false" :pagination="pagination" :row-key="(row) => row.username" />
+        <n-data-table v-if="userItems.length" :columns="userCols" :data="userItems" size="small" :bordered="false" :pagination="paginationUser" :row-key="(row) => row.username" />
         <n-empty v-else description="无" />
       </n-tab-pane>
     </n-tabs>
@@ -39,7 +39,9 @@ import Layout from '../layouts/MainLayout.vue'
 const route = useRoute()
 const sys = ref(null), svcItems = ref([]), portItems = ref([]), userItems = ref([])
 
-const pagination = reactive({ page: 1, pageSize: 10, showSizePicker: true, pageSizes: [10, 20, 50] })
+const paginationPort = reactive({ page: 1, pageSize: 10, showSizePicker: true, pageSizes: [10, 20, 50], onUpdatePage: (p) => { paginationPort.page = p }, onUpdatePageSize: (s) => { paginationPort.pageSize = s; paginationPort.page = 1 } })
+const paginationUser = reactive({ page: 1, pageSize: 5, showSizePicker: true, pageSizes: [5, 10, 20], onUpdatePage: (p) => { paginationUser.page = p }, onUpdatePageSize: (s) => { paginationUser.pageSize = s; paginationUser.page = 1 } })
+const paginationSvc = reactive({ page: 1, pageSize: 10, showSizePicker: true, pageSizes: [10, 20, 50], onUpdatePage: (p) => { paginationSvc.page = p }, onUpdatePageSize: (s) => { paginationSvc.pageSize = s; paginationSvc.page = 1 } })
 
 const disks = computed(() => {
   const d = sys.value?.disks || []
@@ -65,8 +67,14 @@ onMounted(async () => {
   try {
     const d = await api.getAssetDetail(route.params.id)
     sys.value = (d.system || {}).system || d.system || {}
-    svcItems.value = ((d.system || {}).services || []).map(s => ({...s}))
-    portItems.value = (d.processes || []).filter(p => (p.listening_ports||[]).length).map(p => ({...p, ports: p.listening_ports}))
+    const svcMap = {}
+    const svcRaw = ((d.system || {}).services || [])
+    svcRaw.forEach(s => { if (s.pid > 0) svcMap[s.pid] = s.name })
+    svcItems.value = svcRaw.map(s => ({...s}))
+    portItems.value = (d.processes || []).filter(p => (p.listening_ports||[]).length).map(p => {
+      const svcName = svcMap[p.pid]
+      return { ...p, ports: p.listening_ports, name: svcName || p.name }
+    })
     userItems.value = d.users || []
   } catch(e) {}
 })

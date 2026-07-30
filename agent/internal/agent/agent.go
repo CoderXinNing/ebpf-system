@@ -94,7 +94,7 @@ func (a *Agent) Run() {
 		}
 	}()
 
-	a.HeartbeatLoop()
+	a.runHeartbeatLoop()
 }
 
 func (a *Agent) connectAndRegister() {

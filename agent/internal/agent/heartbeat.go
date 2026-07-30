@@ -8,8 +8,16 @@ import (
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 )
 
-func (a *Agent) HeartbeatLoop() {
+func (a *Agent) runHeartbeatLoop() {
 	for {
+		// 确保已注册
+		a.connectAndRegister()
+		if a.token == "" {
+			log.Printf("❌ 注册失败: %v, 重试...", nil)
+			time.Sleep(a.cfg.Agent.RetryDelay)
+			continue
+		}
+
 		stream, err := a.client.Heartbeat(context.Background())
 		if err != nil {
 			log.Printf("⚠️ 心跳流建立失败: %v", err)
@@ -40,6 +48,7 @@ func (a *Agent) HeartbeatLoop() {
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
+				log.Printf("⚠️ 心跳流断开: %v, 将重新注册...", err)
 				close(done)
 				break
 			}
@@ -49,6 +58,7 @@ func (a *Agent) HeartbeatLoop() {
 				}
 			}
 		}
+
 		time.Sleep(a.cfg.Agent.RetryDelay)
 	}
 }
@@ -64,11 +74,11 @@ func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 	case pb.ProbeCommand_RELOAD:
 		log.Println("🔄 Server指令: 重新扫描")
 		a.pluginMgr.ScanAndLoad()
-	case pb.ProbeCommand_COLLECT:
-		log.Println("🔄 手动触发: 全量资产采集")
-		a.collectAndReportAssets()
 	case pb.ProbeCommand_INSTALL:
 		log.Printf("📦 Server指令: 安装 %s", cmd.ProbeName)
 		a.pluginMgr.InstallProbe(cmd.ProbeName, cmd.ProbeData, cmd.ProbeConfig)
+	case pb.ProbeCommand_COLLECT:
+		log.Println("🔄 手动触发: 全量资产采集")
+		a.collectAndReportAssets()
 	}
 }

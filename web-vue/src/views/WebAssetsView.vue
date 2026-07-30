@@ -4,8 +4,8 @@
       <n-tabs type="line" v-model:value="tab" @update:value="load">
         <n-tab-pane name="全部" tab="全部" />
         <n-tab-pane name="框架" tab="框架" />
-        <n-tab-pane name="服务器" tab="服务器" />
         <n-tab-pane name="Web应用" tab="Web应用" />
+        <n-tab-pane name="数据库" tab="数据库" />
       </n-tabs>
       <n-data-table :columns="cols" :data="summary" size="small" :bordered="false" :pagination="pagination" :row-key="(row) => row.name" style="margin-top:12px" />
     </n-card>
@@ -57,7 +57,7 @@ async function load() {
   try {
     const type = tab.value === '全部' ? '所有' : tab.value
     const d = await api.getAssetsByCategory(type)
-    const webTypes = ['框架', '服务器', 'Web应用']
+    const webTypes = ['框架', 'Web应用', 'Web关键路径']
     const items = (d.items || []).filter(i => webTypes.includes(i.type))
 
     const map = {}

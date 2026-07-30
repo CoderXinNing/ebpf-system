@@ -30,15 +30,15 @@ var knownWebComponents = []webPattern{
 	{name: "SpringBoot", compType: "框架", jarKeywords: []string{"spring-boot", "springboot"}},
 	{name: "SpringMVC", compType: "框架", jarKeywords: []string{"spring-webmvc", "spring-web"}},
 	{name: "Struts2", compType: "框架", jarKeywords: []string{"struts2-core", "struts2"}},
-	{name: "Tomcat", compType: "服务器", procKeywords: []string{"tomcat", "catalina"}, jarKeywords: []string{"tomcat-embed", "catalina"}},
-	{name: "Jetty", compType: "服务器", jarKeywords: []string{"jetty-server", "jetty"}},
-	{name: "Netty", compType: "服务器", jarKeywords: []string{"netty-all", "netty"}},
+	{name: "Tomcat", compType: "Web应用", procKeywords: []string{"tomcat", "catalina"}, jarKeywords: []string{"tomcat-embed", "catalina"}},
+	{name: "Jetty", compType: "Web应用", jarKeywords: []string{"jetty-server", "jetty"}},
+	{name: "Netty", compType: "Web应用", jarKeywords: []string{"netty-all", "netty"}},
 
 	// Python Web框架
 	{name: "Flask", compType: "框架", procKeywords: []string{"flask"}, pathKeywords: []string{"flask"}},
 	{name: "Django", compType: "框架", procKeywords: []string{"django"}, pathKeywords: []string{"django"}},
 	{name: "FastAPI", compType: "框架", procKeywords: []string{"fastapi", "uvicorn"}},
-	{name: "Gunicorn", compType: "服务器", procKeywords: []string{"gunicorn"}},
+	{name: "Gunicorn", compType: "Web应用", procKeywords: []string{"gunicorn"}},
 
 	// Node.js Web框架
 	{name: "Express", compType: "框架", pathKeywords: []string{"express"}},
@@ -47,7 +47,7 @@ var knownWebComponents = []webPattern{
 	{name: "NestJS", compType: "框架", pathKeywords: []string{"nestjs", "nest"}},
 
 	// PHP
-	{name: "PHP-FPM", compType: "服务器", procKeywords: []string{"php-fpm"}},
+	{name: "PHP-FPM", compType: "Web应用", procKeywords: []string{"php-fpm"}},
 	{name: "Laravel", compType: "框架", pathKeywords: []string{"laravel", "artisan"}},
 
 	// Go
@@ -55,11 +55,11 @@ var knownWebComponents = []webPattern{
 	{name: "Echo", compType: "框架", pathKeywords: []string{"echo", "labstack"}},
 
 	// Web服务器
-	{name: "Nginx", compType: "服务器", procKeywords: []string{"nginx"}},
-	{name: "Apache", compType: "服务器", procKeywords: []string{"httpd", "apache2"}},
-	{name: "Caddy", compType: "服务器", procKeywords: []string{"caddy"}},
-	{name: "Traefik", compType: "服务器", procKeywords: []string{"traefik"}},
-	{name: "Envoy", compType: "服务器", procKeywords: []string{"envoy"}},
+	{name: "Nginx", compType: "Web应用", procKeywords: []string{"nginx"}},
+	{name: "Apache", compType: "Web应用", procKeywords: []string{"httpd", "apache2"}},
+	{name: "Caddy", compType: "Web应用", procKeywords: []string{"caddy"}},
+	{name: "Traefik", compType: "Web应用", procKeywords: []string{"traefik"}},
+	{name: "Envoy", compType: "Web应用", procKeywords: []string{"envoy"}},
 
 	// 静态资源/CDN
 	{name: "Vue.js", compType: "框架", pathKeywords: []string{"vue", "vue.js"}},
@@ -176,6 +176,29 @@ func IdentifyWebComponents() []WebComponent {
 		}
 	}
 
+	// 合并服务识别中的Web服务器
+	svcs := IdentifyServices()
+	for _, svc := range svcs {
+		if svc.Type == "Web服务器" {
+			found := false
+			for _, c := range components {
+				if c.Name == svc.Name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				components = append(components, WebComponent{
+					Name:    svc.Name,
+					Type:    svc.Type,
+					Version: svc.Version,
+					PID:     svc.PID,
+					BasePath: svc.ExePath,
+					ConfigPath: svc.ConfigPath,
+				})
+			}
+		}
+	}
 	return components
 }
 
