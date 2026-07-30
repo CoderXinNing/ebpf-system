@@ -47,9 +47,7 @@ function showDetail(name) {
   show.value = true
 }
 
-const load = async () => {
-
-  setInterval(() => { load() }, 30000)
+onMounted(async () => {
   try {
     const d = await api.getAssetsByCategory('所有')
     const items = d.items || []
