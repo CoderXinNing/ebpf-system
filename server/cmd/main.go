@@ -97,6 +97,7 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 	tk := genToken()
 	h.Agents[req.AgentId] = &handler.AgentInfo{
 		ID: req.AgentId, Hostname: req.Hostname, IPAddr: req.IpAddress,
+		Version:     req.AgentVersion,
 		Token: tk, FirstSeen: now, LastSeen: now,
 		Framework: req.Framework, KernelInfo: req.KernelInfo,
 		Commands: make([]*pb.ProbeCommand, 0),

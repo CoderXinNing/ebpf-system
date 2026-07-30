@@ -27,6 +27,7 @@ type AgentInfo struct {
 	Hostname     string            `json:"hostname"`
 	IPAddr       string            `json:"ip_addr"`
 	Token        string            `json:"-"`
+	Version     string            `json:"version"`
 	ActiveProbes int32             `json:"active_probes"`
 	LastSeen     int64             `json:"last_seen"`
 	FirstSeen    int64             `json:"first_seen"`

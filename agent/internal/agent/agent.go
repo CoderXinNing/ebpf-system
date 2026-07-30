@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+const AgentVersion = "1.0.0"
+
 type Agent struct {
 	id, hostname, kernelVer, ipAddr, token string
 	cfg          *config.AgentConfig
@@ -107,6 +109,7 @@ func (a *Agent) register() error {
 	fw := a.capabilities.Framework
 	req := &pb.RegisterRequest{
 		AgentId: a.id, Hostname: a.hostname, KernelVersion: a.kernelVer, IpAddress: a.ipAddr,
+		AgentVersion: AgentVersion,
 		Framework: &pb.FrameworkInfo{
 			BccAvailable: fw.BCCAvailable, LibbpfAvailable: fw.LibBPFAvailable, LibbpfCore: fw.LibBPFCORE,
 			BpftraceAvailable: fw.BpftraceAvailable, ClangAvailable: fw.ClangAvailable,
