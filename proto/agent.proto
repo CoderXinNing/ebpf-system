@@ -7,7 +7,8 @@ option go_package = "github.com/CoderXinNing/ebpf-system/proto/pb";
 message RegisterRequest {
     string agent_id = 1; string hostname = 2; string kernel_version = 3; string ip_address = 4;
     string agent_version = 5;
-    FrameworkInfo framework = 6; KernelInfo kernel_info = 7;
+    string agent_group = 6;
+    FrameworkInfo framework = 7; KernelInfo kernel_info = 8;
 }
 message RegisterResponse { bool success = 1; string message = 2; string agent_token = 3; }
 message FrameworkInfo {

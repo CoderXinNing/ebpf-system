@@ -14,6 +14,7 @@
         <n-tab-pane name="all" tab="全部" />
         <n-tab-pane name="online" tab="在线" />
         <n-tab-pane name="offline" tab="离线" />
+        <n-tab-pane v-for="g in groups" :key="g" :name="g" :tab="g" />
       </n-tabs>
       <n-data-table
         :columns="cols"
@@ -84,7 +85,7 @@ onMounted(async () => {
 
     agents.value = agentList.map(a => ({
       ...a,
-      os: assetMap[a.id]?.hostname || '-',
+      os: assetMap[a.id]?.os || '-',
       kernel: a.kernel_info?.version || '-',
       procs: assetMap[a.id]?.process_count || 0,
       users: assetMap[a.id]?.user_count || 0,

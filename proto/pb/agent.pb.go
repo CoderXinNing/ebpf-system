@@ -83,8 +83,9 @@ type RegisterRequest struct {
 	KernelVersion string                 `protobuf:"bytes,3,opt,name=kernel_version,json=kernelVersion,proto3" json:"kernel_version,omitempty"`
 	IpAddress     string                 `protobuf:"bytes,4,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
 	AgentVersion  string                 `protobuf:"bytes,5,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
-	Framework     *FrameworkInfo         `protobuf:"bytes,6,opt,name=framework,proto3" json:"framework,omitempty"`
-	KernelInfo    *KernelInfo            `protobuf:"bytes,7,opt,name=kernel_info,json=kernelInfo,proto3" json:"kernel_info,omitempty"`
+	AgentGroup    string                 `protobuf:"bytes,6,opt,name=agent_group,json=agentGroup,proto3" json:"agent_group,omitempty"`
+	Framework     *FrameworkInfo         `protobuf:"bytes,7,opt,name=framework,proto3" json:"framework,omitempty"`
+	KernelInfo    *KernelInfo            `protobuf:"bytes,8,opt,name=kernel_info,json=kernelInfo,proto3" json:"kernel_info,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -150,6 +151,13 @@ func (x *RegisterRequest) GetIpAddress() string {
 func (x *RegisterRequest) GetAgentVersion() string {
 	if x != nil {
 		return x.AgentVersion
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetAgentGroup() string {
+	if x != nil {
+		return x.AgentGroup
 	}
 	return ""
 }
@@ -1829,16 +1837,18 @@ var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x11proto/agent.proto\x12\bsentinel\"\xa1\x02\n" +
+	"\x11proto/agent.proto\x12\bsentinel\"\xc2\x02\n" +
 	"\x0fRegisterRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12%\n" +
 	"\x0ekernel_version\x18\x03 \x01(\tR\rkernelVersion\x12\x1d\n" +
 	"\n" +
 	"ip_address\x18\x04 \x01(\tR\tipAddress\x12#\n" +
-	"\ragent_version\x18\x05 \x01(\tR\fagentVersion\x125\n" +
-	"\tframework\x18\x06 \x01(\v2\x17.sentinel.FrameworkInfoR\tframework\x125\n" +
-	"\vkernel_info\x18\a \x01(\v2\x14.sentinel.KernelInfoR\n" +
+	"\ragent_version\x18\x05 \x01(\tR\fagentVersion\x12\x1f\n" +
+	"\vagent_group\x18\x06 \x01(\tR\n" +
+	"agentGroup\x125\n" +
+	"\tframework\x18\a \x01(\v2\x17.sentinel.FrameworkInfoR\tframework\x125\n" +
+	"\vkernel_info\x18\b \x01(\v2\x14.sentinel.KernelInfoR\n" +
 	"kernelInfo\"g\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +

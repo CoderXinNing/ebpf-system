@@ -28,6 +28,7 @@ type AgentInfo struct {
 	IPAddr       string            `json:"ip_addr"`
 	Token        string            `json:"-"`
 	Version     string            `json:"version"`
+	Group       string            `json:"group"`
 	ActiveProbes int32             `json:"active_probes"`
 	LastSeen     int64             `json:"last_seen"`
 	FirstSeen    int64             `json:"first_seen"`
@@ -69,6 +70,17 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.POST("/command", h.roleMiddleware("admin", "operator"), h.Command)
 		api.GET("/assets", h.AssetsOverview)
 		api.GET("/assets/:agent_id", h.AssetDetail)
+		api.GET("/groups", func(c *gin.Context) {
+			h.Mu.RLock()
+			defer h.Mu.RUnlock()
+			groups := make(map[string]int)
+			for _, a := range h.Agents {
+				g := a.Group
+				if g == "" { g = "默认组" }
+				groups[g]++
+			}
+			c.JSON(200, gin.H{"groups": groups})
+		})
 		api.GET("/assets/category", h.AssetsByCategory)
 		api.GET("/users", h.roleMiddleware("admin"), h.ListUsers)
 	}
@@ -225,6 +237,7 @@ func (h *Handler) AssetsByCategory(c *gin.Context) {
 		ServiceName string `json:"service_name"`
 		Type        string   `json:"type"`
 		Version     string `json:"version"`
+	Group       string            `json:"group"`
 		PID         int32  `json:"pid"`
 		ListenPort  []string `json:"listen_port"`
 		ExePath     string `json:"exe_path"`
