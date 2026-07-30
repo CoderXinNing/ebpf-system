@@ -50,6 +50,8 @@ func main() {
 	// HTTP
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+	r.StaticFile("/install.sh", "./server/static/install.sh")
+	r.Static("/bin", "./server/static")
 	r.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")

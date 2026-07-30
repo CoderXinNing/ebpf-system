@@ -7,13 +7,11 @@ CONFIG_DIR="${INSTALL_DIR}/configs"
 BIN_DIR="${INSTALL_DIR}/bin"
 PROBES_DIR="${INSTALL_DIR}/probes"
 
-# 默认参数
 SERVER="127.0.0.1:50051"
 GROUP="默认组"
 RUN_AS="root"
 OS="linux-amd64"
 
-# 解析参数
 while [[ $# -gt 0 ]]; do
     case $1 in
         --server) SERVER="$2"; shift 2 ;;
@@ -24,51 +22,44 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# 从SERVER提取HTTP地址
+HTTP_SERVER=$(echo $SERVER | sed 's/:50051//')
+
 echo "╔══════════════════════════════════════╗"
 echo "║  eBPF Sentinel Agent v${VERSION}          ║"
-echo "╠══════════════════════════════════════╣"
 echo "║  业务组: ${GROUP}                         ║"
-echo "║  运行用户: ${RUN_AS}                      ║"
 echo "║  Server: ${SERVER}              ║"
 echo "╚══════════════════════════════════════╝"
-echo ""
 
-# 创建目录
 mkdir -p ${INSTALL_DIR} ${CONFIG_DIR} ${BIN_DIR} ${PROBES_DIR}
 
-# 复制Agent二进制（从安装包同目录）
-AGENT_BIN="${BIN_DIR}/agent"
-if [ -f "./agent-linux-${OS##*-}" ]; then
-    cp "./agent-linux-${OS##*-}" ${AGENT_BIN}
+# 从Server下载Agent二进制
+AGENT_URL="http://${HTTP_SERVER}:8080/bin/agent-linux-${OS##*-}"
+echo "📥 下载 ${AGENT_URL}..."
+if command -v curl &> /dev/null; then
+    curl -fSL -o ${BIN_DIR}/agent "${AGENT_URL}"
+elif command -v wget &> /dev/null; then
+    wget -O ${BIN_DIR}/agent "${AGENT_URL}"
 else
-    echo "❌ 找不到 agent-linux-${OS##*-}，请确认架构"
+    echo "❌ 需要 curl 或 wget"
     exit 1
 fi
-chmod +x ${AGENT_BIN}
+chmod +x ${BIN_DIR}/agent
 
-# 生成配置文件
-HOSTNAME=$(hostname)
+# 生成配置
 cat > ${CONFIG_DIR}/agent.yaml << YAML
 agent:
-    name: "${HOSTNAME}"
+    name: "$(hostname)"
     server: "${SERVER}"
     retry_delay: 5s
     heartbeat_interval: 10s
+    group: "${GROUP}"
 
 autoload: []
-
 collect_interval: 300s
 YAML
 
-echo "📝 配置已生成: ${CONFIG_DIR}/agent.yaml"
-
-# 创建systemd服务
-if [ "${RUN_AS}" != "root" ]; then
-    RUN_CMD="${BIN_DIR}/agent --config ${CONFIG_DIR}/agent.yaml"
-else
-    RUN_CMD="${BIN_DIR}/agent --config ${CONFIG_DIR}/agent.yaml"
-fi
-
+# systemd服务
 cat > /etc/systemd/system/ebpf-sentinel-agent.service << SYSTEMD
 [Unit]
 Description=eBPF Sentinel Agent
@@ -92,34 +83,7 @@ systemctl start ebpf-sentinel-agent
 sleep 2
 
 if systemctl is-active --quiet ebpf-sentinel-agent; then
-    echo ""
-    echo "✅ Agent 安装成功并已启动！"
+    echo "✅ Agent 安装成功！"
 else
-    echo ""
-    echo "⚠️  Agent 启动失败，查看日志: journalctl -u ebpf-sentinel-agent -n 20"
+    echo "⚠️  启动失败: journalctl -u ebpf-sentinel-agent -n 10"
 fi
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  目录:    ${INSTALL_DIR}"
-echo "  配置:    ${CONFIG_DIR}/agent.yaml"
-echo "  日志:    journalctl -u ebpf-sentinel-agent -f"
-echo "  状态:    systemctl status ebpf-sentinel-agent"
-echo "  停止:    systemctl stop ebpf-sentinel-agent"
-echo "  重启:    systemctl restart ebpf-sentinel-agent"
-echo "  卸载:    ${INSTALL_DIR}/uninstall.sh"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-# 生成卸载脚本
-cat > ${INSTALL_DIR}/uninstall.sh << 'UNINSTALL'
-#!/bin/bash
-echo "🗑️  卸载 eBPF Sentinel Agent..."
-systemctl stop ebpf-sentinel-agent 2>/dev/null
-systemctl disable ebpf-sentinel-agent 2>/dev/null
-rm -f /etc/systemd/system/ebpf-sentinel-agent.service
-systemctl daemon-reload
-rm -rf /opt/ebpf-sentinel
-echo "✅ 已卸载"
-UNINSTALL
-chmod +x ${INSTALL_DIR}/uninstall.sh
