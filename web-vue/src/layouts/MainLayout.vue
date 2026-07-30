@@ -49,7 +49,10 @@ const menu = [
   { label: 'Web资产', key: '/web' },
   { label: '软件应用', key: '/packages' },
   { label: '事件流', key: '/events' },
-  { label: '探针管理', key: '/probes' },
+    { label: 'Agent管理', key: 'agent', children: [
+      { label: 'Agent列表', key: '/probes' },
+      { label: '安装Agent', key: '/install' },
+    ] },
 ]
 
 const titleMap = {

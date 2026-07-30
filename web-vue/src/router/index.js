@@ -9,6 +9,7 @@ const routes = [
   { path: '/packages', component: () => import('../views/PackagesView.vue') },
   { path: '/events', component: () => import('../views/EventsView.vue') },
   { path: '/probes', component: () => import('../views/ProbesView.vue') },
+  { path: '/install', component: () => import('../views/AgentInstall.vue') },
 ]
 
 const router = createRouter({
