@@ -11,7 +11,6 @@ import (
 // AgentConfig Agent完整配置
 type AgentConfig struct {
 	Agent    AgentSection    `yaml:"agent"`
-	Guardian GuardianSection `yaml:"guardian"`
 	Autoload []ProbeConfig   `yaml:"autoload"`
 }
 
@@ -23,13 +22,6 @@ type AgentSection struct {
 	HeartbeatInterval time.Duration `yaml:"heartbeat_interval"`
 	CollectInterval   time.Duration `yaml:"collect_interval"`
 }
-
-// GuardianSection 守护探针配置
-type GuardianSection struct {
-	Enabled bool `yaml:"enabled"`
-}
-
-// ProbeConfig 探针加载配置
 type ProbeConfig struct {
 	Name    string `yaml:"name"`
 	ID      string `yaml:"id"`
@@ -46,10 +38,6 @@ func DefaultConfig() *AgentConfig {
 			HeartbeatInterval: 10 * time.Second,
 		CollectInterval:   300 * time.Second,
 		},
-		Guardian: GuardianSection{
-			Enabled: true,
-		},
-		Autoload: []ProbeConfig{},
 	}
 }
 

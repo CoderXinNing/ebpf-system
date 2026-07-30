@@ -39,7 +39,7 @@ func (a *Agent) runHeartbeatLoop() {
 						AgentId:      a.id,
 						AgentToken:   a.token,
 						Timestamp:    time.Now().Unix(),
-						ActiveProbes: int32(len(a.pluginMgr.ListPlugins())),
+						ActiveProbes: 0,
 					})
 				}
 			}
@@ -65,18 +65,6 @@ func (a *Agent) runHeartbeatLoop() {
 
 func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 	switch cmd.Type {
-	case pb.ProbeCommand_LOAD:
-		log.Printf("📥 Server指令: 加载 %s", cmd.ProbeName)
-		a.pluginMgr.LoadSingle(cmd.ProbeName)
-	case pb.ProbeCommand_UNLOAD:
-		log.Printf("📤 Server指令: 卸载 %s", cmd.ProbeName)
-		a.pluginMgr.Unload(cmd.ProbeName)
-	case pb.ProbeCommand_RELOAD:
-		log.Println("🔄 Server指令: 重新扫描")
-		a.pluginMgr.ScanAndLoad()
-	case pb.ProbeCommand_INSTALL:
-		log.Printf("📦 Server指令: 安装 %s", cmd.ProbeName)
-		a.pluginMgr.InstallProbe(cmd.ProbeName, cmd.ProbeData, cmd.ProbeConfig)
 	case pb.ProbeCommand_COLLECT:
 		log.Println("🔄 手动触发: 全量资产采集")
 		a.collectAndReportAssets()

@@ -2,14 +2,11 @@ package agent
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
-	"github.com/CoderXinNing/ebpf-system/agent/internal/guardian"
-	"github.com/CoderXinNing/ebpf-system/agent/internal/loader"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 	"google.golang.org/grpc"
@@ -20,8 +17,6 @@ type Agent struct {
 	id, hostname, kernelVer, ipAddr, token string
 	cfg          *config.AgentConfig
 	capabilities *probe.AgentCapabilities
-	guardian     *guardian.Guardian
-	pluginMgr    *loader.PluginManager
 	eventQueue   chan *pb.ProbeEvent
 	conn         *grpc.ClientConn
 	client       pb.SentinelClient
@@ -50,27 +45,7 @@ func (a *Agent) Init() error {
 	a.kernelVer = caps.KernelVersion
 	fmt.Print(caps.Summary())
 
-	if a.cfg.Guardian.Enabled {
-		a.guardian = guardian.NewGuardian(nil)
-		if err := a.guardian.Start(); err != nil {
-			log.Printf("⚠️ 守护探针: %v", err)
-		}
-	}
 
-	a.pluginMgr = loader.NewPluginManager("/opt/ebpf-sentinel/probes", func(name string, raw []byte) {
-		var pid uint32
-		var comm, filename string
-		if len(raw) >= 92 {
-			pid = binary.LittleEndian.Uint32(raw[0:4])
-			comm = cstring(raw[12:28])
-			filename = cstring(raw[28:92])
-		}
-		a.eventQueue <- &pb.ProbeEvent{
-			ProbeId: name, ProbeName: name, Timestamp: time.Now().Unix(),
-			EventType: "plugin", Pid: int32(pid), Comm: comm, Filename: filename,
-		}
-	})
-	a.pluginMgr.ScanAndLoad()
 
 	return nil
 }
@@ -184,12 +159,6 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 }
 
 func (a *Agent) Shutdown() {
-	if a.guardian != nil {
-		a.guardian.Stop()
-	}
-	if a.pluginMgr != nil {
-		a.pluginMgr.Close()
-	}
 	if a.conn != nil {
 		a.conn.Close()
 	}

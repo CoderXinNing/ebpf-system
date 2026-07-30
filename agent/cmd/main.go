@@ -22,7 +22,8 @@ func main() {
 		config.GenerateDefault(*configPath)
 		return
 	}
-	cfg, _ := config.Load(*configPath)
+	cfg, err := config.Load(*configPath)
+	if err != nil { log.Fatalf("❌ 配置加载失败: %v", err) }
 
 	ag := agent.New(cfg)
 	if err := ag.Init(); err != nil {

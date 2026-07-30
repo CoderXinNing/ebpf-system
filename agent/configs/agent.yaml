@@ -3,10 +3,10 @@ agent:
     server: 127.0.0.1:50051
     retry_delay: 5s
     heartbeat_interval: 10s
-guardian:
-    enabled: true
+
 autoload:
     - name: exec_monitor
       id: auto-exec-001
       enabled: false
+
 collect_interval: 300s
