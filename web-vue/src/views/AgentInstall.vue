@@ -78,7 +78,7 @@ curl -fsSL http://${serverAddr.value}:8080/install.sh | bash -s -- \\
   --os ${os.value} \\
   --group "${group.value}" \\
   --run-as ${runAs} \\
-  --server ${serverAddr.value}:50051 --group "${group.value}"`
+  --server ${serverAddr.value}:50051`
 })
 
 function copyCmd() {
