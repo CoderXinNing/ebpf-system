@@ -44,4 +44,7 @@ a { color: #1e6fff; text-decoration: none; }
 .n-modal-mask { background: rgba(0,0,0,.3) !important; }
 .n-modal .n-card { border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,.08); background: #fff !important; color: #1d2129 !important; }
 .n-modal .n-card > .n-card-header { font-size: 18px; font-weight: 600; color: #1d2129 !important; border-bottom: 1px solid #f0f2f5; }
+.n-input { border: 1px solid #d0d5dd !important; border-radius: 6px !important; }
+.n-input .n-input__input-el { color: #333 !important; }
+.n-input .n-input__placeholder { color: #999 !important; }
 </style>

@@ -1,7 +1,9 @@
 <template>
   <Layout>
     <n-card title="进程与服务" size="small" :bordered="false">
-      <n-data-table :columns="cols" :data="summary" size="small" :bordered="false" :pagination="pagination" :row-key="(row) => row.name" />
+      <div style="background:#f5f6f8;padding:8px 12px;border-radius:6px;margin-bottom:8px"><n-input v-model:value="search" placeholder="搜索..." clearable size="small" style="width:300px" /></div>
+      <n-input v-model:value="search" placeholder="搜索服务/进程名..." clearable style="margin-bottom:12px;width:300px" outlined style="margin-bottom:12px;width:300px;border:1px solid #d0d5dd;border-radius:6px" placeholder-style="color:#333" />
+      <n-data-table :columns="cols" :data="search ? filtered : summary" size="small" :bordered="false" :pagination="pagination" :row-key="(row) => row.name" />
     </n-card>
 
     <n-modal v-model:show="show" title="主机列表" style="width:700px" preset="card" :bordered="false">
@@ -17,6 +19,7 @@ import { api } from '../api'
 import Layout from '../layouts/MainLayout.vue'
 
 const summary = ref([]), show = ref(false), detail = ref([])
+const search = ref("")
 
 const pagination = reactive({
   page: 1, pageSize: 20, showSizePicker: true,
@@ -61,6 +64,7 @@ onMounted(async () => {
         map[name].count++
       }
     })
+  const filtered = computed(() => { if (!search.value) return summary.value; return summary.value.filter(s => s.name.toLowerCase().includes(search.value.toLowerCase())) })
     summary.value = Object.entries(map)
       .map(([name, v]) => ({ name, count: v.count, type: v.type, hosts: v.hosts }))
       .sort((a, b) => b.count - a.count)
