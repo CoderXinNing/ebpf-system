@@ -45,6 +45,16 @@ a { color: #1e6fff; text-decoration: none; }
 .n-modal .n-card { border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,.08); background: #fff !important; color: #1d2129 !important; }
 .n-modal .n-card > .n-card-header { font-size: 18px; font-weight: 600; color: #1d2129 !important; border-bottom: 1px solid #f0f2f5; }
 .n-input { border: 1px solid #d0d5dd !important; border-radius: 6px !important; }
-.n-input .n-input__input-el { color: #333 !important; }
+.n-select .n-base-selection { border: 1px solid #d0d5dd !important; border-radius: 6px !important; }
+  .n-select .n-base-selection__label { background: #fff !important; }
+.n-input .n-input__input-el { color: #1d2129 !important; font-weight: 500; }
 .n-input .n-input__placeholder { color: #999 !important; }
+.n-select .n-base-selection { background: #fff !important; }
+.n-select .n-base-selection-label { color: #1d2129 !important; font-weight: 500; }
+.n-select .n-base-selection-placeholder { color: #999 !important; }
+.n-base-select-menu .n-base-select-option { color: #333 !important; background: #fff !important; }
+.n-base-select-menu .n-base-select-option.n-base-select-option--selected { color: #1e6fff !important; background: #e8f0fe !important; }
+.n-base-select-menu .n-base-select-option:hover { background: #f5f6f8 !important; }
+.n-base-select-menu { padding: 0 !important; }
+.n-base-select-menu .n-scrollbar-content { padding: 4px 0 !important; }
 </style>
