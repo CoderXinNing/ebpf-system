@@ -51,6 +51,7 @@ function showDetail(name) {
 }
 
 onMounted(async () => {
+  setInterval(() => { load() }, 30000)
   try {
     const [agt] = await Promise.all([api.getAgents()])
     agents.value = agt.agents || []

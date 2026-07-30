@@ -74,6 +74,7 @@ function goStat(idx) {
 }
 
 onMounted(async () => {
+  setInterval(() => { load() }, 30000)
   try {
     const [ag, as] = await Promise.all([api.getAgents(), api.getAssets()])
     const agentList = ag.agents || []

@@ -51,4 +51,6 @@ async function load() {
   } catch(e) {}
 }
 onMounted(load)
+setInterval(load, 30000)
+  setInterval(() => { load() }, 30000)
 </script>

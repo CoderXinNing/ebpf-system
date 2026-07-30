@@ -1,6 +1,7 @@
 <template>
   <Layout>
     <n-card title="Web资产" size="small" :bordered="false">
+      <n-input v-model:value="search" placeholder="搜索..." clearable style="margin-bottom:12px;width:300px" />
       <n-tabs type="line" v-model:value="tab" @update:value="load">
         <n-tab-pane name="全部" tab="全部" />
         <n-tab-pane name="框架" tab="框架" />
@@ -23,6 +24,7 @@ import { api } from '../api'
 import Layout from '../layouts/MainLayout.vue'
 
 const tab = ref('全部'), summary = ref([]), show = ref(false), detail = ref([])
+const search = ref("")
 
 const pagination = reactive({
   page: 1, pageSize: 20, showSizePicker: true,
@@ -76,4 +78,6 @@ async function load() {
   } catch(e) {}
 }
 onMounted(load)
+setInterval(load, 30000)
+  setInterval(() => { load() }, 30000)
 </script>
