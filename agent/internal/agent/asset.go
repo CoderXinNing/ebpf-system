@@ -44,10 +44,12 @@ func (a *Agent) collectAndReportAssets() {
 			User: c.User, Schedule: c.Schedule, Command: c.Command, Source: c.Source,
 		})
 	}
+	pkgSizes := collector.GetAllPackageSizes()
+	log.Printf("包大小map: %d个", len(pkgSizes))
 	for _, p := range pkgs {
 		assetReq.Packages = append(assetReq.Packages, &pb.PackageAsset{
 			Name: p.Name, Version: p.Version, Manager: p.Manager,
-				SizeKb: collector.GetPackageSize(p.Name),
+				SizeKb: pkgSizes[p.Name],
 		})
 	}
 

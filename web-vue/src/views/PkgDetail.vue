@@ -30,6 +30,7 @@ const cols = [
   { title: '版本', key: 'version', minWidth: 100 },
   { title: '包管理器', key: 'manager', minWidth: 80 },
   { title: '大小(KB)', key: 'size_kb', minWidth: 80 },
+  { title: '大小(KB)', key: 'size_kb', minWidth: 80 },
 ]
 
 const filtered = computed(() => {
