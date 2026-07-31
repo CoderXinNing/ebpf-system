@@ -114,6 +114,11 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 	h := s.handler
 	h.Mu.Lock()
 	agent, ok := h.Agents[req.AgentId]
+	if agent == nil {
+		h.Mu.Unlock()
+		stream.Send(&pb.HeartbeatResponse{Success: false})
+		return nil
+	}
 	if !ok || agent == nil {
 		h.Mu.Unlock()
 		stream.Send(&pb.HeartbeatResponse{Success: false})

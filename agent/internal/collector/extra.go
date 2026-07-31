@@ -237,3 +237,23 @@ func CollectNpmPackages() []NpmPackage {
 
 	return pkgs
 }
+
+func collectPythonFromPkg() []PythonPackage {
+	var pkgs []PythonPackage
+	// dpkg
+	out, err := exec.Command("dpkg-query", "-W", "-f=${Package}\t${Version}\n").Output()
+	if err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			fields := strings.Split(line, "\t")
+			if len(fields) >= 2 && strings.HasPrefix(fields[0], "python3-") {
+				pkgs = append(pkgs, PythonPackage{
+					Name: strings.TrimPrefix(fields[0], "python3-"),
+					Version: fields[1],
+					Scope: "system",
+					Path: "-",
+				})
+			}
+		}
+	}
+	return pkgs
+}
