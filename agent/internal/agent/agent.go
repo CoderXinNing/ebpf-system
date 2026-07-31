@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/collector"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 	"google.golang.org/grpc"
@@ -54,6 +55,15 @@ func (a *Agent) Init() error {
 
 func (a *Agent) Run() {
 	log.Printf("🛡️  eBPF Sentinel Agent  ID: %s", a.id)
+	// 采集测试
+	jars := collector.CollectJarPackages()
+	log.Printf("Jar包: %d个", len(jars))
+	pyPkgs := collector.CollectPythonPackages()
+	log.Printf("Python包: %d个", len(pyPkgs))
+	npmPkgs := collector.CollectNpmPackages()
+	log.Printf("Npm包: %d个", len(npmPkgs))
+	svcs := collector.CollectServiceStatus()
+	log.Printf("服务状态: %d个", len(svcs))
 
 	a.connectAndRegister()
 	go a.eventReporter()
