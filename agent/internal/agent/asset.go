@@ -44,12 +44,10 @@ func (a *Agent) collectAndReportAssets() {
 			User: c.User, Schedule: c.Schedule, Command: c.Command, Source: c.Source,
 		})
 	}
-	pkgSizes := collector.GetAllPackageSizes()
-	log.Printf("包大小map: %d个", len(pkgSizes))
 	for _, p := range pkgs {
 		assetReq.Packages = append(assetReq.Packages, &pb.PackageAsset{
 			Name: p.Name, Version: p.Version, Manager: p.Manager,
-				SizeKb: pkgSizes[p.Name],
+				SizeKb: 0,
 		})
 	}
 
@@ -138,6 +136,18 @@ func (a *Agent) collectAndReportAssets() {
 		len(assetReq.DiskUsages), len(assetReq.NetworkDetails), len(assetReq.ServiceStatus),
 		len(assetReq.JarPackages), len(assetReq.PythonPackages), len(assetReq.NpmPackages))
 
+	perf := collector.CollectPerfData()
+	assetReq.Perf = &pb.PerfDataAsset{
+		CpuPercent: perf.CPUPercent,
+		MemPercent: perf.MemPercent,
+		MemUsedMb:  int32(perf.MemUsedMB),
+		MemTotalMb: int32(perf.MemTotalMB),
+	}
+	for _, d := range perf.DiskUsage {
+		assetReq.Perf.DiskUsage = append(assetReq.Perf.DiskUsage, &pb.DiskPerfAsset{
+			MountPoint: d.MountPoint, UsedMb: int32(d.UsedMB), TotalMb: int32(d.TotalMB), Percent: d.Percent,
+		})
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if _, err := a.client.ReportAssets(ctx, assetReq); err != nil {

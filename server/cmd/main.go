@@ -212,6 +212,7 @@ func (s *Server) ReportAssets(ctx context.Context, req *pb.AssetReport) (*pb.Hea
 		"python_packages": req.PythonPackages,
 		"npm_packages":    req.NpmPackages,
 		"agent_self":      req.AgentSelf,
+		"perf":           req.Perf,
 	}
 	sysJSON, _ := json.Marshal(sysData)
 	s.handler.Store.SaveAsset(req.AgentId, procJSON, userJSON, sysJSON)

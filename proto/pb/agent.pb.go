@@ -766,6 +766,7 @@ func (x *EventReport) GetEvents() []*ProbeEvent {
 // 资产上报
 type AssetReport struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
+	Perf           *PerfDataAsset         `protobuf:"bytes,21,opt,name=perf,proto3" json:"perf,omitempty"`
 	System         *SystemAsset           `protobuf:"bytes,5,opt,name=system,proto3" json:"system,omitempty"`
 	Hardware       *HardwareAsset         `protobuf:"bytes,10,opt,name=hardware,proto3" json:"hardware,omitempty"`
 	KernelModules  []*KernelModuleAsset   `protobuf:"bytes,11,rep,name=kernel_modules,json=kernelModules,proto3" json:"kernel_modules,omitempty"`
@@ -818,6 +819,13 @@ func (x *AssetReport) ProtoReflect() protoreflect.Message {
 // Deprecated: Use AssetReport.ProtoReflect.Descriptor instead.
 func (*AssetReport) Descriptor() ([]byte, []int) {
 	return file_proto_agent_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *AssetReport) GetPerf() *PerfDataAsset {
+	if x != nil {
+		return x.Perf
+	}
+	return nil
 }
 
 func (x *AssetReport) GetSystem() *SystemAsset {
@@ -1533,7 +1541,7 @@ type PackageAsset struct {
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	Manager       string                 `protobuf:"bytes,3,opt,name=manager,proto3" json:"manager,omitempty"`
-	SizeKb        int64                  `protobuf:"varint,4,opt,name=size_kb,json=sizeKb,proto3" json:"size_kb"`
+	SizeKb        int64                  `protobuf:"varint,4,opt,name=size_kb,json=sizeKb,proto3" json:"size_kb,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2744,6 +2752,150 @@ func (x *NetworkGatewayAsset) GetDns() []string {
 	return nil
 }
 
+type PerfDataAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CpuPercent    float64                `protobuf:"fixed64,1,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"`
+	MemPercent    float64                `protobuf:"fixed64,2,opt,name=mem_percent,json=memPercent,proto3" json:"mem_percent,omitempty"`
+	MemUsedMb     int32                  `protobuf:"varint,3,opt,name=mem_used_mb,json=memUsedMb,proto3" json:"mem_used_mb,omitempty"`
+	MemTotalMb    int32                  `protobuf:"varint,4,opt,name=mem_total_mb,json=memTotalMb,proto3" json:"mem_total_mb,omitempty"`
+	DiskUsage     []*DiskPerfAsset       `protobuf:"bytes,5,rep,name=disk_usage,json=diskUsage,proto3" json:"disk_usage,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PerfDataAsset) Reset() {
+	*x = PerfDataAsset{}
+	mi := &file_proto_agent_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PerfDataAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PerfDataAsset) ProtoMessage() {}
+
+func (x *PerfDataAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PerfDataAsset.ProtoReflect.Descriptor instead.
+func (*PerfDataAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *PerfDataAsset) GetCpuPercent() float64 {
+	if x != nil {
+		return x.CpuPercent
+	}
+	return 0
+}
+
+func (x *PerfDataAsset) GetMemPercent() float64 {
+	if x != nil {
+		return x.MemPercent
+	}
+	return 0
+}
+
+func (x *PerfDataAsset) GetMemUsedMb() int32 {
+	if x != nil {
+		return x.MemUsedMb
+	}
+	return 0
+}
+
+func (x *PerfDataAsset) GetMemTotalMb() int32 {
+	if x != nil {
+		return x.MemTotalMb
+	}
+	return 0
+}
+
+func (x *PerfDataAsset) GetDiskUsage() []*DiskPerfAsset {
+	if x != nil {
+		return x.DiskUsage
+	}
+	return nil
+}
+
+type DiskPerfAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MountPoint    string                 `protobuf:"bytes,1,opt,name=mount_point,json=mountPoint,proto3" json:"mount_point,omitempty"`
+	UsedMb        int32                  `protobuf:"varint,2,opt,name=used_mb,json=usedMb,proto3" json:"used_mb,omitempty"`
+	TotalMb       int32                  `protobuf:"varint,3,opt,name=total_mb,json=totalMb,proto3" json:"total_mb,omitempty"`
+	Percent       string                 `protobuf:"bytes,4,opt,name=percent,proto3" json:"percent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiskPerfAsset) Reset() {
+	*x = DiskPerfAsset{}
+	mi := &file_proto_agent_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiskPerfAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiskPerfAsset) ProtoMessage() {}
+
+func (x *DiskPerfAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiskPerfAsset.ProtoReflect.Descriptor instead.
+func (*DiskPerfAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *DiskPerfAsset) GetMountPoint() string {
+	if x != nil {
+		return x.MountPoint
+	}
+	return ""
+}
+
+func (x *DiskPerfAsset) GetUsedMb() int32 {
+	if x != nil {
+		return x.UsedMb
+	}
+	return 0
+}
+
+func (x *DiskPerfAsset) GetTotalMb() int32 {
+	if x != nil {
+		return x.TotalMb
+	}
+	return 0
+}
+
+func (x *DiskPerfAsset) GetPercent() string {
+	if x != nil {
+		return x.Percent
+	}
+	return ""
+}
+
 var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
@@ -2826,8 +2978,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
 	"agentToken\x12,\n" +
-	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"\xf2\b\n" +
-	"\vAssetReport\x12-\n" +
+	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"\x9f\t\n" +
+	"\vAssetReport\x12+\n" +
+	"\x04perf\x18\x15 \x01(\v2\x17.sentinel.PerfDataAssetR\x04perf\x12-\n" +
 	"\x06system\x18\x05 \x01(\v2\x15.sentinel.SystemAssetR\x06system\x123\n" +
 	"\bhardware\x18\n" +
 	" \x01(\v2\x17.sentinel.HardwareAssetR\bhardware\x12B\n" +
@@ -3008,7 +3161,23 @@ const file_proto_agent_proto_rawDesc = "" +
 	"start_time\x18\t \x01(\tR\tstartTime\"A\n" +
 	"\x13NetworkGatewayAsset\x12\x18\n" +
 	"\agateway\x18\x01 \x01(\tR\agateway\x12\x10\n" +
-	"\x03dns\x18\x02 \x03(\tR\x03dns2\x9f\x02\n" +
+	"\x03dns\x18\x02 \x03(\tR\x03dns\"\xcb\x01\n" +
+	"\rPerfDataAsset\x12\x1f\n" +
+	"\vcpu_percent\x18\x01 \x01(\x01R\n" +
+	"cpuPercent\x12\x1f\n" +
+	"\vmem_percent\x18\x02 \x01(\x01R\n" +
+	"memPercent\x12\x1e\n" +
+	"\vmem_used_mb\x18\x03 \x01(\x05R\tmemUsedMb\x12 \n" +
+	"\fmem_total_mb\x18\x04 \x01(\x05R\n" +
+	"memTotalMb\x126\n" +
+	"\n" +
+	"disk_usage\x18\x05 \x03(\v2\x17.sentinel.DiskPerfAssetR\tdiskUsage\"~\n" +
+	"\rDiskPerfAsset\x12\x1f\n" +
+	"\vmount_point\x18\x01 \x01(\tR\n" +
+	"mountPoint\x12\x17\n" +
+	"\aused_mb\x18\x02 \x01(\x05R\x06usedMb\x12\x19\n" +
+	"\btotal_mb\x18\x03 \x01(\x05R\atotalMb\x12\x18\n" +
+	"\apercent\x18\x04 \x01(\tR\apercent2\x9f\x02\n" +
 	"\bSentinel\x12A\n" +
 	"\bRegister\x12\x19.sentinel.RegisterRequest\x1a\x1a.sentinel.RegisterResponse\x12H\n" +
 	"\tHeartbeat\x12\x1a.sentinel.HeartbeatRequest\x1a\x1b.sentinel.HeartbeatResponse(\x010\x01\x12B\n" +
@@ -3028,7 +3197,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
 var file_proto_agent_proto_goTypes = []any{
 	(ProbeCommand_CommandType)(0), // 0: sentinel.ProbeCommand.CommandType
 	(*RegisterRequest)(nil),       // 1: sentinel.RegisterRequest
@@ -3065,6 +3234,8 @@ var file_proto_agent_proto_goTypes = []any{
 	(*UserAsset)(nil),             // 32: sentinel.UserAsset
 	(*ProcessAsset)(nil),          // 33: sentinel.ProcessAsset
 	(*NetworkGatewayAsset)(nil),   // 34: sentinel.NetworkGatewayAsset
+	(*PerfDataAsset)(nil),         // 35: sentinel.PerfDataAsset
+	(*DiskPerfAsset)(nil),         // 36: sentinel.DiskPerfAsset
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	3,  // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
@@ -3072,43 +3243,45 @@ var file_proto_agent_proto_depIdxs = []int32{
 	7,  // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
 	0,  // 3: sentinel.ProbeCommand.type:type_name -> sentinel.ProbeCommand.CommandType
 	8,  // 4: sentinel.EventReport.events:type_name -> sentinel.ProbeEvent
-	11, // 5: sentinel.AssetReport.system:type_name -> sentinel.SystemAsset
-	21, // 6: sentinel.AssetReport.hardware:type_name -> sentinel.HardwareAsset
-	22, // 7: sentinel.AssetReport.kernel_modules:type_name -> sentinel.KernelModuleAsset
-	23, // 8: sentinel.AssetReport.env_variables:type_name -> sentinel.EnvVariableAsset
-	24, // 9: sentinel.AssetReport.disk_usages:type_name -> sentinel.DiskUsageAsset
-	25, // 10: sentinel.AssetReport.network_details:type_name -> sentinel.NetworkDetailAsset
-	34, // 11: sentinel.AssetReport.gateway_dns:type_name -> sentinel.NetworkGatewayAsset
-	26, // 12: sentinel.AssetReport.service_status:type_name -> sentinel.ServiceStatusAsset
-	27, // 13: sentinel.AssetReport.jar_packages:type_name -> sentinel.JarPackageAsset
-	28, // 14: sentinel.AssetReport.python_packages:type_name -> sentinel.PythonPackageAsset
-	29, // 15: sentinel.AssetReport.npm_packages:type_name -> sentinel.NpmPackageAsset
-	30, // 16: sentinel.AssetReport.agent_self:type_name -> sentinel.AgentSelfAsset
-	20, // 17: sentinel.AssetReport.crons:type_name -> sentinel.CronAsset
-	19, // 18: sentinel.AssetReport.packages:type_name -> sentinel.PackageAsset
-	18, // 19: sentinel.AssetReport.services:type_name -> sentinel.IdentifiedService
-	17, // 20: sentinel.AssetReport.web_components:type_name -> sentinel.WebComponentAsset
-	32, // 21: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
-	33, // 22: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
-	12, // 23: sentinel.SystemAsset.os:type_name -> sentinel.OSAsset
-	13, // 24: sentinel.SystemAsset.cpu:type_name -> sentinel.CPUAsset
-	14, // 25: sentinel.SystemAsset.memory:type_name -> sentinel.MemoryAsset
-	15, // 26: sentinel.SystemAsset.disks:type_name -> sentinel.DiskAsset
-	16, // 27: sentinel.SystemAsset.networks:type_name -> sentinel.NetworkAsset
-	31, // 28: sentinel.SystemAsset.services:type_name -> sentinel.ServiceAsset
-	1,  // 29: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
-	5,  // 30: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
-	9,  // 31: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
-	10, // 32: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
-	2,  // 33: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
-	6,  // 34: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
-	6,  // 35: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
-	6,  // 36: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
-	33, // [33:37] is the sub-list for method output_type
-	29, // [29:33] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	35, // 5: sentinel.AssetReport.perf:type_name -> sentinel.PerfDataAsset
+	11, // 6: sentinel.AssetReport.system:type_name -> sentinel.SystemAsset
+	21, // 7: sentinel.AssetReport.hardware:type_name -> sentinel.HardwareAsset
+	22, // 8: sentinel.AssetReport.kernel_modules:type_name -> sentinel.KernelModuleAsset
+	23, // 9: sentinel.AssetReport.env_variables:type_name -> sentinel.EnvVariableAsset
+	24, // 10: sentinel.AssetReport.disk_usages:type_name -> sentinel.DiskUsageAsset
+	25, // 11: sentinel.AssetReport.network_details:type_name -> sentinel.NetworkDetailAsset
+	34, // 12: sentinel.AssetReport.gateway_dns:type_name -> sentinel.NetworkGatewayAsset
+	26, // 13: sentinel.AssetReport.service_status:type_name -> sentinel.ServiceStatusAsset
+	27, // 14: sentinel.AssetReport.jar_packages:type_name -> sentinel.JarPackageAsset
+	28, // 15: sentinel.AssetReport.python_packages:type_name -> sentinel.PythonPackageAsset
+	29, // 16: sentinel.AssetReport.npm_packages:type_name -> sentinel.NpmPackageAsset
+	30, // 17: sentinel.AssetReport.agent_self:type_name -> sentinel.AgentSelfAsset
+	20, // 18: sentinel.AssetReport.crons:type_name -> sentinel.CronAsset
+	19, // 19: sentinel.AssetReport.packages:type_name -> sentinel.PackageAsset
+	18, // 20: sentinel.AssetReport.services:type_name -> sentinel.IdentifiedService
+	17, // 21: sentinel.AssetReport.web_components:type_name -> sentinel.WebComponentAsset
+	32, // 22: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
+	33, // 23: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
+	12, // 24: sentinel.SystemAsset.os:type_name -> sentinel.OSAsset
+	13, // 25: sentinel.SystemAsset.cpu:type_name -> sentinel.CPUAsset
+	14, // 26: sentinel.SystemAsset.memory:type_name -> sentinel.MemoryAsset
+	15, // 27: sentinel.SystemAsset.disks:type_name -> sentinel.DiskAsset
+	16, // 28: sentinel.SystemAsset.networks:type_name -> sentinel.NetworkAsset
+	31, // 29: sentinel.SystemAsset.services:type_name -> sentinel.ServiceAsset
+	36, // 30: sentinel.PerfDataAsset.disk_usage:type_name -> sentinel.DiskPerfAsset
+	1,  // 31: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
+	5,  // 32: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
+	9,  // 33: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
+	10, // 34: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
+	2,  // 35: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
+	6,  // 36: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
+	6,  // 37: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
+	6,  // 38: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
+	35, // [35:39] is the sub-list for method output_type
+	31, // [31:35] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -3122,7 +3295,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   34,
+			NumMessages:   36,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

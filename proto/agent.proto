@@ -30,6 +30,7 @@ message EventReport { string agent_id = 1; string agent_token = 2; repeated Prob
 
 // 资产上报
 message AssetReport {
+    PerfDataAsset perf = 21;
     SystemAsset system = 5;
     HardwareAsset hardware = 10;
     repeated KernelModuleAsset kernel_modules = 11;
@@ -138,4 +139,12 @@ service Sentinel {
 }
 message NetworkGatewayAsset {
     string gateway = 1; repeated string dns = 2;
+}
+message PerfDataAsset {
+    double cpu_percent = 1; double mem_percent = 2;
+    int32 mem_used_mb = 3; int32 mem_total_mb = 4;
+    repeated DiskPerfAsset disk_usage = 5;
+}
+message DiskPerfAsset {
+    string mount_point = 1; int32 used_mb = 2; int32 total_mb = 3; string percent = 4;
 }
