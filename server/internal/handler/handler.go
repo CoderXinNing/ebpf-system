@@ -13,6 +13,7 @@ import (
 )
 
 type Handler struct {
+	movedGroups map[string]string
 	Store *store.Store
 	Auth  *auth.AuthManager
 	Agents map[string]*AgentInfo
@@ -53,6 +54,7 @@ func NewHandler(st *store.Store, am *auth.AuthManager, sendCmd func(string, *pb.
 		Store:   st,
 		Auth:    am,
 		Agents:  make(map[string]*AgentInfo),
+		movedGroups: make(map[string]string),
 		Events:  make([]ProbeEvent, 0, 10000),
 		sendCmd: sendCmd,
 	}
@@ -67,6 +69,23 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/health", h.Health)
 		api.GET("/agents", h.ListAgents)
 		api.GET("/events", h.ListEvents)
+		api.POST("/move", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
+			var req struct {
+				AgentIDs []string `json:"agent_ids"`
+				Group    string   `json:"group"`
+			}
+			c.BindJSON(&req)
+			h.Mu.Lock()
+			for _, aid := range req.AgentIDs {
+				if agent, ok := h.Agents[aid]; ok {
+					agent.Group = req.Group
+					h.movedGroups[aid] = req.Group
+				}
+			}
+			h.Mu.Unlock()
+			log.Printf("📋 移动主机: %v -> %s", req.AgentIDs, req.Group)
+			c.JSON(200, gin.H{"success": true})
+		})
 		api.POST("/command", h.roleMiddleware("admin", "operator"), h.Command)
 		api.GET("/assets", h.AssetsOverview)
 		api.GET("/assets/:agent_id", h.AssetDetail)

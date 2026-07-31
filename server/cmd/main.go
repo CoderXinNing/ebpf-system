@@ -100,7 +100,7 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 	h.Agents[req.AgentId] = &handler.AgentInfo{
 		ID: req.AgentId, Hostname: req.Hostname, IPAddr: req.IpAddress,
 		Version:     req.AgentVersion,
-		Group:       req.AgentGroup,
+		Group:       getGroup(req.AgentGroup),
 		Token: tk, FirstSeen: now, LastSeen: now,
 		Framework: req.Framework, KernelInfo: req.KernelInfo,
 		Commands: make([]*pb.ProbeCommand, 0),
@@ -222,4 +222,9 @@ func genToken() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+func getGroup(g string) string {
+    if g == "" { return "未分组" }
+    return g
 }

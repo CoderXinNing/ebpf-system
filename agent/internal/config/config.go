@@ -20,7 +20,6 @@ type AgentSection struct {
 	Server            string        `yaml:"server"`
 	RetryDelay        time.Duration `yaml:"retry_delay"`
 	HeartbeatInterval time.Duration `yaml:"heartbeat_interval"`
-	Group             string        `yaml:"group"`
 	CollectInterval   time.Duration `yaml:"collect_interval"`
 }
 type ProbeConfig struct {
@@ -37,7 +36,6 @@ func DefaultConfig() *AgentConfig {
 			Server:            "127.0.0.1:50051",
 			RetryDelay:        5 * time.Second,
 			HeartbeatInterval: 10 * time.Second,
-		Group:             "默认组",
 		CollectInterval:   300 * time.Second,
 		},
 	}
@@ -78,3 +76,4 @@ func GenerateDefault(path string) error {
 
 	return os.WriteFile(path, data, 0644)
 }
+func UpdateGroup(group string) {}

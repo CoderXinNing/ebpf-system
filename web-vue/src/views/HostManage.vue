@@ -123,7 +123,7 @@ function onCheck(keys) { checkedKeys.value = keys }
 
 function doMove() {
   if (!targetGroup.value || checkedKeys.value.length === 0) return
-  alert("已移动 " + checkedKeys.value.length + " 台主机到 " + targetGroup.value + "\n(后端API待实现)")
+	api.moveHosts(checkedKeys.value, targetGroup.value).then(() => { message.success("已移动"); showMove.value = false; checkedKeys.value = [] }).catch(e => message.error("移动失败"))
   showMove.value = false
   checkedKeys.value = []
 }

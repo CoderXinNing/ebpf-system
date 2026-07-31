@@ -120,7 +120,6 @@ func (a *Agent) register() error {
 	req := &pb.RegisterRequest{
 		AgentId: a.id, Hostname: a.hostname, KernelVersion: a.kernelVer, IpAddress: a.ipAddr,
 		AgentVersion: AgentVersion,
-		AgentGroup: a.cfg.Agent.Group,
 		Framework: &pb.FrameworkInfo{
 			BccAvailable: fw.BCCAvailable, LibbpfAvailable: fw.LibBPFAvailable, LibbpfCore: fw.LibBPFCORE,
 			BpftraceAvailable: fw.BpftraceAvailable, ClangAvailable: fw.ClangAvailable,

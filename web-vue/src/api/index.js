@@ -35,6 +35,7 @@ export const api = {
   },
 
   sendCommand: (data) => request('/api/command', {
+  moveHosts: (ids, group) => request("/api/move", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agent_ids: ids, group }) }),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)

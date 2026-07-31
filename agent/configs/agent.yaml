@@ -1,7 +1,6 @@
 agent:
     name: ""
     server: 127.0.0.1:50051
-    group: "默认组"
     retry_delay: 5s
     heartbeat_interval: 10s
 

@@ -24,11 +24,12 @@ const (
 type ProbeCommand_CommandType int32
 
 const (
-	ProbeCommand_LOAD    ProbeCommand_CommandType = 0
-	ProbeCommand_UNLOAD  ProbeCommand_CommandType = 1
-	ProbeCommand_RELOAD  ProbeCommand_CommandType = 3
-	ProbeCommand_INSTALL ProbeCommand_CommandType = 4
-	ProbeCommand_COLLECT ProbeCommand_CommandType = 5
+	ProbeCommand_LOAD      ProbeCommand_CommandType = 0
+	ProbeCommand_UNLOAD    ProbeCommand_CommandType = 1
+	ProbeCommand_RELOAD    ProbeCommand_CommandType = 3
+	ProbeCommand_INSTALL   ProbeCommand_CommandType = 4
+	ProbeCommand_COLLECT   ProbeCommand_CommandType = 5
+	ProbeCommand_SET_GROUP ProbeCommand_CommandType = 6
 )
 
 // Enum value maps for ProbeCommand_CommandType.
@@ -39,13 +40,15 @@ var (
 		3: "RELOAD",
 		4: "INSTALL",
 		5: "COLLECT",
+		6: "SET_GROUP",
 	}
 	ProbeCommand_CommandType_value = map[string]int32{
-		"LOAD":    0,
-		"UNLOAD":  1,
-		"RELOAD":  3,
-		"INSTALL": 4,
-		"COLLECT": 5,
+		"LOAD":      0,
+		"UNLOAD":    1,
+		"RELOAD":    3,
+		"INSTALL":   4,
+		"COLLECT":   5,
+		"SET_GROUP": 6,
 	}
 )
 
@@ -523,6 +526,7 @@ type ProbeCommand struct {
 	ProbeName     string                   `protobuf:"bytes,3,opt,name=probe_name,json=probeName,proto3" json:"probe_name,omitempty"`
 	ProbeData     []byte                   `protobuf:"bytes,4,opt,name=probe_data,json=probeData,proto3" json:"probe_data,omitempty"`
 	ProbeConfig   string                   `protobuf:"bytes,5,opt,name=probe_config,json=probeConfig,proto3" json:"probe_config,omitempty"`
+	GroupName     string                   `protobuf:"bytes,6,opt,name=group_name,json=groupName,proto3" json:"group_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -588,6 +592,13 @@ func (x *ProbeCommand) GetProbeData() []byte {
 func (x *ProbeCommand) GetProbeConfig() string {
 	if x != nil {
 		return x.ProbeConfig
+	}
+	return ""
+}
+
+func (x *ProbeCommand) GetGroupName() string {
+	if x != nil {
+		return x.GroupName
 	}
 	return ""
 }
@@ -2711,7 +2722,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\ractive_probes\x18\x04 \x01(\x05R\factiveProbes\"a\n" +
 	"\x11HeartbeatResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x122\n" +
-	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\x8d\x02\n" +
+	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\xbb\x02\n" +
 	"\fProbeCommand\x126\n" +
 	"\x04type\x18\x01 \x01(\x0e2\".sentinel.ProbeCommand.CommandTypeR\x04type\x12\x19\n" +
 	"\bprobe_id\x18\x02 \x01(\tR\aprobeId\x12\x1d\n" +
@@ -2719,7 +2730,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"probe_name\x18\x03 \x01(\tR\tprobeName\x12\x1d\n" +
 	"\n" +
 	"probe_data\x18\x04 \x01(\fR\tprobeData\x12!\n" +
-	"\fprobe_config\x18\x05 \x01(\tR\vprobeConfig\"I\n" +
+	"\fprobe_config\x18\x05 \x01(\tR\vprobeConfig\x12\x1d\n" +
+	"\n" +
+	"group_name\x18\x06 \x01(\tR\tgroupName\"X\n" +
 	"\vCommandType\x12\b\n" +
 	"\x04LOAD\x10\x00\x12\n" +
 	"\n" +
@@ -2727,7 +2740,8 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
 	"\x06RELOAD\x10\x03\x12\v\n" +
 	"\aINSTALL\x10\x04\x12\v\n" +
-	"\aCOLLECT\x10\x05\"\xdf\x01\n" +
+	"\aCOLLECT\x10\x05\x12\r\n" +
+	"\tSET_GROUP\x10\x06\"\xdf\x01\n" +
 	"\n" +
 	"ProbeEvent\x12\x19\n" +
 	"\bprobe_id\x18\x01 \x01(\tR\aprobeId\x12\x1d\n" +

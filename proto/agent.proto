@@ -20,9 +20,10 @@ message KernelInfo { string version = 1; string arch = 2; bool btf_enabled = 3; 
 message HeartbeatRequest { string agent_id = 1; string agent_token = 2; int64 timestamp = 3; int32 active_probes = 4; }
 message HeartbeatResponse { bool success = 1; repeated ProbeCommand commands = 2; }
 message ProbeCommand {
-    enum CommandType { LOAD = 0; UNLOAD = 1; RELOAD = 3; INSTALL = 4; COLLECT = 5; }
+    enum CommandType { LOAD = 0; UNLOAD = 1; RELOAD = 3; INSTALL = 4; COLLECT = 5; SET_GROUP = 6; }
     CommandType type = 1; string probe_id = 2; string probe_name = 3;
     bytes probe_data = 4; string probe_config = 5;
+    string group_name = 6;
 }
 message ProbeEvent { string probe_id = 1; string probe_name = 2; int64 timestamp = 3; string event_type = 4; int32 pid = 5; string comm = 6; string filename = 7; string details = 8; }
 message EventReport { string agent_id = 1; string agent_token = 2; repeated ProbeEvent events = 3; }
