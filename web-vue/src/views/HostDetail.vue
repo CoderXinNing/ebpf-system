@@ -41,12 +41,12 @@ const pagination = reactive({ page: 1, pageSize: 15, showSizePicker: true, pageS
 const portCols = [
   { title: '端口:进程', key: 'port_proc', minWidth: 130, render: (r) => `${r.port}:${r.name}` },
   { title: '绑定IP', key: 'bind_ip', minWidth: 120 }, { title: '协议', key: 'protocol', minWidth: 60 },
-  { title: 'PID', key: 'pid', minWidth: 60 }, { title: '用户', key: 'user', minWidth: 80 }
+  { title: 'PID', key: 'pid', minWidth: 60 }, { title: '用户', key: 'user', minWidth: 80 }, { title: '启动时间', key: 'start_time', minWidth: 140 }
 ]
 const procCols = [
   { title: '进程名', key: 'name', minWidth: 140 }, { title: 'PID', key: 'pid', minWidth: 60 },
   { title: '用户', key: 'user', minWidth: 80 }, { title: '状态', key: 'state', minWidth: 50 },
-  { title: '路径', key: 'exe_path', ellipsis: { tooltip: true }, minWidth: 200 }
+  { title: '路径', key: 'exe_path', ellipsis: { tooltip: true }, minWidth: 200 }, { title: '启动时间', key: 'start_time', minWidth: 140 }
 ]
 const appCols = [
   { title: '应用名', key: 'name', minWidth: 130 }, { title: '版本', key: 'version', minWidth: 100 },
@@ -101,7 +101,7 @@ const tabs = computed(() => {
   const s = d.system || {}
   return [
     { key: 'sys', label: '系统', hasTable: false },
-    { key: 'port', label: '端口服务', hasTable: true, cols: portCols, data: procs.filter(p => (p.listening_ports||[]).length).flatMap(p => (p.listening_ports||[]).map(port => ({ port, name: p.name, bind_ip: '0.0.0.0', protocol: 'TCP', pid: p.pid, user: p.user }))), rowKey: (r) => r.pid + ':' + r.port },
+    { key: 'port', label: '端口服务', hasTable: true, cols: portCols, data: procs.filter(p => (p.listening_ports||[]).length).flatMap(p => (p.listening_ports||[]).map(port => ({ port, name: p.name, bind_ip: '0.0.0.0', protocol: "TCP", pid: p.pid, user: p.user, start_time: p.start_time }))), rowKey: (r) => r.pid + ':' + r.port },
     { key: 'proc', label: '运行进程', hasTable: true, cols: procCols, data: procs, rowKey: (r) => r.pid },
     { key: 'app', label: '软件应用', hasTable: true, cols: appCols, data: s.services || [], rowKey: (r) => r.name },
     { key: 'web', label: 'Web服务', hasTable: true, cols: webSvcCols, data: (s.web_components||[]).filter(w => w.type==='Web应用'), rowKey: (r) => r.name },
@@ -113,7 +113,7 @@ const tabs = computed(() => {
     { key: 'service', label: '启动服务', hasTable: true, cols: svcCols, data: s.service_status || [], rowKey: (r) => r.name },
     { key: 'cron', label: '计划任务', hasTable: true, cols: cronCols, data: s.crons || [], rowKey: (r) => `${r.user}-${r.schedule}-${r.command}` },
     { key: 'kernel', label: '内核模块', hasTable: true, cols: kmCols, data: s.kernel_modules || [], rowKey: (r) => r.name },
-    { key: 'env', label: '环境变量', hasTable: true, cols: envCols, data: s.env_variables || [], rowKey: (r) => `${r.name}-${r.user}` },
+  { key: 'env', label: '环境变量' , hasTable: true, cols: envCols, data: s.env_variables || [], rowKey: (r) => `${r.name}-${r.user}` },
     { key: 'user', label: '用户', hasTable: true, cols: userCols, data: d.users || [], rowKey: (r) => r.username },
   ]
 })

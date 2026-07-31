@@ -32,7 +32,6 @@ const cols = [
   { title: 'PID', key: 'pid', minWidth: 60 },
   { title: '运行用户', key: 'user', minWidth: 80 },
   { title: '进程启动时间', key: 'start_time', minWidth: 140 },
-  { title: '进程启动时间', key: 'start_time', minWidth: 140 },
 ]
 
 const filtered = computed(() => {
@@ -54,7 +53,7 @@ onMounted(async () => {
           (p.listening_ports || []).filter(pn => pn === portStr).forEach(() => {
             list.push({
               ip: a.ip_addr, bind_ip: '0.0.0.0', protocol: 'TCP',
-              pid: p.pid, user: p.user, start_time: '-',
+              pid: p.pid, user: p.user, start_time: p.start_time || '-',
             })
           })
         })
