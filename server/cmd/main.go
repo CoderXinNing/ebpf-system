@@ -110,7 +110,10 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 }
 
 func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
-	req, _ := stream.Recv()
+	req, err := stream.Recv()
+	if err != nil || req == nil {
+		return nil
+	}
 	h := s.handler
 	h.Mu.Lock()
 	agent, ok := h.Agents[req.AgentId]

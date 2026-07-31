@@ -169,7 +169,8 @@ func CollectPythonPackages() []PythonPackage {
 		out, err = exec.Command("pip", "list", "--format=columns").Output()
 	}
 	if err != nil {
-		return pkgs
+		// 降级：从系统包管理器获取
+		return collectPythonFromPkg()
 	}
 
 	lines := strings.Split(string(out), "\n")
