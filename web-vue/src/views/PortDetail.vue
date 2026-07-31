@@ -32,6 +32,7 @@ const cols = [
   { title: 'PID', key: 'pid', minWidth: 60 },
   { title: '运行用户', key: 'user', minWidth: 80 },
   { title: '进程启动时间', key: 'start_time', minWidth: 140 },
+  { title: '进程启动时间', key: 'start_time', minWidth: 140 },
 ]
 
 const filtered = computed(() => {

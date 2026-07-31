@@ -29,6 +29,7 @@ const cols = [
   { title: '主机IP', key: 'ip', minWidth: 130, render: (r) => h('span', {}, [h('span', { style: 'color:#67c23a;margin-right:4px' }, '●'), r.ip]) },
   { title: '版本', key: 'version', minWidth: 100 },
   { title: '包管理器', key: 'manager', minWidth: 80 },
+  { title: '大小(KB)', key: 'size_kb', minWidth: 80 },
 ]
 
 const filtered = computed(() => {

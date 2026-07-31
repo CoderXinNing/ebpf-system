@@ -47,6 +47,7 @@ func (a *Agent) collectAndReportAssets() {
 	for _, p := range pkgs {
 		assetReq.Packages = append(assetReq.Packages, &pb.PackageAsset{
 			Name: p.Name, Version: p.Version, Manager: p.Manager,
+				SizeKb: collector.GetPackageSize(p.Name),
 		})
 	}
 
@@ -109,6 +110,11 @@ func (a *Agent) collectAndReportAssets() {
 		assetReq.DiskUsages = append(assetReq.DiskUsages, &pb.DiskUsageAsset{MountPoint: d.MountPoint, TotalMb: int32(d.TotalMB), UsedMb: int32(d.UsedMB), UsePercent: d.UsePercent})
 	}
 	for _, n := range collector.CollectNetworkDetails() {
+	// 网关和DNS
+	gw := collector.CollectGatewayDNS()
+	if gw != nil {
+		assetReq.GatewayDns = &pb.NetworkGatewayAsset{Gateway: gw.Gateway, Dns: gw.DNS}
+	}
 		assetReq.NetworkDetails = append(assetReq.NetworkDetails, &pb.NetworkDetailAsset{Name: n.Name, Mac: n.MAC, Ips: n.IPs, Speed: n.Speed, Duplex: n.Duplex, Mtu: n.MTU})
 	}
 	for _, s := range collector.CollectServiceStatus() {

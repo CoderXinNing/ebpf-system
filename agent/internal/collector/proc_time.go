@@ -26,7 +26,7 @@ func GetProcessStartTimeFormatted(pid int) string {
 		return "-"
 	}
 
-	starttimeTicks, err := strconv.ParseInt(fields[19], 10, 64)
+	starttimeTicks, err := strconv.ParseInt(fields[18], 10, 64)
 	if err != nil {
 		return "-"
 	}

@@ -206,6 +206,7 @@ func (s *Server) ReportAssets(ctx context.Context, req *pb.AssetReport) (*pb.Hea
 		"env_variables":   req.EnvVariables,
 		"disk_usages":     req.DiskUsages,
 		"network_details": req.NetworkDetails,
+		"gateway_dns":     req.GatewayDns,
 		"service_status":  req.ServiceStatus,
 		"jar_packages":    req.JarPackages,
 		"python_packages": req.PythonPackages,

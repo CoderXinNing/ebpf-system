@@ -772,6 +772,7 @@ type AssetReport struct {
 	EnvVariables   []*EnvVariableAsset    `protobuf:"bytes,12,rep,name=env_variables,json=envVariables,proto3" json:"env_variables,omitempty"`
 	DiskUsages     []*DiskUsageAsset      `protobuf:"bytes,13,rep,name=disk_usages,json=diskUsages,proto3" json:"disk_usages,omitempty"`
 	NetworkDetails []*NetworkDetailAsset  `protobuf:"bytes,14,rep,name=network_details,json=networkDetails,proto3" json:"network_details,omitempty"`
+	GatewayDns     *NetworkGatewayAsset   `protobuf:"bytes,20,opt,name=gateway_dns,json=gatewayDns,proto3" json:"gateway_dns,omitempty"`
 	ServiceStatus  []*ServiceStatusAsset  `protobuf:"bytes,15,rep,name=service_status,json=serviceStatus,proto3" json:"service_status,omitempty"`
 	JarPackages    []*JarPackageAsset     `protobuf:"bytes,16,rep,name=jar_packages,json=jarPackages,proto3" json:"jar_packages,omitempty"`
 	PythonPackages []*PythonPackageAsset  `protobuf:"bytes,17,rep,name=python_packages,json=pythonPackages,proto3" json:"python_packages,omitempty"`
@@ -857,6 +858,13 @@ func (x *AssetReport) GetDiskUsages() []*DiskUsageAsset {
 func (x *AssetReport) GetNetworkDetails() []*NetworkDetailAsset {
 	if x != nil {
 		return x.NetworkDetails
+	}
+	return nil
+}
+
+func (x *AssetReport) GetGatewayDns() *NetworkGatewayAsset {
+	if x != nil {
+		return x.GatewayDns
 	}
 	return nil
 }
@@ -1525,6 +1533,7 @@ type PackageAsset struct {
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	Manager       string                 `protobuf:"bytes,3,opt,name=manager,proto3" json:"manager,omitempty"`
+	SizeKb        int64                  `protobuf:"varint,4,opt,name=size_kb,json=sizeKb,proto3" json:"size_kb"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1578,6 +1587,13 @@ func (x *PackageAsset) GetManager() string {
 		return x.Manager
 	}
 	return ""
+}
+
+func (x *PackageAsset) GetSizeKb() int64 {
+	if x != nil {
+		return x.SizeKb
+	}
+	return 0
 }
 
 type CronAsset struct {
@@ -2676,6 +2692,58 @@ func (x *ProcessAsset) GetStartTime() string {
 	return ""
 }
 
+type NetworkGatewayAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Gateway       string                 `protobuf:"bytes,1,opt,name=gateway,proto3" json:"gateway,omitempty"`
+	Dns           []string               `protobuf:"bytes,2,rep,name=dns,proto3" json:"dns,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NetworkGatewayAsset) Reset() {
+	*x = NetworkGatewayAsset{}
+	mi := &file_proto_agent_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NetworkGatewayAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NetworkGatewayAsset) ProtoMessage() {}
+
+func (x *NetworkGatewayAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NetworkGatewayAsset.ProtoReflect.Descriptor instead.
+func (*NetworkGatewayAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *NetworkGatewayAsset) GetGateway() string {
+	if x != nil {
+		return x.Gateway
+	}
+	return ""
+}
+
+func (x *NetworkGatewayAsset) GetDns() []string {
+	if x != nil {
+		return x.Dns
+	}
+	return nil
+}
+
 var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
@@ -2758,7 +2826,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
 	"agentToken\x12,\n" +
-	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"\xb2\b\n" +
+	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"\xf2\b\n" +
 	"\vAssetReport\x12-\n" +
 	"\x06system\x18\x05 \x01(\v2\x15.sentinel.SystemAssetR\x06system\x123\n" +
 	"\bhardware\x18\n" +
@@ -2767,7 +2835,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\renv_variables\x18\f \x03(\v2\x1a.sentinel.EnvVariableAssetR\fenvVariables\x129\n" +
 	"\vdisk_usages\x18\r \x03(\v2\x18.sentinel.DiskUsageAssetR\n" +
 	"diskUsages\x12E\n" +
-	"\x0fnetwork_details\x18\x0e \x03(\v2\x1c.sentinel.NetworkDetailAssetR\x0enetworkDetails\x12C\n" +
+	"\x0fnetwork_details\x18\x0e \x03(\v2\x1c.sentinel.NetworkDetailAssetR\x0enetworkDetails\x12>\n" +
+	"\vgateway_dns\x18\x14 \x01(\v2\x1d.sentinel.NetworkGatewayAssetR\n" +
+	"gatewayDns\x12C\n" +
 	"\x0eservice_status\x18\x0f \x03(\v2\x1c.sentinel.ServiceStatusAssetR\rserviceStatus\x12<\n" +
 	"\fjar_packages\x18\x10 \x03(\v2\x19.sentinel.JarPackageAssetR\vjarPackages\x12E\n" +
 	"\x0fpython_packages\x18\x11 \x03(\v2\x1c.sentinel.PythonPackageAssetR\x0epythonPackages\x12<\n" +
@@ -2831,11 +2901,12 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\vconfig_path\x18\x06 \x01(\tR\n" +
 	"configPath\x12\x1f\n" +
 	"\vlisten_port\x18\a \x03(\tR\n" +
-	"listenPort\"V\n" +
+	"listenPort\"o\n" +
 	"\fPackageAsset\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x18\n" +
-	"\amanager\x18\x03 \x01(\tR\amanager\"m\n" +
+	"\amanager\x18\x03 \x01(\tR\amanager\x12\x17\n" +
+	"\asize_kb\x18\x04 \x01(\x03R\x06sizeKb\"m\n" +
 	"\tCronAsset\x12\x12\n" +
 	"\x04user\x18\x01 \x01(\tR\x04user\x12\x1a\n" +
 	"\bschedule\x18\x02 \x01(\tR\bschedule\x12\x18\n" +
@@ -2934,7 +3005,10 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x05state\x18\a \x01(\tR\x05state\x12'\n" +
 	"\x0flistening_ports\x18\b \x03(\tR\x0elisteningPorts\x12\x1d\n" +
 	"\n" +
-	"start_time\x18\t \x01(\tR\tstartTime2\x9f\x02\n" +
+	"start_time\x18\t \x01(\tR\tstartTime\"A\n" +
+	"\x13NetworkGatewayAsset\x12\x18\n" +
+	"\agateway\x18\x01 \x01(\tR\agateway\x12\x10\n" +
+	"\x03dns\x18\x02 \x03(\tR\x03dns2\x9f\x02\n" +
 	"\bSentinel\x12A\n" +
 	"\bRegister\x12\x19.sentinel.RegisterRequest\x1a\x1a.sentinel.RegisterResponse\x12H\n" +
 	"\tHeartbeat\x12\x1a.sentinel.HeartbeatRequest\x1a\x1b.sentinel.HeartbeatResponse(\x010\x01\x12B\n" +
@@ -2954,7 +3028,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_proto_agent_proto_goTypes = []any{
 	(ProbeCommand_CommandType)(0), // 0: sentinel.ProbeCommand.CommandType
 	(*RegisterRequest)(nil),       // 1: sentinel.RegisterRequest
@@ -2990,6 +3064,7 @@ var file_proto_agent_proto_goTypes = []any{
 	(*ServiceAsset)(nil),          // 31: sentinel.ServiceAsset
 	(*UserAsset)(nil),             // 32: sentinel.UserAsset
 	(*ProcessAsset)(nil),          // 33: sentinel.ProcessAsset
+	(*NetworkGatewayAsset)(nil),   // 34: sentinel.NetworkGatewayAsset
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	3,  // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
@@ -3003,36 +3078,37 @@ var file_proto_agent_proto_depIdxs = []int32{
 	23, // 8: sentinel.AssetReport.env_variables:type_name -> sentinel.EnvVariableAsset
 	24, // 9: sentinel.AssetReport.disk_usages:type_name -> sentinel.DiskUsageAsset
 	25, // 10: sentinel.AssetReport.network_details:type_name -> sentinel.NetworkDetailAsset
-	26, // 11: sentinel.AssetReport.service_status:type_name -> sentinel.ServiceStatusAsset
-	27, // 12: sentinel.AssetReport.jar_packages:type_name -> sentinel.JarPackageAsset
-	28, // 13: sentinel.AssetReport.python_packages:type_name -> sentinel.PythonPackageAsset
-	29, // 14: sentinel.AssetReport.npm_packages:type_name -> sentinel.NpmPackageAsset
-	30, // 15: sentinel.AssetReport.agent_self:type_name -> sentinel.AgentSelfAsset
-	20, // 16: sentinel.AssetReport.crons:type_name -> sentinel.CronAsset
-	19, // 17: sentinel.AssetReport.packages:type_name -> sentinel.PackageAsset
-	18, // 18: sentinel.AssetReport.services:type_name -> sentinel.IdentifiedService
-	17, // 19: sentinel.AssetReport.web_components:type_name -> sentinel.WebComponentAsset
-	32, // 20: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
-	33, // 21: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
-	12, // 22: sentinel.SystemAsset.os:type_name -> sentinel.OSAsset
-	13, // 23: sentinel.SystemAsset.cpu:type_name -> sentinel.CPUAsset
-	14, // 24: sentinel.SystemAsset.memory:type_name -> sentinel.MemoryAsset
-	15, // 25: sentinel.SystemAsset.disks:type_name -> sentinel.DiskAsset
-	16, // 26: sentinel.SystemAsset.networks:type_name -> sentinel.NetworkAsset
-	31, // 27: sentinel.SystemAsset.services:type_name -> sentinel.ServiceAsset
-	1,  // 28: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
-	5,  // 29: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
-	9,  // 30: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
-	10, // 31: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
-	2,  // 32: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
-	6,  // 33: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
-	6,  // 34: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
-	6,  // 35: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
-	32, // [32:36] is the sub-list for method output_type
-	28, // [28:32] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	34, // 11: sentinel.AssetReport.gateway_dns:type_name -> sentinel.NetworkGatewayAsset
+	26, // 12: sentinel.AssetReport.service_status:type_name -> sentinel.ServiceStatusAsset
+	27, // 13: sentinel.AssetReport.jar_packages:type_name -> sentinel.JarPackageAsset
+	28, // 14: sentinel.AssetReport.python_packages:type_name -> sentinel.PythonPackageAsset
+	29, // 15: sentinel.AssetReport.npm_packages:type_name -> sentinel.NpmPackageAsset
+	30, // 16: sentinel.AssetReport.agent_self:type_name -> sentinel.AgentSelfAsset
+	20, // 17: sentinel.AssetReport.crons:type_name -> sentinel.CronAsset
+	19, // 18: sentinel.AssetReport.packages:type_name -> sentinel.PackageAsset
+	18, // 19: sentinel.AssetReport.services:type_name -> sentinel.IdentifiedService
+	17, // 20: sentinel.AssetReport.web_components:type_name -> sentinel.WebComponentAsset
+	32, // 21: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
+	33, // 22: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
+	12, // 23: sentinel.SystemAsset.os:type_name -> sentinel.OSAsset
+	13, // 24: sentinel.SystemAsset.cpu:type_name -> sentinel.CPUAsset
+	14, // 25: sentinel.SystemAsset.memory:type_name -> sentinel.MemoryAsset
+	15, // 26: sentinel.SystemAsset.disks:type_name -> sentinel.DiskAsset
+	16, // 27: sentinel.SystemAsset.networks:type_name -> sentinel.NetworkAsset
+	31, // 28: sentinel.SystemAsset.services:type_name -> sentinel.ServiceAsset
+	1,  // 29: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
+	5,  // 30: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
+	9,  // 31: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
+	10, // 32: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
+	2,  // 33: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
+	6,  // 34: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
+	6,  // 35: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
+	6,  // 36: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
+	33, // [33:37] is the sub-list for method output_type
+	29, // [29:33] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -3046,7 +3122,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   33,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

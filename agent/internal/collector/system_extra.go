@@ -125,3 +125,40 @@ func CollectNetworkDetails() []NetworkDetail {
 
 	return nets
 }
+
+// DNS和网关
+type NetworkGateway struct {
+	Gateway string `json:"gateway"`
+	DNS     []string `json:"dns"`
+}
+
+func CollectGatewayDNS() *NetworkGateway {
+	ng := &NetworkGateway{}
+
+	// 默认网关
+	out, err := exec.Command("ip", "route", "show", "default").Output()
+	if err == nil {
+		fields := strings.Fields(string(out))
+		for i, f := range fields {
+			if f == "via" && i+1 < len(fields) {
+				ng.Gateway = fields[i+1]
+				break
+			}
+		}
+	}
+
+	// DNS
+	dnsData, err := os.ReadFile("/etc/resolv.conf")
+	if err == nil {
+		for _, line := range strings.Split(string(dnsData), "\n") {
+			if strings.HasPrefix(line, "nameserver") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					ng.DNS = append(ng.DNS, fields[1])
+				}
+			}
+		}
+	}
+
+	return ng
+}

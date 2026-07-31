@@ -67,7 +67,6 @@ func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 	switch cmd.Type {
 	case pb.ProbeCommand_SET_GROUP:
 		log.Printf("📋 修改分组: %s", cmd.GroupName)
-		a.cfg.Agent.Group = cmd.GroupName
 		// 更新配置文件和localStorage下次启动生效
 		// 更新配置文件
 	case pb.ProbeCommand_COLLECT:

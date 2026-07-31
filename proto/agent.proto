@@ -36,6 +36,7 @@ message AssetReport {
     repeated EnvVariableAsset env_variables = 12;
     repeated DiskUsageAsset disk_usages = 13;
     repeated NetworkDetailAsset network_details = 14;
+    NetworkGatewayAsset gateway_dns = 20;
     repeated ServiceStatusAsset service_status = 15;
     repeated JarPackageAsset jar_packages = 16;
     repeated PythonPackageAsset python_packages = 17;
@@ -76,6 +77,7 @@ message IdentifiedService {
 }
 message PackageAsset {
     string name = 1; string version = 2; string manager = 3;
+    int64 size_kb = 4;
 }
 message CronAsset {
     string user = 1; string schedule = 2; string command = 3; string source = 4;
@@ -133,4 +135,7 @@ service Sentinel {
     rpc Heartbeat(stream HeartbeatRequest) returns (stream HeartbeatResponse);
     rpc ReportEvents(EventReport) returns (HeartbeatResponse);
     rpc ReportAssets(AssetReport) returns (HeartbeatResponse);
+}
+message NetworkGatewayAsset {
+    string gateway = 1; repeated string dns = 2;
 }
