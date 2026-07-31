@@ -9,6 +9,7 @@ const routes = [
   { path: '/proc_agg', component: () => import('../views/ProcAggView.vue') },
   { path: '/proc_agg/:name', component: () => import('../views/ProcAggDetail.vue') },
   { path: '/web', component: () => import('../views/WebAssetsView.vue') },
+  { path: '/web_detail/:name', component: () => import('../views/WebDetail.vue') },
   { path: '/packages', component: () => import('../views/PackagesView.vue') },
   { path: '/events', component: () => import('../views/EventsView.vue') },
   { path: '/probes', component: () => import('../views/ProbesView.vue') },
