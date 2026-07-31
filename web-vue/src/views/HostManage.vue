@@ -12,7 +12,7 @@
             <span>{{ item.label }}</span>
             <div style="display:flex;align-items:center;gap:4px">
             <span style="color:#999">{{ item.count }}</span>
-            <span v-if="item.key!=='all'" style="cursor:pointer;font-size:14px;color:#ccc" @click.stop="deleteGroup(item.key)" title="删除分组">×</span>
+            <span v-if="item.key!=='all' && item.key!=='未分组'" style="cursor:pointer;font-size:14px;color:#ccc" @click.stop="deleteGroup(item.key)" title="删除分组">×</span>
           </div>
           </div>
         </div>
@@ -124,6 +124,12 @@ function onCheck(keys) { checkedKeys.value = keys }
 function doMove() {
   if (!targetGroup.value || checkedKeys.value.length === 0) return
 	api.moveHosts(checkedKeys.value, targetGroup.value).then(() => { message.success("已移动"); showMove.value = false; checkedKeys.value = [] }).catch(e => message.error("移动失败"))
+			// 记录组名
+			const custom = JSON.parse(localStorage.getItem("custom_groups") || "[]")
+			if (!custom.includes(targetGroup.value)) {
+				custom.push(targetGroup.value)
+				localStorage.setItem("custom_groups", JSON.stringify(custom))
+			}
   showMove.value = false
   checkedKeys.value = []
 }
@@ -145,7 +151,22 @@ function buildTree() {
   custom.forEach(g => {
     if (!map[g]) list.push({ label: g, key: g, count: 0 })
   })
-  treeList.value = list
+	
+  // 固定顺序：全部主机 → 未分组 → 其他
+  const fixed = [list.find(item => item.key === "all")]
+  const ungrouped = list.find(item => item.key === "未分组") || { label: "未分组", key: "未分组", count: 0 }
+  fixed.push(ungrouped)
+  list.forEach(item => {
+    if (item.key !== "all" && item.key !== "未分组") fixed.push(item)
+  })
+  treeList.value = fixed
+	// 合并localStorage里所有历史组
+	const savedGroups = JSON.parse(localStorage.getItem("custom_groups") || "[]")
+	savedGroups.forEach(g => {
+		if (!list.find(item => item.key === g)) {
+			list.push({ label: g, key: g, count: 0 })
+		}
+	})
 }
 
 onMounted(async () => {
