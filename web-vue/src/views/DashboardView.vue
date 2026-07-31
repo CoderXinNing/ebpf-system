@@ -43,7 +43,9 @@ const agents = ref([]), filter = ref('all')
 
 const pagination = reactive({
   page: 1, pageSize: 20, showSizePicker: true,
-  pageSizes: [10, 20, 50, 100]
+  pageSizes: [10, 20, 50, 100],
+  onUpdatePage: (p) => { pagination.page = p },
+  onUpdatePageSize: (s) => { pagination.pageSize = s; pagination.page = 1 }
 })
 
 const filteredAgents = computed(() => {

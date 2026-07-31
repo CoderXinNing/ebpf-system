@@ -25,7 +25,7 @@ const summary = ref([]), show = ref(false), detail = ref([]), search = ref(''), 
 const managerOptions = [{label:'全部',value:null},{label:'dpkg',value:'dpkg'},{label:'rpm',value:'rpm'},{label:'apk',value:'apk'},{label:'pacman',value:'pacman'}]
 const agents = ref([])
 
-const pagination = reactive({
+const pagination = reactive({ page: 1, pageSize: 20, showSizePicker: true, pageSizes: [10, 20, 50, 100], onUpdatePage: (p) => { pagination.page = p }, onUpdatePageSize: (s) => { pagination.pageSize = s; pagination.page = 1 },
   page: 1, pageSize: 20, showSizePicker: true,
   pageSizes: [10, 20, 50, 100]
 })

@@ -36,7 +36,7 @@ const tab = ref('sys')
 const sys = ref({}), hw = ref({})
 const allData = ref({})
 
-const pagination = reactive({ page: 1, pageSize: 15, showSizePicker: true, pageSizes: [10, 15, 20, 50] })
+const pagination = reactive({ page: 1, pageSize: 15, showSizePicker: true, pageSizes: [10, 15, 20, 50], onUpdatePage: (p) => { pagination.page = p }, onUpdatePageSize: (s) => { pagination.pageSize = s; pagination.page = 1 } })
 
 const portCols = [
   { title: '端口:进程', key: 'port_proc', minWidth: 130, render: (r) => `${r.port}:${r.name}` },
