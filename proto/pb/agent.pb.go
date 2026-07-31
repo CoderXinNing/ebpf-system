@@ -2567,6 +2567,7 @@ type ProcessAsset struct {
 	User           string                 `protobuf:"bytes,6,opt,name=user,proto3" json:"user,omitempty"`
 	State          string                 `protobuf:"bytes,7,opt,name=state,proto3" json:"state,omitempty"`
 	ListeningPorts []string               `protobuf:"bytes,8,rep,name=listening_ports,json=listeningPorts,proto3" json:"listening_ports,omitempty"`
+	StartTime      string                 `protobuf:"bytes,9,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2655,6 +2656,13 @@ func (x *ProcessAsset) GetListeningPorts() []string {
 		return x.ListeningPorts
 	}
 	return nil
+}
+
+func (x *ProcessAsset) GetStartTime() string {
+	if x != nil {
+		return x.StartTime
+	}
+	return ""
 }
 
 var File_proto_agent_proto protoreflect.FileDescriptor
@@ -2901,7 +2909,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
 	"last_login\x18\n" +
 	" \x01(\tR\tlastLogin\x12\"\n" +
-	"\rlast_login_ip\x18\v \x01(\tR\vlastLoginIp\"\xd0\x01\n" +
+	"\rlast_login_ip\x18\v \x01(\tR\vlastLoginIp\"\xef\x01\n" +
 	"\fProcessAsset\x12\x10\n" +
 	"\x03pid\x18\x01 \x01(\x05R\x03pid\x12\x12\n" +
 	"\x04ppid\x18\x02 \x01(\x05R\x04ppid\x12\x12\n" +
@@ -2910,7 +2918,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bexe_path\x18\x05 \x01(\tR\aexePath\x12\x12\n" +
 	"\x04user\x18\x06 \x01(\tR\x04user\x12\x14\n" +
 	"\x05state\x18\a \x01(\tR\x05state\x12'\n" +
-	"\x0flistening_ports\x18\b \x03(\tR\x0elisteningPorts2\x9f\x02\n" +
+	"\x0flistening_ports\x18\b \x03(\tR\x0elisteningPorts\x12\x1d\n" +
+	"\n" +
+	"start_time\x18\t \x01(\tR\tstartTime2\x9f\x02\n" +
 	"\bSentinel\x12A\n" +
 	"\bRegister\x12\x19.sentinel.RegisterRequest\x1a\x1a.sentinel.RegisterResponse\x12H\n" +
 	"\tHeartbeat\x12\x1a.sentinel.HeartbeatRequest\x1a\x1b.sentinel.HeartbeatResponse(\x010\x01\x12B\n" +

@@ -28,6 +28,7 @@ func (a *Agent) collectAndReportAssets() {
 		assetReq.Processes = append(assetReq.Processes, &pb.ProcessAsset{
 			Pid: int32(p.PID), Ppid: int32(p.PPID), Name: p.Name, Cmdline: p.Cmdline,
 			ExePath: p.ExePath, User: p.User, State: p.State, ListeningPorts: p.Ports,
+				StartTime: collector.GetProcessStartTimeFormatted(p.PID),
 		})
 	}
 	for _, u := range users {

@@ -124,6 +124,7 @@ message ProcessAsset {
     int32 pid = 1; int32 ppid = 2; string name = 3; string cmdline = 4;
     string exe_path = 5; string user = 6; string state = 7;
     repeated string listening_ports = 8;
+    string start_time = 9;
 }
 
 service Sentinel {
