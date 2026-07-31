@@ -45,7 +45,8 @@ const showNotify = ref(false)
 
 const menu = [
   { label: '资产清点', key: '/' },
-  { label: '进程端口', key: '/processes' },
+  { label: '端口服务', key: '/processes' },
+    { label: '进程聚合', key: '/proc_agg' },
   { label: 'Web资产', key: '/web' },
   { label: '软件应用', key: '/packages' },
   { label: '事件流', key: '/events' },

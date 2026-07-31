@@ -1,10 +1,11 @@
 <template>
   <Layout>
-    <n-card title="进程与服务" size="small" :bordered="false">
-      <n-data-table :columns="cols" :data="summary" size="small" :bordered="false" :pagination="pagination" :row-key="(row) => row.name" />
+    <n-card title="端口服务" size="small" :bordered="false">
+      <n-input v-model:value="search" placeholder="搜索端口/进程名..." clearable style="margin-bottom:12px;width:300px" />
+      <n-data-table :columns="cols" :data="filtered" size="small" :bordered="false" :pagination="pagination" :row-key="(r) => r.key" />
     </n-card>
 
-    <n-modal v-model:show="show" title="主机列表" style="width:700px" preset="card" :bordered="false">
+    <n-modal v-model:show="show" :title="detailTitle" style="width:800px" preset="card" :bordered="false">
       <n-data-table v-if="detail.length" :columns="detailCols" :data="detail" size="small" :bordered="false" />
       <n-empty v-else />
     </n-modal>
@@ -12,58 +13,70 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
+import { ref, reactive, computed, onMounted, h } from 'vue'
 import { api } from '../api'
 import Layout from '../layouts/MainLayout.vue'
 
-const summary = ref([]), show = ref(false), detail = ref([])
+const summary = ref([]), search = ref(''), show = ref(false), detail = ref([]), detailTitle = ref('')
 
 const pagination = reactive({
   page: 1, pageSize: 20, showSizePicker: true,
   pageSizes: [10, 20, 50, 100],
-  onChange: (p) => { pagination.page = p },
+  onUpdatePage: (p) => { pagination.page = p },
   onUpdatePageSize: (s) => { pagination.pageSize = s; pagination.page = 1 }
 })
 
 const cols = [
-  { title: '服务/进程名', key: 'name', minWidth: 80 },
+  { title: '端口号:进程名', key: 'label', minWidth: 160 },
   { title: '主机数', key: 'count', minWidth: 80 },
-  { title: '类型', key: 'type', minWidth: 80 },
-  { title: '操作', key: 'name', minWidth: 80, render: (r) => h('a', { href: 'javascript:void(0)', onClick: () => showDetail(r.name), style: 'color:#58a6ff' }, '查看主机') }
+  { title: '操作', key: 'label', minWidth: 100, render: (r) => h('a', { href: '#/port_detail/' + encodeURIComponent(r.label), style: 'color:#1e6fff' }, '查看主机') }
 ]
 
 const detailCols = [
-  { title: '主机名', key: 'hostname' }, { title: 'IP', key: 'ip_addr' },
-  { title: 'PID', key: 'pid', minWidth: 80 }, { title: '端口', key: 'ports', minWidth: 80 },
-  { title: '操作', key: 'agent_id', minWidth: 80, render: (r) => h('a', { href: '#/host/' + r.agent_id }, '详情') }
+  { title: '主机IP', key: 'ip', minWidth: 130, render: (r) => h('span', {}, [h('span', { style: 'color:#67c23a;margin-right:4px' }, '●'), r.ip]) },
+  { title: '绑定IP', key: 'bind_ip', minWidth: 120 },
+  { title: '协议', key: 'protocol', minWidth: 60 },
+  { title: 'PID', key: 'pid', minWidth: 60 },
+  { title: '运行用户', key: 'user', minWidth: 80 },
+  { title: '进程启动时间', key: 'start_time', minWidth: 140 },
 ]
 
-function showDetail(name) {
-  const s = summary.value.find(s => s.name === name)
-  detail.value = s ? s.hosts.map(h => ({
-    hostname: h.hostname, ip_addr: h.ip_addr || '-',
-    pid: h.pid, ports: (h.listen_port || []).join(','), agent_id: h.agent_id
-  })) : []
+const filtered = computed(() => {
+  if (!search.value) return summary.value
+  return summary.value.filter(s => s.label.toLowerCase().includes(search.value.toLowerCase()))
+})
+
+function showDetail(r) {
+  detailTitle.value = r.label
+  detail.value = r.hosts || []
   show.value = true
 }
 
 onMounted(async () => {
   try {
-    const d = await api.getAssetsByCategory('所有')
-    const items = d.items || []
+    const agt = await api.getAgents()
+    const agents = agt.agents || []
     const map = {}
-    items.forEach(i => {
-      const name = i.service_name || i.name || '未知'
-      if (!map[name]) map[name] = { hosts: [], count: 0, seen: new Set(), type: i.type || '其他' }
-      if (!map[name].seen.has(i.agent_id)) {
-        map[name].seen.add(i.agent_id)
-        map[name].hosts.push(i)
-        map[name].count++
-      }
-    })
-    summary.value = Object.entries(map)
-      .map(([name, v]) => ({ name, count: v.count, type: v.type, hosts: v.hosts }))
-      .sort((a, b) => b.count - a.count)
+
+    for (const a of agents) {
+      try {
+        const d = await api.getAssetDetail(a.id)
+        const procs = d.processes || []
+        procs.filter(p => (p.listening_ports||[]).length > 0).forEach(p => {
+          p.listening_ports.forEach(port => {
+            const key = `${port}:${p.name}`
+            if (!map[key]) map[key] = { key, label: key, count: 0, hosts: [] }
+            map[key].count++
+            map[key].hosts.push({
+              ip: a.ip_addr, bind_ip: '0.0.0.0', protocol: 'TCP',
+              pid: p.pid, user: p.user, start_time: '-',
+            })
+          })
+        })
+      } catch(e) {}
+    }
+
+    summary.value = Object.values(map).sort((a, b) => b.count - a.count)
   } catch(e) {}
 })
 </script>
