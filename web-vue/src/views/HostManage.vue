@@ -4,12 +4,16 @@
       <div style="width:240px;flex-shrink:0;background:#fff;border-radius:8px;padding:16px;display:flex;flex-direction:column">
         <n-input v-model:value="groupSearch" placeholder="搜索业务组..." size="small" clearable style="margin-bottom:12px" />
         <div style="flex:1;overflow-y:auto">
+			<n-button size="small" dashed @click="showAddGroup=true" style="margin-bottom:8px;width:100%">+ 新建业务组</n-button>
           <div v-for="item in treeList" :key="item.key"
             style="padding:8px 12px;cursor:pointer;border-radius:4px;font-size:13px;margin-bottom:2px;display:flex;justify-content:space-between"
             :style="{background: selectedGroup===item.key ? '#e8f0fe' : 'transparent', fontWeight: selectedGroup===item.key ? '600' : 'normal'}"
             @click="selectedGroup = item.key">
             <span>{{ item.label }}</span>
+            <div style="display:flex;align-items:center;gap:4px">
             <span style="color:#999">{{ item.count }}</span>
+            <span v-if="item.key!=='all'" style="cursor:pointer;font-size:14px;color:#ccc" @click.stop="deleteGroup(item.key)" title="删除分组">×</span>
+          </div>
           </div>
         </div>
       </div>
@@ -24,6 +28,10 @@
         </n-card>
       </div>
     </div>
+      <n-modal v-model:show="showAddGroup" title="新建业务组" style="width:400px" preset="card" :bordered="false">
+      <n-input v-model:value="newGroupName" placeholder="输入组名" style="margin-bottom:12px" />
+      <n-button type="primary" @click="createGroup">创建</n-button>
+    </n-modal>
   </Layout>
 </template>
 
@@ -37,6 +45,8 @@ const groupSearch = ref('')
 const selectedGroup = ref('all')
 const ipFilter = ref('')
 const treeList = ref([])
+const showAddGroup = ref(false)
+const newGroupName = ref()
 
 const pagination = reactive({
   page: 1, pageSize: 20, showSizePicker: true,
@@ -67,6 +77,31 @@ const filtered = computed(() => {
   return list
 })
 
+function createGroup() {
+  if (!newGroupName.value) return
+  // 暂存localStorage
+  const custom = JSON.parse(localStorage.getItem("custom_groups") || "[]")
+  if (!custom.includes(newGroupName.value)) {
+    custom.push(newGroupName.value)
+    localStorage.setItem("custom_groups", JSON.stringify(custom))
+  }
+  newGroupName.value = ''
+  showAddGroup.value = false
+  buildTree()
+}
+
+function deleteGroup(name) {
+  if (confirm("删除分组 \"" + name + "\" ?")) {
+    const custom = JSON.parse(localStorage.getItem("custom_groups") || "[]")
+    const idx = custom.indexOf(name)
+    if (idx >= 0) {
+      custom.splice(idx, 1)
+      localStorage.setItem("custom_groups", JSON.stringify(custom))
+    }
+    buildTree()
+  }
+}
+
 function buildTree() {
   const map = {}
   agents.value.forEach(a => {
@@ -79,6 +114,10 @@ function buildTree() {
     if (!groupSearch.value || name.includes(groupSearch.value)) {
       list.push({ label: name, key: name, count })
     }
+  })
+  const custom = JSON.parse(localStorage.getItem("custom_groups") || "[]")
+  custom.forEach(g => {
+    if (!map[g]) list.push({ label: g, key: g, count: 0 })
   })
   treeList.value = list
 }
