@@ -754,18 +754,28 @@ func (x *EventReport) GetEvents() []*ProbeEvent {
 
 // 资产上报
 type AssetReport struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	System        *SystemAsset           `protobuf:"bytes,5,opt,name=system,proto3" json:"system,omitempty"`
-	Crons         []*CronAsset           `protobuf:"bytes,6,rep,name=crons,proto3" json:"crons,omitempty"`
-	Packages      []*PackageAsset        `protobuf:"bytes,7,rep,name=packages,proto3" json:"packages,omitempty"`
-	Services      []*IdentifiedService   `protobuf:"bytes,8,rep,name=services,proto3" json:"services,omitempty"`
-	WebComponents []*WebComponentAsset   `protobuf:"bytes,9,rep,name=web_components,json=webComponents,proto3" json:"web_components,omitempty"`
-	Users         []*UserAsset           `protobuf:"bytes,4,rep,name=users,proto3" json:"users,omitempty"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
-	AgentToken    string                 `protobuf:"bytes,2,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
-	Processes     []*ProcessAsset        `protobuf:"bytes,3,rep,name=processes,proto3" json:"processes,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	System         *SystemAsset           `protobuf:"bytes,5,opt,name=system,proto3" json:"system,omitempty"`
+	Hardware       *HardwareAsset         `protobuf:"bytes,10,opt,name=hardware,proto3" json:"hardware,omitempty"`
+	KernelModules  []*KernelModuleAsset   `protobuf:"bytes,11,rep,name=kernel_modules,json=kernelModules,proto3" json:"kernel_modules,omitempty"`
+	EnvVariables   []*EnvVariableAsset    `protobuf:"bytes,12,rep,name=env_variables,json=envVariables,proto3" json:"env_variables,omitempty"`
+	DiskUsages     []*DiskUsageAsset      `protobuf:"bytes,13,rep,name=disk_usages,json=diskUsages,proto3" json:"disk_usages,omitempty"`
+	NetworkDetails []*NetworkDetailAsset  `protobuf:"bytes,14,rep,name=network_details,json=networkDetails,proto3" json:"network_details,omitempty"`
+	ServiceStatus  []*ServiceStatusAsset  `protobuf:"bytes,15,rep,name=service_status,json=serviceStatus,proto3" json:"service_status,omitempty"`
+	JarPackages    []*JarPackageAsset     `protobuf:"bytes,16,rep,name=jar_packages,json=jarPackages,proto3" json:"jar_packages,omitempty"`
+	PythonPackages []*PythonPackageAsset  `protobuf:"bytes,17,rep,name=python_packages,json=pythonPackages,proto3" json:"python_packages,omitempty"`
+	NpmPackages    []*NpmPackageAsset     `protobuf:"bytes,18,rep,name=npm_packages,json=npmPackages,proto3" json:"npm_packages,omitempty"`
+	AgentSelf      *AgentSelfAsset        `protobuf:"bytes,19,opt,name=agent_self,json=agentSelf,proto3" json:"agent_self,omitempty"`
+	Crons          []*CronAsset           `protobuf:"bytes,6,rep,name=crons,proto3" json:"crons,omitempty"`
+	Packages       []*PackageAsset        `protobuf:"bytes,7,rep,name=packages,proto3" json:"packages,omitempty"`
+	Services       []*IdentifiedService   `protobuf:"bytes,8,rep,name=services,proto3" json:"services,omitempty"`
+	WebComponents  []*WebComponentAsset   `protobuf:"bytes,9,rep,name=web_components,json=webComponents,proto3" json:"web_components,omitempty"`
+	Users          []*UserAsset           `protobuf:"bytes,4,rep,name=users,proto3" json:"users,omitempty"`
+	AgentId        string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	AgentToken     string                 `protobuf:"bytes,2,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
+	Processes      []*ProcessAsset        `protobuf:"bytes,3,rep,name=processes,proto3" json:"processes,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *AssetReport) Reset() {
@@ -801,6 +811,76 @@ func (*AssetReport) Descriptor() ([]byte, []int) {
 func (x *AssetReport) GetSystem() *SystemAsset {
 	if x != nil {
 		return x.System
+	}
+	return nil
+}
+
+func (x *AssetReport) GetHardware() *HardwareAsset {
+	if x != nil {
+		return x.Hardware
+	}
+	return nil
+}
+
+func (x *AssetReport) GetKernelModules() []*KernelModuleAsset {
+	if x != nil {
+		return x.KernelModules
+	}
+	return nil
+}
+
+func (x *AssetReport) GetEnvVariables() []*EnvVariableAsset {
+	if x != nil {
+		return x.EnvVariables
+	}
+	return nil
+}
+
+func (x *AssetReport) GetDiskUsages() []*DiskUsageAsset {
+	if x != nil {
+		return x.DiskUsages
+	}
+	return nil
+}
+
+func (x *AssetReport) GetNetworkDetails() []*NetworkDetailAsset {
+	if x != nil {
+		return x.NetworkDetails
+	}
+	return nil
+}
+
+func (x *AssetReport) GetServiceStatus() []*ServiceStatusAsset {
+	if x != nil {
+		return x.ServiceStatus
+	}
+	return nil
+}
+
+func (x *AssetReport) GetJarPackages() []*JarPackageAsset {
+	if x != nil {
+		return x.JarPackages
+	}
+	return nil
+}
+
+func (x *AssetReport) GetPythonPackages() []*PythonPackageAsset {
+	if x != nil {
+		return x.PythonPackages
+	}
+	return nil
+}
+
+func (x *AssetReport) GetNpmPackages() []*NpmPackageAsset {
+	if x != nil {
+		return x.NpmPackages
+	}
+	return nil
+}
+
+func (x *AssetReport) GetAgentSelf() *AgentSelfAsset {
+	if x != nil {
+		return x.AgentSelf
 	}
 	return nil
 }
@@ -1557,6 +1637,750 @@ func (x *CronAsset) GetSource() string {
 	return ""
 }
 
+type HardwareAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Manufacturer  string                 `protobuf:"bytes,1,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`
+	Model         string                 `protobuf:"bytes,2,opt,name=model,proto3" json:"model,omitempty"`
+	SerialNumber  string                 `protobuf:"bytes,3,opt,name=serial_number,json=serialNumber,proto3" json:"serial_number,omitempty"`
+	Uuid          string                 `protobuf:"bytes,4,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	BootTime      string                 `protobuf:"bytes,5,opt,name=boot_time,json=bootTime,proto3" json:"boot_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HardwareAsset) Reset() {
+	*x = HardwareAsset{}
+	mi := &file_proto_agent_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HardwareAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HardwareAsset) ProtoMessage() {}
+
+func (x *HardwareAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HardwareAsset.ProtoReflect.Descriptor instead.
+func (*HardwareAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *HardwareAsset) GetManufacturer() string {
+	if x != nil {
+		return x.Manufacturer
+	}
+	return ""
+}
+
+func (x *HardwareAsset) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *HardwareAsset) GetSerialNumber() string {
+	if x != nil {
+		return x.SerialNumber
+	}
+	return ""
+}
+
+func (x *HardwareAsset) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *HardwareAsset) GetBootTime() string {
+	if x != nil {
+		return x.BootTime
+	}
+	return ""
+}
+
+type KernelModuleAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	Path          string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
+	Version       string                 `protobuf:"bytes,4,opt,name=version,proto3" json:"version,omitempty"`
+	Size          string                 `protobuf:"bytes,5,opt,name=size,proto3" json:"size,omitempty"`
+	UsedBy        int32                  `protobuf:"varint,6,opt,name=used_by,json=usedBy,proto3" json:"used_by,omitempty"`
+	Parameters    []string               `protobuf:"bytes,7,rep,name=parameters,proto3" json:"parameters,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KernelModuleAsset) Reset() {
+	*x = KernelModuleAsset{}
+	mi := &file_proto_agent_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KernelModuleAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KernelModuleAsset) ProtoMessage() {}
+
+func (x *KernelModuleAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KernelModuleAsset.ProtoReflect.Descriptor instead.
+func (*KernelModuleAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *KernelModuleAsset) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *KernelModuleAsset) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *KernelModuleAsset) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *KernelModuleAsset) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *KernelModuleAsset) GetSize() string {
+	if x != nil {
+		return x.Size
+	}
+	return ""
+}
+
+func (x *KernelModuleAsset) GetUsedBy() int32 {
+	if x != nil {
+		return x.UsedBy
+	}
+	return 0
+}
+
+func (x *KernelModuleAsset) GetParameters() []string {
+	if x != nil {
+		return x.Parameters
+	}
+	return nil
+}
+
+type EnvVariableAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Value         string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Type          string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	User          string                 `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnvVariableAsset) Reset() {
+	*x = EnvVariableAsset{}
+	mi := &file_proto_agent_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnvVariableAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnvVariableAsset) ProtoMessage() {}
+
+func (x *EnvVariableAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnvVariableAsset.ProtoReflect.Descriptor instead.
+func (*EnvVariableAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *EnvVariableAsset) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *EnvVariableAsset) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *EnvVariableAsset) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *EnvVariableAsset) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+type DiskUsageAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MountPoint    string                 `protobuf:"bytes,1,opt,name=mount_point,json=mountPoint,proto3" json:"mount_point,omitempty"`
+	TotalMb       int32                  `protobuf:"varint,2,opt,name=total_mb,json=totalMb,proto3" json:"total_mb,omitempty"`
+	UsedMb        int32                  `protobuf:"varint,3,opt,name=used_mb,json=usedMb,proto3" json:"used_mb,omitempty"`
+	UsePercent    string                 `protobuf:"bytes,4,opt,name=use_percent,json=usePercent,proto3" json:"use_percent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiskUsageAsset) Reset() {
+	*x = DiskUsageAsset{}
+	mi := &file_proto_agent_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiskUsageAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiskUsageAsset) ProtoMessage() {}
+
+func (x *DiskUsageAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiskUsageAsset.ProtoReflect.Descriptor instead.
+func (*DiskUsageAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *DiskUsageAsset) GetMountPoint() string {
+	if x != nil {
+		return x.MountPoint
+	}
+	return ""
+}
+
+func (x *DiskUsageAsset) GetTotalMb() int32 {
+	if x != nil {
+		return x.TotalMb
+	}
+	return 0
+}
+
+func (x *DiskUsageAsset) GetUsedMb() int32 {
+	if x != nil {
+		return x.UsedMb
+	}
+	return 0
+}
+
+func (x *DiskUsageAsset) GetUsePercent() string {
+	if x != nil {
+		return x.UsePercent
+	}
+	return ""
+}
+
+type NetworkDetailAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Mac           string                 `protobuf:"bytes,2,opt,name=mac,proto3" json:"mac,omitempty"`
+	Ips           []string               `protobuf:"bytes,3,rep,name=ips,proto3" json:"ips,omitempty"`
+	Speed         string                 `protobuf:"bytes,4,opt,name=speed,proto3" json:"speed,omitempty"`
+	Duplex        string                 `protobuf:"bytes,5,opt,name=duplex,proto3" json:"duplex,omitempty"`
+	Mtu           string                 `protobuf:"bytes,6,opt,name=mtu,proto3" json:"mtu,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NetworkDetailAsset) Reset() {
+	*x = NetworkDetailAsset{}
+	mi := &file_proto_agent_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NetworkDetailAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NetworkDetailAsset) ProtoMessage() {}
+
+func (x *NetworkDetailAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NetworkDetailAsset.ProtoReflect.Descriptor instead.
+func (*NetworkDetailAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *NetworkDetailAsset) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *NetworkDetailAsset) GetMac() string {
+	if x != nil {
+		return x.Mac
+	}
+	return ""
+}
+
+func (x *NetworkDetailAsset) GetIps() []string {
+	if x != nil {
+		return x.Ips
+	}
+	return nil
+}
+
+func (x *NetworkDetailAsset) GetSpeed() string {
+	if x != nil {
+		return x.Speed
+	}
+	return ""
+}
+
+func (x *NetworkDetailAsset) GetDuplex() string {
+	if x != nil {
+		return x.Duplex
+	}
+	return ""
+}
+
+func (x *NetworkDetailAsset) GetMtu() string {
+	if x != nil {
+		return x.Mtu
+	}
+	return ""
+}
+
+type ServiceStatusAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Enabled       bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Active        string                 `protobuf:"bytes,3,opt,name=active,proto3" json:"active,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServiceStatusAsset) Reset() {
+	*x = ServiceStatusAsset{}
+	mi := &file_proto_agent_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServiceStatusAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServiceStatusAsset) ProtoMessage() {}
+
+func (x *ServiceStatusAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServiceStatusAsset.ProtoReflect.Descriptor instead.
+func (*ServiceStatusAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ServiceStatusAsset) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ServiceStatusAsset) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *ServiceStatusAsset) GetActive() string {
+	if x != nil {
+		return x.Active
+	}
+	return ""
+}
+
+type JarPackageAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Executable    bool                   `protobuf:"varint,3,opt,name=executable,proto3" json:"executable,omitempty"`
+	Version       string                 `protobuf:"bytes,4,opt,name=version,proto3" json:"version,omitempty"`
+	Path          string                 `protobuf:"bytes,5,opt,name=path,proto3" json:"path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *JarPackageAsset) Reset() {
+	*x = JarPackageAsset{}
+	mi := &file_proto_agent_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JarPackageAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JarPackageAsset) ProtoMessage() {}
+
+func (x *JarPackageAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JarPackageAsset.ProtoReflect.Descriptor instead.
+func (*JarPackageAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *JarPackageAsset) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *JarPackageAsset) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *JarPackageAsset) GetExecutable() bool {
+	if x != nil {
+		return x.Executable
+	}
+	return false
+}
+
+func (x *JarPackageAsset) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *JarPackageAsset) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+type PythonPackageAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Path          string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
+	Scope         string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PythonPackageAsset) Reset() {
+	*x = PythonPackageAsset{}
+	mi := &file_proto_agent_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PythonPackageAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PythonPackageAsset) ProtoMessage() {}
+
+func (x *PythonPackageAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PythonPackageAsset.ProtoReflect.Descriptor instead.
+func (*PythonPackageAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *PythonPackageAsset) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PythonPackageAsset) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *PythonPackageAsset) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *PythonPackageAsset) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+type NpmPackageAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Path          string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
+	Scope         string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NpmPackageAsset) Reset() {
+	*x = NpmPackageAsset{}
+	mi := &file_proto_agent_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NpmPackageAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NpmPackageAsset) ProtoMessage() {}
+
+func (x *NpmPackageAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NpmPackageAsset.ProtoReflect.Descriptor instead.
+func (*NpmPackageAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *NpmPackageAsset) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *NpmPackageAsset) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *NpmPackageAsset) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *NpmPackageAsset) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+type AgentSelfAsset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InstallPath   string                 `protobuf:"bytes,1,opt,name=install_path,json=installPath,proto3" json:"install_path,omitempty"`
+	ConfigPath    string                 `protobuf:"bytes,2,opt,name=config_path,json=configPath,proto3" json:"config_path,omitempty"`
+	LogPath       string                 `protobuf:"bytes,3,opt,name=log_path,json=logPath,proto3" json:"log_path,omitempty"`
+	RunUser       string                 `protobuf:"bytes,4,opt,name=run_user,json=runUser,proto3" json:"run_user,omitempty"`
+	RunPid        int32                  `protobuf:"varint,5,opt,name=run_pid,json=runPid,proto3" json:"run_pid,omitempty"`
+	Version       string                 `protobuf:"bytes,6,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentSelfAsset) Reset() {
+	*x = AgentSelfAsset{}
+	mi := &file_proto_agent_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentSelfAsset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentSelfAsset) ProtoMessage() {}
+
+func (x *AgentSelfAsset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentSelfAsset.ProtoReflect.Descriptor instead.
+func (*AgentSelfAsset) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *AgentSelfAsset) GetInstallPath() string {
+	if x != nil {
+		return x.InstallPath
+	}
+	return ""
+}
+
+func (x *AgentSelfAsset) GetConfigPath() string {
+	if x != nil {
+		return x.ConfigPath
+	}
+	return ""
+}
+
+func (x *AgentSelfAsset) GetLogPath() string {
+	if x != nil {
+		return x.LogPath
+	}
+	return ""
+}
+
+func (x *AgentSelfAsset) GetRunUser() string {
+	if x != nil {
+		return x.RunUser
+	}
+	return ""
+}
+
+func (x *AgentSelfAsset) GetRunPid() int32 {
+	if x != nil {
+		return x.RunPid
+	}
+	return 0
+}
+
+func (x *AgentSelfAsset) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
 type ServiceAsset struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -1567,7 +2391,7 @@ type ServiceAsset struct {
 
 func (x *ServiceAsset) Reset() {
 	*x = ServiceAsset{}
-	mi := &file_proto_agent_proto_msgTypes[20]
+	mi := &file_proto_agent_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1579,7 +2403,7 @@ func (x *ServiceAsset) String() string {
 func (*ServiceAsset) ProtoMessage() {}
 
 func (x *ServiceAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[20]
+	mi := &file_proto_agent_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1592,7 +2416,7 @@ func (x *ServiceAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceAsset.ProtoReflect.Descriptor instead.
 func (*ServiceAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{20}
+	return file_proto_agent_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ServiceAsset) GetName() string {
@@ -1628,7 +2452,7 @@ type UserAsset struct {
 
 func (x *UserAsset) Reset() {
 	*x = UserAsset{}
-	mi := &file_proto_agent_proto_msgTypes[21]
+	mi := &file_proto_agent_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1640,7 +2464,7 @@ func (x *UserAsset) String() string {
 func (*UserAsset) ProtoMessage() {}
 
 func (x *UserAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[21]
+	mi := &file_proto_agent_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1653,7 +2477,7 @@ func (x *UserAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserAsset.ProtoReflect.Descriptor instead.
 func (*UserAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{21}
+	return file_proto_agent_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *UserAsset) GetUsername() string {
@@ -1749,7 +2573,7 @@ type ProcessAsset struct {
 
 func (x *ProcessAsset) Reset() {
 	*x = ProcessAsset{}
-	mi := &file_proto_agent_proto_msgTypes[22]
+	mi := &file_proto_agent_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1761,7 +2585,7 @@ func (x *ProcessAsset) String() string {
 func (*ProcessAsset) ProtoMessage() {}
 
 func (x *ProcessAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[22]
+	mi := &file_proto_agent_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1774,7 +2598,7 @@ func (x *ProcessAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessAsset.ProtoReflect.Descriptor instead.
 func (*ProcessAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{22}
+	return file_proto_agent_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ProcessAsset) GetPid() int32 {
@@ -1912,9 +2736,22 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
 	"agentToken\x12,\n" +
-	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"\xb5\x03\n" +
+	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"\xb2\b\n" +
 	"\vAssetReport\x12-\n" +
-	"\x06system\x18\x05 \x01(\v2\x15.sentinel.SystemAssetR\x06system\x12)\n" +
+	"\x06system\x18\x05 \x01(\v2\x15.sentinel.SystemAssetR\x06system\x123\n" +
+	"\bhardware\x18\n" +
+	" \x01(\v2\x17.sentinel.HardwareAssetR\bhardware\x12B\n" +
+	"\x0ekernel_modules\x18\v \x03(\v2\x1b.sentinel.KernelModuleAssetR\rkernelModules\x12?\n" +
+	"\renv_variables\x18\f \x03(\v2\x1a.sentinel.EnvVariableAssetR\fenvVariables\x129\n" +
+	"\vdisk_usages\x18\r \x03(\v2\x18.sentinel.DiskUsageAssetR\n" +
+	"diskUsages\x12E\n" +
+	"\x0fnetwork_details\x18\x0e \x03(\v2\x1c.sentinel.NetworkDetailAssetR\x0enetworkDetails\x12C\n" +
+	"\x0eservice_status\x18\x0f \x03(\v2\x1c.sentinel.ServiceStatusAssetR\rserviceStatus\x12<\n" +
+	"\fjar_packages\x18\x10 \x03(\v2\x19.sentinel.JarPackageAssetR\vjarPackages\x12E\n" +
+	"\x0fpython_packages\x18\x11 \x03(\v2\x1c.sentinel.PythonPackageAssetR\x0epythonPackages\x12<\n" +
+	"\fnpm_packages\x18\x12 \x03(\v2\x19.sentinel.NpmPackageAssetR\vnpmPackages\x127\n" +
+	"\n" +
+	"agent_self\x18\x13 \x01(\v2\x18.sentinel.AgentSelfAssetR\tagentSelf\x12)\n" +
 	"\x05crons\x18\x06 \x03(\v2\x13.sentinel.CronAssetR\x05crons\x122\n" +
 	"\bpackages\x18\a \x03(\v2\x16.sentinel.PackageAssetR\bpackages\x127\n" +
 	"\bservices\x18\b \x03(\v2\x1b.sentinel.IdentifiedServiceR\bservices\x12B\n" +
@@ -1981,7 +2818,72 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x04user\x18\x01 \x01(\tR\x04user\x12\x1a\n" +
 	"\bschedule\x18\x02 \x01(\tR\bschedule\x12\x18\n" +
 	"\acommand\x18\x03 \x01(\tR\acommand\x12\x16\n" +
-	"\x06source\x18\x04 \x01(\tR\x06source\"<\n" +
+	"\x06source\x18\x04 \x01(\tR\x06source\"\x9f\x01\n" +
+	"\rHardwareAsset\x12\"\n" +
+	"\fmanufacturer\x18\x01 \x01(\tR\fmanufacturer\x12\x14\n" +
+	"\x05model\x18\x02 \x01(\tR\x05model\x12#\n" +
+	"\rserial_number\x18\x03 \x01(\tR\fserialNumber\x12\x12\n" +
+	"\x04uuid\x18\x04 \x01(\tR\x04uuid\x12\x1b\n" +
+	"\tboot_time\x18\x05 \x01(\tR\bbootTime\"\xc4\x01\n" +
+	"\x11KernelModuleAsset\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\x12\x18\n" +
+	"\aversion\x18\x04 \x01(\tR\aversion\x12\x12\n" +
+	"\x04size\x18\x05 \x01(\tR\x04size\x12\x17\n" +
+	"\aused_by\x18\x06 \x01(\x05R\x06usedBy\x12\x1e\n" +
+	"\n" +
+	"parameters\x18\a \x03(\tR\n" +
+	"parameters\"d\n" +
+	"\x10EnvVariableAsset\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\x12\x12\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12\x12\n" +
+	"\x04user\x18\x04 \x01(\tR\x04user\"\x86\x01\n" +
+	"\x0eDiskUsageAsset\x12\x1f\n" +
+	"\vmount_point\x18\x01 \x01(\tR\n" +
+	"mountPoint\x12\x19\n" +
+	"\btotal_mb\x18\x02 \x01(\x05R\atotalMb\x12\x17\n" +
+	"\aused_mb\x18\x03 \x01(\x05R\x06usedMb\x12\x1f\n" +
+	"\vuse_percent\x18\x04 \x01(\tR\n" +
+	"usePercent\"\x8c\x01\n" +
+	"\x12NetworkDetailAsset\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
+	"\x03mac\x18\x02 \x01(\tR\x03mac\x12\x10\n" +
+	"\x03ips\x18\x03 \x03(\tR\x03ips\x12\x14\n" +
+	"\x05speed\x18\x04 \x01(\tR\x05speed\x12\x16\n" +
+	"\x06duplex\x18\x05 \x01(\tR\x06duplex\x12\x10\n" +
+	"\x03mtu\x18\x06 \x01(\tR\x03mtu\"Z\n" +
+	"\x12ServiceStatusAsset\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x16\n" +
+	"\x06active\x18\x03 \x01(\tR\x06active\"\x87\x01\n" +
+	"\x0fJarPackageAsset\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1e\n" +
+	"\n" +
+	"executable\x18\x03 \x01(\bR\n" +
+	"executable\x12\x18\n" +
+	"\aversion\x18\x04 \x01(\tR\aversion\x12\x12\n" +
+	"\x04path\x18\x05 \x01(\tR\x04path\"l\n" +
+	"\x12PythonPackageAsset\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\"i\n" +
+	"\x0fNpmPackageAsset\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\x12\x14\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\"\xbd\x01\n" +
+	"\x0eAgentSelfAsset\x12!\n" +
+	"\finstall_path\x18\x01 \x01(\tR\vinstallPath\x12\x1f\n" +
+	"\vconfig_path\x18\x02 \x01(\tR\n" +
+	"configPath\x12\x19\n" +
+	"\blog_path\x18\x03 \x01(\tR\alogPath\x12\x19\n" +
+	"\brun_user\x18\x04 \x01(\tR\arunUser\x12\x17\n" +
+	"\arun_pid\x18\x05 \x01(\x05R\x06runPid\x12\x18\n" +
+	"\aversion\x18\x06 \x01(\tR\aversion\"<\n" +
 	"\fServiceAsset\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\"\xaa\x02\n" +
@@ -2028,7 +2930,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_proto_agent_proto_goTypes = []any{
 	(ProbeCommand_CommandType)(0), // 0: sentinel.ProbeCommand.CommandType
 	(*RegisterRequest)(nil),       // 1: sentinel.RegisterRequest
@@ -2051,9 +2953,19 @@ var file_proto_agent_proto_goTypes = []any{
 	(*IdentifiedService)(nil),     // 18: sentinel.IdentifiedService
 	(*PackageAsset)(nil),          // 19: sentinel.PackageAsset
 	(*CronAsset)(nil),             // 20: sentinel.CronAsset
-	(*ServiceAsset)(nil),          // 21: sentinel.ServiceAsset
-	(*UserAsset)(nil),             // 22: sentinel.UserAsset
-	(*ProcessAsset)(nil),          // 23: sentinel.ProcessAsset
+	(*HardwareAsset)(nil),         // 21: sentinel.HardwareAsset
+	(*KernelModuleAsset)(nil),     // 22: sentinel.KernelModuleAsset
+	(*EnvVariableAsset)(nil),      // 23: sentinel.EnvVariableAsset
+	(*DiskUsageAsset)(nil),        // 24: sentinel.DiskUsageAsset
+	(*NetworkDetailAsset)(nil),    // 25: sentinel.NetworkDetailAsset
+	(*ServiceStatusAsset)(nil),    // 26: sentinel.ServiceStatusAsset
+	(*JarPackageAsset)(nil),       // 27: sentinel.JarPackageAsset
+	(*PythonPackageAsset)(nil),    // 28: sentinel.PythonPackageAsset
+	(*NpmPackageAsset)(nil),       // 29: sentinel.NpmPackageAsset
+	(*AgentSelfAsset)(nil),        // 30: sentinel.AgentSelfAsset
+	(*ServiceAsset)(nil),          // 31: sentinel.ServiceAsset
+	(*UserAsset)(nil),             // 32: sentinel.UserAsset
+	(*ProcessAsset)(nil),          // 33: sentinel.ProcessAsset
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	3,  // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
@@ -2062,31 +2974,41 @@ var file_proto_agent_proto_depIdxs = []int32{
 	0,  // 3: sentinel.ProbeCommand.type:type_name -> sentinel.ProbeCommand.CommandType
 	8,  // 4: sentinel.EventReport.events:type_name -> sentinel.ProbeEvent
 	11, // 5: sentinel.AssetReport.system:type_name -> sentinel.SystemAsset
-	20, // 6: sentinel.AssetReport.crons:type_name -> sentinel.CronAsset
-	19, // 7: sentinel.AssetReport.packages:type_name -> sentinel.PackageAsset
-	18, // 8: sentinel.AssetReport.services:type_name -> sentinel.IdentifiedService
-	17, // 9: sentinel.AssetReport.web_components:type_name -> sentinel.WebComponentAsset
-	22, // 10: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
-	23, // 11: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
-	12, // 12: sentinel.SystemAsset.os:type_name -> sentinel.OSAsset
-	13, // 13: sentinel.SystemAsset.cpu:type_name -> sentinel.CPUAsset
-	14, // 14: sentinel.SystemAsset.memory:type_name -> sentinel.MemoryAsset
-	15, // 15: sentinel.SystemAsset.disks:type_name -> sentinel.DiskAsset
-	16, // 16: sentinel.SystemAsset.networks:type_name -> sentinel.NetworkAsset
-	21, // 17: sentinel.SystemAsset.services:type_name -> sentinel.ServiceAsset
-	1,  // 18: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
-	5,  // 19: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
-	9,  // 20: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
-	10, // 21: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
-	2,  // 22: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
-	6,  // 23: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
-	6,  // 24: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
-	6,  // 25: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
-	22, // [22:26] is the sub-list for method output_type
-	18, // [18:22] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	21, // 6: sentinel.AssetReport.hardware:type_name -> sentinel.HardwareAsset
+	22, // 7: sentinel.AssetReport.kernel_modules:type_name -> sentinel.KernelModuleAsset
+	23, // 8: sentinel.AssetReport.env_variables:type_name -> sentinel.EnvVariableAsset
+	24, // 9: sentinel.AssetReport.disk_usages:type_name -> sentinel.DiskUsageAsset
+	25, // 10: sentinel.AssetReport.network_details:type_name -> sentinel.NetworkDetailAsset
+	26, // 11: sentinel.AssetReport.service_status:type_name -> sentinel.ServiceStatusAsset
+	27, // 12: sentinel.AssetReport.jar_packages:type_name -> sentinel.JarPackageAsset
+	28, // 13: sentinel.AssetReport.python_packages:type_name -> sentinel.PythonPackageAsset
+	29, // 14: sentinel.AssetReport.npm_packages:type_name -> sentinel.NpmPackageAsset
+	30, // 15: sentinel.AssetReport.agent_self:type_name -> sentinel.AgentSelfAsset
+	20, // 16: sentinel.AssetReport.crons:type_name -> sentinel.CronAsset
+	19, // 17: sentinel.AssetReport.packages:type_name -> sentinel.PackageAsset
+	18, // 18: sentinel.AssetReport.services:type_name -> sentinel.IdentifiedService
+	17, // 19: sentinel.AssetReport.web_components:type_name -> sentinel.WebComponentAsset
+	32, // 20: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
+	33, // 21: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
+	12, // 22: sentinel.SystemAsset.os:type_name -> sentinel.OSAsset
+	13, // 23: sentinel.SystemAsset.cpu:type_name -> sentinel.CPUAsset
+	14, // 24: sentinel.SystemAsset.memory:type_name -> sentinel.MemoryAsset
+	15, // 25: sentinel.SystemAsset.disks:type_name -> sentinel.DiskAsset
+	16, // 26: sentinel.SystemAsset.networks:type_name -> sentinel.NetworkAsset
+	31, // 27: sentinel.SystemAsset.services:type_name -> sentinel.ServiceAsset
+	1,  // 28: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
+	5,  // 29: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
+	9,  // 30: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
+	10, // 31: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
+	2,  // 32: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
+	6,  // 33: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
+	6,  // 34: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
+	6,  // 35: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
+	32, // [32:36] is the sub-list for method output_type
+	28, // [28:32] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -2100,7 +3022,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   23,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

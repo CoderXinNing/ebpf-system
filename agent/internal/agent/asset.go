@@ -48,6 +48,7 @@ func (a *Agent) collectAndReportAssets() {
 			Name: p.Name, Version: p.Version, Manager: p.Manager,
 		})
 	}
+
 	svcs := collector.IdentifyServices()
 	for _, s := range svcs {
 		assetReq.Services = append(assetReq.Services, &pb.IdentifiedService{
@@ -57,6 +58,7 @@ func (a *Agent) collectAndReportAssets() {
 		})
 	}
 	log.Printf("🔍 服务识别: %d个", len(svcs))
+
 	wcs := collector.IdentifyWebComponents()
 	for _, w := range wcs {
 		assetReq.WebComponents = append(assetReq.WebComponents, &pb.WebComponentAsset{
@@ -92,6 +94,40 @@ func (a *Agent) collectAndReportAssets() {
 		log.Printf("🖥️  系统: %s %s CPU=%d核 Mem=%dMB 磁盘=%d 服务=%d",
 			sysInfo.OS.Name, sysInfo.OS.Kernel, sysInfo.CPU.Cores, sysInfo.Memory.TotalMB, len(sysInfo.Disks), len(sysInfo.Services))
 	}
+
+	// 新增采集字段
+	hw := collector.CollectHardwareInfo()
+	assetReq.Hardware = &pb.HardwareAsset{Manufacturer: hw.Manufacturer, Model: hw.Model, SerialNumber: hw.SerialNumber, Uuid: hw.UUID, BootTime: hw.BootTime}
+	for _, m := range collector.CollectKernelModuleDetails() {
+		assetReq.KernelModules = append(assetReq.KernelModules, &pb.KernelModuleAsset{Name: m.Name, Description: m.Description, Path: m.Path, Version: m.Version, Size: m.Size, UsedBy: int32(m.UsedBy), Parameters: m.Parameters})
+	}
+	for _, e := range collector.CollectEnvVariables() {
+		assetReq.EnvVariables = append(assetReq.EnvVariables, &pb.EnvVariableAsset{Name: e.Name, Value: e.Value, Type: e.Type, User: e.User})
+	}
+	for _, d := range collector.CollectDiskUsage() {
+		assetReq.DiskUsages = append(assetReq.DiskUsages, &pb.DiskUsageAsset{MountPoint: d.MountPoint, TotalMb: int32(d.TotalMB), UsedMb: int32(d.UsedMB), UsePercent: d.UsePercent})
+	}
+	for _, n := range collector.CollectNetworkDetails() {
+		assetReq.NetworkDetails = append(assetReq.NetworkDetails, &pb.NetworkDetailAsset{Name: n.Name, Mac: n.MAC, Ips: n.IPs, Speed: n.Speed, Duplex: n.Duplex, Mtu: n.MTU})
+	}
+	for _, s := range collector.CollectServiceStatus() {
+		assetReq.ServiceStatus = append(assetReq.ServiceStatus, &pb.ServiceStatusAsset{Name: s.Name, Enabled: s.Enabled, Active: s.Active})
+	}
+	for _, j := range collector.CollectJarPackages() {
+		assetReq.JarPackages = append(assetReq.JarPackages, &pb.JarPackageAsset{Name: j.Name, Type: j.Type, Executable: j.Executable, Version: j.Version, Path: j.Path})
+	}
+	for _, p := range collector.CollectPythonPackages() {
+		assetReq.PythonPackages = append(assetReq.PythonPackages, &pb.PythonPackageAsset{Name: p.Name, Version: p.Version, Path: p.Path, Scope: p.Scope})
+	}
+	for _, p := range collector.CollectNpmPackages() {
+		assetReq.NpmPackages = append(assetReq.NpmPackages, &pb.NpmPackageAsset{Name: p.Name, Version: p.Version, Path: p.Path, Scope: p.Scope})
+	}
+	self := collector.CollectAgentSelfInfo()
+	assetReq.AgentSelf = &pb.AgentSelfAsset{InstallPath: self.InstallPath, ConfigPath: self.ConfigPath, LogPath: self.LogPath, RunUser: self.RunUser, RunPid: int32(self.RunPID), Version: self.Version}
+	log.Printf("📊 新增字段: hw=%v km=%d env=%d disk=%d net=%d svc=%d jar=%d py=%d npm=%d",
+		assetReq.Hardware != nil, len(assetReq.KernelModules), len(assetReq.EnvVariables),
+		len(assetReq.DiskUsages), len(assetReq.NetworkDetails), len(assetReq.ServiceStatus),
+		len(assetReq.JarPackages), len(assetReq.PythonPackages), len(assetReq.NpmPackages))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

@@ -188,11 +188,21 @@ func (s *Server) ReportAssets(ctx context.Context, req *pb.AssetReport) (*pb.Hea
 	procJSON, _ := json.Marshal(req.Processes)
 	userJSON, _ := json.Marshal(req.Users)
 	sysData := map[string]interface{}{
-		"system":   req.System,
-		"crons":    req.Crons,
-		"packages":       req.Packages,
-		"services":       req.Services,
-		"web_components": req.WebComponents,
+		"system":          req.System,
+		"crons":           req.Crons,
+		"packages":        req.Packages,
+		"services":        req.Services,
+		"web_components":  req.WebComponents,
+		"hardware":        req.Hardware,
+		"kernel_modules":  req.KernelModules,
+		"env_variables":   req.EnvVariables,
+		"disk_usages":     req.DiskUsages,
+		"network_details": req.NetworkDetails,
+		"service_status":  req.ServiceStatus,
+		"jar_packages":    req.JarPackages,
+		"python_packages": req.PythonPackages,
+		"npm_packages":    req.NpmPackages,
+		"agent_self":      req.AgentSelf,
 	}
 	sysJSON, _ := json.Marshal(sysData)
 	s.handler.Store.SaveAsset(req.AgentId, procJSON, userJSON, sysJSON)
