@@ -23,14 +23,20 @@
           <div style="display:flex;gap:8px;margin-bottom:12px">
             <n-input v-model:value="ipFilter" placeholder="搜索IP..." size="small" style="width:160px" clearable />
             <span style="font-size:13px;color:#666;line-height:28px">{{ filtered.length }}台</span>
+            <n-button v-if="checkedKeys.length>0" size="small" @click="showMove=true">移动到 ({{ checkedKeys.length }})</n-button>
           </div>
-          <n-data-table :columns="cols" :data="filtered" size="small" :bordered="false" :pagination="pagination" :row-key="(r) => r.id" />
+          <n-data-table :columns="cols" :data="filtered" size="small" :bordered="false" :pagination="pagination" :row-key="(r) => r.id" @update:checked-row-keys="onCheck" />
         </n-card>
       </div>
     </div>
       <n-modal v-model:show="showAddGroup" title="新建业务组" style="width:400px" preset="card" :bordered="false">
       <n-input v-model:value="newGroupName" placeholder="输入组名" style="margin-bottom:12px" />
       <n-button type="primary" @click="createGroup">创建</n-button>
+    </n-modal>
+
+    <n-modal v-model:show="showMove" title="移动到业务组" style="width:400px" preset="card" :bordered="false">
+      <n-select v-model:value="targetGroup" :options="groupOpts" placeholder="选择目标组" style="margin-bottom:12px" />
+      <n-button type="primary" @click="doMove">确定移动</n-button>
     </n-modal>
   </Layout>
 </template>
@@ -45,6 +51,9 @@ const groupSearch = ref('')
 const selectedGroup = ref('all')
 const ipFilter = ref('')
 const treeList = ref([])
+const checkedKeys = ref([])
+const showMove = ref(false)
+const targetGroup = ref(null)
 const showAddGroup = ref(false)
 const newGroupName = ref()
 
@@ -56,12 +65,20 @@ const pagination = reactive({
 })
 
 const cols = [
+  { type: 'selection', minWidth: 40 },
   { title: '主机IP', key: 'ip_addr', minWidth: 130 },
   { title: '主机名', key: 'hostname', minWidth: 140 },
   { title: '业务组', key: 'group', minWidth: 100 },
   { title: 'OS', key: 'os', minWidth: 160 },
   { title: '操作', key: 'id', minWidth: 80, render: (row) => h('a', { href: '#/host/' + row.id, style: 'color:#1e6fff' }, '详情') }
 ]
+
+const groupOpts = computed(() => {
+  const names = [...new Set(agents.value.map(a => a.group || '未分组'))]
+  const custom = JSON.parse(localStorage.getItem("custom_groups") || "[]")
+  custom.forEach(g => { if (!names.includes(g)) names.push(g) })
+  return names.map(g => ({ label: g, value: g }))
+})
 
 const filtered = computed(() => {
   let list = agents.value
@@ -100,6 +117,15 @@ function deleteGroup(name) {
     }
     buildTree()
   }
+}
+
+function onCheck(keys) { checkedKeys.value = keys }
+
+function doMove() {
+  if (!targetGroup.value || checkedKeys.value.length === 0) return
+  alert("已移动 " + checkedKeys.value.length + " 台主机到 " + targetGroup.value + "\n(后端API待实现)")
+  showMove.value = false
+  checkedKeys.value = []
 }
 
 function buildTree() {
