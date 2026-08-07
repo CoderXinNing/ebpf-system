@@ -48,6 +48,8 @@ func (a *Agent) runHeartbeatLoop() {
 			if err != nil {
 				log.Printf("⚠️ 心跳流断开: %v, 将重新注册...", err)
 				close(done)
+				// 重新注册
+				a.connectAndRegister()
 				break
 			}
 			if resp.Success && len(resp.Commands) > 0 {
