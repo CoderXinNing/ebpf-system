@@ -7,7 +7,7 @@ agent:
 autoload:
     - name: exec_monitor
       id: auto-exec-001
-      enabled: false
+      enabled: true
 
 collect_interval: 300s
 
