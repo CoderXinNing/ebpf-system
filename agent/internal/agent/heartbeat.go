@@ -11,9 +11,7 @@ import (
 func (a *Agent) runHeartbeatLoop() {
 	for {
 		// 确保已注册
-		a.connectAndRegister()
 		if a.token == "" {
-			log.Printf("❌ 注册失败: %v, 重试...", nil)
 			time.Sleep(a.cfg.Agent.RetryDelay)
 			continue
 		}

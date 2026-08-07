@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/ringbuf"
 )
 
 type XDPConfig struct {
@@ -20,60 +21,78 @@ type XDPConfig struct {
 	Iface   string
 }
 
-func LoadXDPReporter(cfg XDPConfig) (link.Link, error) {
+type XDPEvent struct {
+	Timestamp uint64
+	PID       uint32
+	EventType uint32
+	Comm      [16]byte
+	Filename  [64]byte
+	Details   [64]byte
+}
+
+type EventCallback func(XDPEvent)
+
+func LoadXDPReporter(cfg XDPConfig, callback EventCallback) (*ebpf.Map, link.Link, error) {
 	spec, err := ebpf.LoadCollectionSpec("probes/templates/xdp_reporter/xdp_reporter.o")
 	if err != nil {
-		return nil, fmt.Errorf("加载spec失败: %w", err)
+		return nil, nil, fmt.Errorf("加载spec失败: %w", err)
 	}
 
 	var objs struct {
 		XdpReporter *ebpf.Program `ebpf:"xdp_reporter"`
-		ServerMap   *ebpf.Map     `ebpf:"server_map"`
+		Events      *ebpf.Map     `ebpf:"events"`
 	}
 
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {
-		return nil, fmt.Errorf("加载程序失败: %w", err)
+		return nil, nil, fmt.Errorf("加载程序失败: %w", err)
 	}
-	log.Printf("   XDP程序已加载到内核 (prog fd=%d)", objs.XdpReporter.FD())
 
-	// 填充配置
-	buf := make([]byte, 36)
-	binary.BigEndian.PutUint32(buf[0:4], ipToUint32(cfg.SrcIP))
-	binary.BigEndian.PutUint32(buf[4:8], ipToUint32(cfg.DstIP))
-	binary.BigEndian.PutUint16(buf[8:10], cfg.SrcPort)
-	binary.BigEndian.PutUint16(buf[10:12], cfg.DstPort)
-	copy(buf[12:18], cfg.SrcMAC)
-	copy(buf[18:24], cfg.DstMAC)
-
-	key := uint32(0)
-	if err := objs.ServerMap.Put(&key, buf); err != nil {
-		objs.XdpReporter.Close()
-		return nil, fmt.Errorf("写入配置失败: %w", err)
-	}
-	log.Printf("   Server配置已写入map")
-
+	// Attach到网卡
 	iface, err := net.InterfaceByName(cfg.Iface)
 	if err != nil {
 		objs.XdpReporter.Close()
-		return nil, fmt.Errorf("网卡不存在: %w", err)
+		return nil, nil, fmt.Errorf("网卡不存在: %w", err)
 	}
 
 	l, err := link.AttachXDP(link.XDPOptions{
 		Program:   objs.XdpReporter,
 		Interface: iface.Index,
-		Flags:     link.XDPGenericMode, // 用generic模式兼容VM
 	})
 	if err != nil {
 		objs.XdpReporter.Close()
-		return nil, fmt.Errorf("attach失败: %w", err)
+		return nil, nil, fmt.Errorf("attach失败: %w", err)
 	}
 
-	log.Printf("✅ XDP已attach到 %s (link fd=%d)", cfg.Iface, l)
-	return l, nil
-}
+	log.Printf("✅ XDP已加载: %s (ring buffer模式)", cfg.Iface)
 
-func ipToUint32(ip net.IP) uint32 {
-	ip = ip.To4()
-	if ip == nil { return 0 }
-	return uint32(ip[0])<<24 | uint32(ip[1])<<16 | uint32(ip[2])<<8 | uint32(ip[3])
+	// 启动ring buffer读取
+	go func() {
+		rd, err := ringbuf.NewReader(objs.Events)
+		if err != nil {
+			log.Printf("⚠️ XDP ring buffer读取失败: %v", err)
+			return
+		}
+		defer rd.Close()
+
+		for {
+			record, err := rd.Read()
+			if err != nil {
+				continue
+			}
+
+			var evt XDPEvent
+			raw := record.RawSample
+			evt.Timestamp = binary.LittleEndian.Uint64(raw[0:8])
+			evt.PID = binary.LittleEndian.Uint32(raw[8:12])
+			evt.EventType = binary.LittleEndian.Uint32(raw[12:16])
+			copy(evt.Comm[:], raw[16:32])
+			copy(evt.Filename[:], raw[32:96])
+			copy(evt.Details[:], raw[96:160])
+
+			log.Printf("📡 XDP事件: type=%d comm=%s file=%s", evt.EventType, string(evt.Comm[:]), string(evt.Filename[:]))
+			callback(evt)
+		}
+	}()
+
+	return objs.Events, l, nil
 }

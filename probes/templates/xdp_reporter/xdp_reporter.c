@@ -1,57 +1,57 @@
 // SPDX-License-Identifier: GPL-2.0
+// XDP事件采集——写入ring buffer，用户态Agent读走上报
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
 char LICENSE[] SEC("license") = "GPL";
 
+// 事件结构
+struct ebpf_event {
+    __u64 timestamp;
+    __u32 pid;
+    __u32 event_type;
+    char comm[16];
+    char filename[64];
+    char details[64];
+};
+
 struct {
-    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
+} events SEC(".maps");
+
+// 统计：每N个包上报一次
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __uint(max_entries, 1);
     __type(key, __u32);
-    __type(value, __u8[36]);
-} server_map SEC(".maps");
+    __type(value, __u64);
+} pkt_count SEC(".maps");
 
 SEC("xdp")
 int xdp_reporter(struct xdp_md *ctx) {
     __u32 key = 0;
-    __u8 *cfg = bpf_map_lookup_elem(&server_map, &key);
-    if (!cfg) return XDP_PASS;
+    __u64 *count = bpf_map_lookup_elem(&pkt_count, &key);
+    if (!count) return XDP_PASS;
 
-    __u32 total_len = 14 + 20 + 8 + 8;
-    if (bpf_xdp_adjust_head(ctx, 0 - (int)total_len) < 0) return XDP_PASS;
+    (*count)++;
 
-    void *data_end = (void *)(long)ctx->data_end;
-    void *data = (void *)(long)ctx->data;
-    __u8 *pkt = data;
-    if (pkt + total_len > (__u8 *)data_end) return XDP_DROP;
+    // 每100个包采集一次
+    if (*count % 100 != 0) return XDP_PASS;
 
-    // Eth
-    for (int i = 0; i < 6; i++) { pkt[i] = cfg[18+i]; pkt[6+i] = cfg[12+i]; }
-    pkt[12] = 0x08; pkt[13] = 0x00;
+    struct ebpf_event *evt = bpf_ringbuf_reserve(&events, sizeof(*evt), 0);
+    if (!evt) return XDP_PASS;
 
-    // IP
-    __u8 *ip = pkt + 14;
-    ip[0] = 0x45; ip[1] = 0x00;
-    __u16 ip_len = bpf_htons(20 + 8 + 8);
-    ip[2] = ip_len & 0xff; ip[3] = (ip_len >> 8) & 0xff;
-    for (int i = 4; i < 12; i++) ip[i] = 0;
-    ip[8] = 64; ip[9] = 17;
-    for (int i = 0; i < 4; i++) { ip[12+i] = cfg[i]; ip[16+i] = cfg[4+i]; }
+    evt->timestamp = bpf_ktime_get_ns();
+    evt->pid = 0;
+    evt->event_type = 1; // XDP包计数
+    __builtin_memcpy(evt->comm, "xdp", 4);
+    __builtin_memcpy(evt->filename, "packet", 7);
+    __builtin_memcpy(evt->details, "xdp probe", 10);
 
-    // UDP
-    __u8 *udp = ip + 20;
-    udp[0] = cfg[8]; udp[1] = cfg[9];
-    udp[2] = cfg[10]; udp[3] = cfg[11];
-    __u16 udp_len = bpf_htons(8 + 8);
-    udp[4] = udp_len & 0xff; udp[5] = (udp_len >> 8) & 0xff;
-    udp[6] = 0; udp[7] = 0;
+    bpf_ringbuf_submit(evt, 0);
 
-    // Payload: "EBPFXD"
-    __u8 *payload = udp + 8;
-    payload[0] = 'E'; payload[1] = 'B'; payload[2] = 'P';
-    payload[3] = 'F'; payload[4] = 'X'; payload[5] = 'D';
-    payload[6] = 0; payload[7] = 0;
-
-    return XDP_TX;
+    // 关键：原包放行，不影响网络
+    return XDP_PASS;
 }
