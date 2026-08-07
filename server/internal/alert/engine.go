@@ -45,6 +45,7 @@ type Alert struct {
 }
 
 type Engine struct {
+	dedupMap  map[string]time.Time
 	mu         sync.RWMutex
 	rules      []Rule
 	freqCount  map[string][]time.Time // 频率统计
@@ -53,6 +54,7 @@ type Engine struct {
 
 func NewEngine(rulesPath string, callback func(Alert)) *Engine {
 	e := &Engine{
+		dedupMap:  make(map[string]time.Time),
 		freqCount: make(map[string][]time.Time),
 		OnAlert:   callback,
 	}
@@ -114,6 +116,17 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 			Filename:    filename,
 			Time:        time.Now(),
 		}
+
+		// 去重：同规则+同Agent 30秒内不重复告警
+		dedupKey := agentID + ":" + rule.Name
+		e.mu.Lock()
+		lastTime, exists := e.dedupMap[dedupKey]
+		if exists && time.Since(lastTime) < 30*time.Second {
+			e.mu.Unlock()
+			continue
+		}
+		e.dedupMap[dedupKey] = time.Now()
+		e.mu.Unlock()
 
 		if e.OnAlert != nil {
 			e.OnAlert(alert)
