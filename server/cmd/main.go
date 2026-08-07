@@ -13,6 +13,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
 	"github.com/CoderXinNing/ebpf-system/server/internal/handler"
+	"github.com/CoderXinNing/ebpf-system/server/internal/alert"
 	"github.com/CoderXinNing/ebpf-system/server/internal/udp"
 	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,7 @@ type Server struct {
 	handler *handler.Handler
 }
 
+var alertEngine *alert.Engine
 func main() {
 	st, err := store.NewStore("sentinel.db")
 	if err != nil {
@@ -37,6 +39,9 @@ func main() {
 	}
 
 	srv := &Server{}
+	alertEngine = alert.NewEngine("server/configs/rules.yaml", func(a alert.Alert) {
+		log.Printf("🚨 告警: [%s] %s - PID=%d %s", a.Severity, a.RuleName, a.PID, a.Comm)
+	})
 	srv.handler = handler.NewHandler(st, am, srv.sendCommand)
 
 	// gRPC
@@ -174,6 +179,9 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 }
 
 func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.HeartbeatResponse, error) {
+	for _, evt := range req.Events {
+		alertEngine.CheckEvent(req.AgentId, evt.Pid, evt.Comm, evt.Filename, evt.Filename, evt.EventType)
+	}
 	h := s.handler
 	h.EventMu.Lock()
 	defer h.EventMu.Unlock()

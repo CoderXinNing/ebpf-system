@@ -1,0 +1,28 @@
+rules:
+  - name: "反弹Shell检测"
+    severity: CRITICAL
+    description: "检测到反弹Shell特征"
+    conditions:
+      - field: "cmdline"
+        op: "regex"
+        value: "/dev/tcp|bash -i|nc -e|python -c.*socket|perl -e.*socket"
+
+  - name: "SSH暴力破解"
+    severity: HIGH
+    description: "短时间内大量SSH登录失败"
+    conditions:
+      - field: "comm"
+        op: "eq"
+        value: "sshd"
+    frequency:
+      count: 5
+      window_sec: 10
+
+  - name: "可疑定时任务"
+    severity: MEDIUM
+    description: "定时任务包含可疑命令"
+    conditions:
+      - field: "cmdline"
+        op: "regex"
+        value: "curl.*http|wget.*http|bash.*/tmp|python.*/tmp"
+    source: "crontab"

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -72,6 +73,13 @@ func LoadXDPReporter(cfg XDPConfig, callback EventCallback) (*ebpf.Map, link.Lin
 		return nil, nil, fmt.Errorf("attach失败: %w", err)
 	}
 
+	// 自动attach
+	bpftoolCmd := exec.Command("bpftool", "net", "attach", "xdp", "pinned", pinPath, "dev", cfg.Iface)
+	if err := bpftoolCmd.Run(); err != nil {
+		log.Printf("⚠️ 自动attach失败（已pin到bpffs，可手动attach）: %v", err)
+	} else {
+		log.Printf("✅ XDP已attach到 %s", cfg.Iface)
+	}
 	log.Printf("✅ XDP已加载: %s (ring buffer模式)", cfg.Iface)
 
 	// 启动ring buffer读取
