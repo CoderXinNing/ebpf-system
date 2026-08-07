@@ -38,7 +38,7 @@ int xdp_reporter(struct xdp_md *ctx) {
     (*count)++;
 
     // 每100个包采集一次
-    if (*count % 100 != 0) return XDP_PASS;
+    if (*count % 10 != 0) return XDP_PASS;
 
     struct ebpf_event *evt = bpf_ringbuf_reserve(&events, sizeof(*evt), 0);
     if (!evt) return XDP_PASS;

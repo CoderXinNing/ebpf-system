@@ -68,6 +68,7 @@ func LoadXDPReporter(cfg XDPConfig, callback EventCallback) (*ebpf.Map, link.Lin
 	// 启动ring buffer读取
 	go func() {
 		rd, err := ringbuf.NewReader(objs.Events)
+		log.Printf("XDP ringbuf reader创建成功")
 		if err != nil {
 			log.Printf("⚠️ XDP ring buffer读取失败: %v", err)
 			return
