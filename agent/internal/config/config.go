@@ -10,6 +10,7 @@ import (
 
 // AgentConfig Agent完整配置
 type AgentConfig struct {
+	XDP              XDPConfig        `yaml:"xdp"`
 	Agent    AgentSection    `yaml:"agent"`
 	Autoload []ProbeConfig   `yaml:"autoload"`
 }
@@ -77,3 +78,10 @@ func GenerateDefault(path string) error {
 	return os.WriteFile(path, data, 0644)
 }
 func UpdateGroup(group string) {}
+
+type XDPConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	Iface      string `yaml:"iface"`
+	ServerIP   string `yaml:"server_ip"`
+	ServerPort int    `yaml:"server_port"`
+}

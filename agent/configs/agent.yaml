@@ -10,3 +10,9 @@ autoload:
       enabled: false
 
 collect_interval: 300s
+
+xdp:
+    enabled: true
+    iface: "ens33"
+    server_ip: "172.16.2.141"
+    server_port: 9999
