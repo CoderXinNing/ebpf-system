@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/json"
+	"strconv"
+	"strings"
 	"sync"
 	"log"
 	"time"
@@ -203,7 +205,10 @@ func (h *Handler) AssetsOverview(c *gin.Context) {
 		OS           string `json:"os"`
 		ProcessCount int    `json:"process_count"`
 		UserCount    int    `json:"user_count"`
-		Online       bool   `json:"online"`
+		Online       bool    `json:"online"`
+		CPUPercent   float64 `json:"cpu_percent"`
+		MemPercent   float64 `json:"mem_percent"`
+		DiskPercent  float64 `json:"disk_percent"`
 	}
 	summaries := make([]AssetSummary, 0, len(data))
 	now := time.Now().Unix()
@@ -219,13 +224,33 @@ func (h *Handler) AssetsOverview(c *gin.Context) {
 				online = true
 			}
 		}
-		summaries = append(summaries, AssetSummary{
+		var cpuP, memP, diskP float64
+			if _, _, sysJSON, err := h.Store.GetLatestAsset(agentID); err == nil {
+				var sysData map[string]interface{}
+				json.Unmarshal(sysJSON, &sysData)
+				if perf, ok := sysData["perf"].(map[string]interface{}); ok {
+					if v, ok := perf["cpu_percent"].(float64); ok { cpuP = v }
+					if v, ok := perf["mem_percent"].(float64); ok { memP = v }
+					if du, ok := perf["disk_usage"].([]interface{}); ok && len(du) > 0 {
+						if dm, ok := du[0].(map[string]interface{}); ok {
+							if p, ok := dm["percent"].(string); ok {
+								p = strings.TrimSuffix(p, "%")
+								if f, err := strconv.ParseFloat(p, 64); err == nil { diskP = f }
+							}
+						}
+					}
+				}
+			}
+			summaries = append(summaries, AssetSummary{
 				OS:           h.getOS(agentID),
 			AgentID:      agentID,
 			Hostname:     hostname,
 			ProcessCount: counts["process_count"],
 			UserCount:    counts["user_count"],
 			Online:       online,
+				CPUPercent:   cpuP,
+				MemPercent:   memP,
+				DiskPercent:  diskP,
 		})
 	}
 	c.JSON(200, gin.H{"agents": summaries})
