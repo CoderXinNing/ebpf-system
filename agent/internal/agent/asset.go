@@ -25,6 +25,17 @@ func (a *Agent) collectAndReportAssets() {
 	assetReq := &pb.AssetReport{AgentId: a.id, AgentToken: a.token}
 
 	for _, p := range procs {
+		// 上报进程事件用于告警检测
+		if len(p.Cmdline) > 0 {
+			a.eventQueue <- &pb.ProbeEvent{
+				ProbeName: "process",
+				Timestamp: time.Now().Unix(),
+				EventType: "process_scan",
+				Pid:       int32(p.PID),
+				Comm:      p.Name,
+				Filename:  p.Cmdline,
+			}
+		}
 		assetReq.Processes = append(assetReq.Processes, &pb.ProcessAsset{
 			Pid: int32(p.PID), Ppid: int32(p.PPID), Name: p.Name, Cmdline: p.Cmdline,
 			ExePath: p.ExePath, User: p.User, State: p.State, ListeningPorts: p.Ports,

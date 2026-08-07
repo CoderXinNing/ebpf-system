@@ -25,7 +25,7 @@ func (a *Agent) startXDP() {
 	// 清理旧XDP
 	pinPath := "/sys/fs/bpf/ebpf-sentinel/xdp_reporter"
 	os.Remove(pinPath)
-	exec.Command("ip", "link", "set", a.cfg.XDP.Iface, "xdp", "off").Run()
+	exec.Command("bpftool", "net", "detach", "xdp", "dev", a.cfg.XDP.Iface).Run()
 
 	if _, err := net.InterfaceByName(a.cfg.XDP.Iface); err != nil {
 		log.Printf("⚠️ 网卡 %s 不存在，XDP降级", a.cfg.XDP.Iface)
