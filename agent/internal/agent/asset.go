@@ -47,7 +47,7 @@ func (a *Agent) collectAndReportAssets() {
 	for _, p := range pkgs {
 		assetReq.Packages = append(assetReq.Packages, &pb.PackageAsset{
 			Name: p.Name, Version: p.Version, Manager: p.Manager,
-				SizeKb: 0,
+				SizeKb: collector.GetPkgSize(p.Name),
 		})
 	}
 
