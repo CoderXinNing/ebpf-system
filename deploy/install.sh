@@ -57,6 +57,12 @@ agent:
 
 autoload: []
 collect_interval: 300s
+
+xdp:
+    enabled: false
+    iface: "ens33"
+    server_ip: ""
+    server_port: 9999
 YAML
 
 # systemd服务

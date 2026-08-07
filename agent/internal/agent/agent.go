@@ -49,6 +49,7 @@ func (a *Agent) Init() error {
 
 
 
+	go a.startXDP()
 	return nil
 }
 

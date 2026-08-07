@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -54,6 +55,14 @@ func LoadXDPReporter(cfg XDPConfig, callback EventCallback) (*ebpf.Map, link.Lin
 		return nil, nil, fmt.Errorf("网卡不存在: %w", err)
 	}
 
+	// Pin程序到bpffs
+	pinPath := "/sys/fs/bpf/ebpf-sentinel/xdp_reporter"
+	os.MkdirAll("/sys/fs/bpf/ebpf-sentinel", 0755)
+	if err := objs.XdpReporter.Pin(pinPath); err != nil {
+		log.Printf("⚠️ Pin XDP到bpffs失败: %v", err)
+	} else {
+		log.Printf("📌 XDP已pin到 %s", pinPath)
+	}
 	l, err := link.AttachXDP(link.XDPOptions{
 		Program:   objs.XdpReporter,
 		Interface: iface.Index,
