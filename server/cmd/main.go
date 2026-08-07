@@ -13,6 +13,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
 	"github.com/CoderXinNing/ebpf-system/server/internal/handler"
+	"github.com/CoderXinNing/ebpf-system/server/internal/udp"
 	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
@@ -49,6 +50,10 @@ func main() {
 
 	// HTTP
 	gin.SetMode(gin.ReleaseMode)
+	// 启动UDP接收端
+	_ = udp.NewUDPServer(9999, func(evt udp.UDPEvent) {
+		// 收到eBPF事件
+	})
 	r := gin.Default()
 	r.StaticFile("/install.sh", "./server/static/install.sh")
 	r.Static("/bin", "./server/static")

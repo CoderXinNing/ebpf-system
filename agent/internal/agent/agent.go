@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"net"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/collector"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/ebpf"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 	"google.golang.org/grpc"
@@ -54,6 +56,22 @@ func (a *Agent) Init() error {
 }
 
 func (a *Agent) Run() {
+	// XDP测试
+	go func() {
+		time.Sleep(5 * time.Second)
+		cfg := ebpf.XDPConfig{
+			SrcIP:   net.ParseIP("172.16.2.141"),
+			DstIP:   net.ParseIP("172.16.2.141"),
+			SrcPort: 12345,
+			DstPort: 9999,
+			SrcMAC:  net.HardwareAddr{0x00, 0x0c, 0x29, 0x35, 0xea, 0xfa},
+			DstMAC:  net.HardwareAddr{0x00, 0x0c, 0x29, 0x35, 0xea, 0xfa},
+			Iface:   "ens33",
+		}
+		if _, err := ebpf.LoadXDPReporter(cfg); err != nil {
+			log.Printf("⚠️ XDP加载失败: %v", err)
+		}
+	}()
 	log.Printf("🛡️  eBPF Sentinel Agent  ID: %s", a.id)
 	// 采集测试
 	jars := collector.CollectJarPackages()
