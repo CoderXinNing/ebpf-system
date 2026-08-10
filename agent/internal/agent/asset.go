@@ -54,6 +54,11 @@ func (a *Agent) collectAndReportAssets() {
 		assetReq.Crons = append(assetReq.Crons, &pb.CronAsset{
 			User: c.User, Schedule: c.Schedule, Command: c.Command, Source: c.Source,
 		})
+		a.eventQueue <- &pb.ProbeEvent{
+			ProbeName: "cron", Timestamp: time.Now().Unix(),
+			EventType: "cron_scan", Pid: 0,
+			Comm: c.User, Filename: c.Command,
+		}
 	}
 	for _, p := range pkgs {
 		assetReq.Packages = append(assetReq.Packages, &pb.PackageAsset{
