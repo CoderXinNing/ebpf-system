@@ -1,6 +1,8 @@
 package ebpf
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"os"
@@ -11,12 +13,6 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
 )
-
-type ConnStat struct {
-	PID   uint32
-	Count uint64
-}
-
 type TCPCallback func(pid uint32, comm string, count uint64)
 
 var tcpCB TCPCallback
@@ -29,7 +25,9 @@ func LoadTCPMonitor(callback TCPCallback) error {
 	}
 
 	spec, err := ebpf.LoadCollectionSpec("probes/templates/tcp_monitor/tcp_monitor.o")
-	if err != nil { return fmt.Errorf("加载spec失败: %w", err) }
+	if err != nil {
+		return fmt.Errorf("加载spec失败: %w", err)
+	}
 
 	var objs struct {
 		TraceConnect *ebpf.Program `ebpf:"trace_connect"`
@@ -60,21 +58,26 @@ func LoadTCPMonitor(callback TCPCallback) error {
 
 		for range ticker.C {
 			var key [16]byte
-			var vals []ConnStat
+			var rawVal []byte
 			iter := objs.TcpConnStats.Iterate()
-			for iter.Next(&key, &vals) {
-				var total uint64
-				var pid uint32
-				for _, v := range vals {
-					total += v.Count
-					if v.PID > 0 { pid = v.PID }
+			for iter.Next(&key, &rawVal) {
+				if len(rawVal) >= 16 {
+					var pid uint32
+					var count uint64
+					binary.Read(bytes.NewReader(rawVal[0:4]), binary.LittleEndian, &pid)
+					binary.Read(bytes.NewReader(rawVal[8:16]), binary.LittleEndian, &count)
+					if count > 0 {
+						comm := strings.TrimRight(string(key[:]), "\x00")
+						log.Printf("TCP聚合: %s x%d次 (PID=%d)", comm, count, pid)
+						if tcpCB != nil {
+							tcpCB(pid, comm, count)
+						}
+						objs.TcpConnStats.Delete(&key)
+					}
 				}
-				if total > 0 {
-					comm := strings.TrimRight(string(key[:]), "\x00")
-					log.Printf("TCP聚合: %s x%d次", comm, total)
-					if tcpCB != nil { tcpCB(pid, comm, total) }
-					objs.TcpConnStats.Delete(&key)
-				}
+			}
+			if err := iter.Err(); err != nil {
+				log.Printf("⚠️ TCP map遍历错误: %v", err)
 			}
 		}
 	}()

@@ -11,7 +11,7 @@ struct conn_stat {
 };
 
 struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
+    __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 1024);
     __type(key, char[16]);
     __type(value, struct conn_stat);
@@ -33,6 +33,5 @@ int trace_connect(struct trace_event_raw_sys_enter *ctx)
         stat->count++;
     }
 
-    bpf_printk("TCP CONNECT: %s", comm);
     return 0;
 }
