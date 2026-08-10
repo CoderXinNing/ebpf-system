@@ -1,0 +1,34 @@
+[[rules]]
+name = "反弹Shell检测"
+severity = "CRITICAL"
+description = "检测到反弹Shell特征"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "/dev/tcp|bash -i|nc -e|python -c.*socket|perl -e.*socket"
+
+[[rules]]
+name = "SSH暴力破解"
+severity = "HIGH"
+description = "短时间内大量SSH登录失败"
+
+[[rules.conditions]]
+field = "comm"
+op = "eq"
+value = "sshd"
+
+[rules.frequency]
+count = 5
+window_sec = 10
+
+[[rules]]
+name = "可疑定时任务"
+severity = "MEDIUM"
+description = "定时任务包含可疑命令"
+source = "crontab"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "curl.*http|wget.*http|bash.*/tmp|python.*/tmp"

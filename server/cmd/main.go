@@ -59,7 +59,7 @@ func main() {
 	}
 
 	srv := &Server{}
-	alertEngine = alert.NewEngine("server/configs/rules.yaml", func(a alert.Alert) {
+	alertEngine = alert.NewEngine("server/configs/rules.toml", func(a alert.Alert) {
 		log.Printf("🚨 告警: [%s] %s - PID=%d %s", a.Severity, a.RuleName, a.PID, a.Comm)
 		st.SaveAlert(store.AlertRecord{
 			RuleName: a.RuleName, Severity: a.Severity, Description: a.Description,

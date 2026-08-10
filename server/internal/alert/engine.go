@@ -8,7 +8,7 @@ import (
 	"log"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/BurntSushi/toml"
 )
 
 type Rule struct {
@@ -70,7 +70,7 @@ func (e *Engine) loadRules(path string) {
 	var config struct {
 		Rules []Rule `yaml:"rules"`
 	}
-	yaml.Unmarshal(data, &config)
+	toml.Decode(string(data), &config)
 	log.Printf("📋 告警规则加载: %d条", len(config.Rules))
 	e.rules = config.Rules
 }

@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	configPath = flag.String("config", "agent/configs/agent.yaml", "配置文件路径")
+	configPath = flag.String("config", "agent/configs/agent.toml", "配置文件路径")
 	genConfig  = flag.Bool("gen-config", false, "生成默认配置文件")
 )
 
