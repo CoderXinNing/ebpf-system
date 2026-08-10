@@ -17,6 +17,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/udp"
 	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 	"github.com/gin-gonic/gin"
+	"github.com/BurntSushi/toml"
 	"google.golang.org/grpc"
 )
 
@@ -26,8 +27,26 @@ type Server struct {
 }
 
 var alertEngine *alert.Engine
+type ServerConfig struct {
+	Server   struct {
+		HTTPPort  int    `toml:"http_port"`
+		GRPCPort  int    `toml:"grpc_port"`
+		JWTSecret string `toml:"jwt_secret"`
+	} `toml:"server"`
+	Database struct {
+		Path string `toml:"path"`
+	} `toml:"database"`
+}
+
 func main() {
-	st, err := store.NewStore("sentinel.db")
+	// 加载配置
+	cfg := loadConfig("server/configs/server.toml")
+	dbPath := "sentinel.db"
+	if cfg != nil {
+		dbPath = cfg.Database.Path
+	}
+
+	st, err := store.NewStore(dbPath)
 	if err != nil {
 		log.Fatalf("数据库初始化失败: %v", err)
 	}
@@ -247,4 +266,13 @@ func genToken() string {
 func getGroup(g string) string {
     if g == "" { return "未分组" }
     return g
+}
+
+func loadConfig(path string) *ServerConfig {
+	var cfg ServerConfig
+	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+		log.Printf("⚠️ 配置文件读取失败，使用默认配置: %v", err)
+		return nil
+	}
+	return &cfg
 }

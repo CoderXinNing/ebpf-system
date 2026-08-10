@@ -105,6 +105,8 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 		}
 
 		// 匹配成功，产生告警
+		comm = strings.TrimRight(comm, string(rune(0)))
+		filename = strings.TrimRight(filename, string(rune(0)))
 		alert := Alert{
 			ID:          time.Now().Format("20060102150405") + "-" + rule.Name,
 			RuleName:    rule.Name,
@@ -112,8 +114,6 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 			Description: rule.Description,
 			AgentID:     agentID,
 			PID:         pid,
-			Comm:        comm,
-			Filename:    filename,
 			Time:        time.Now(),
 		}
 

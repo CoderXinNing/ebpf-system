@@ -5,28 +5,28 @@ import (
 	"os"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"github.com/BurntSushi/toml"
 )
 
 // AgentConfig Agent完整配置
 type AgentConfig struct {
-	XDP              XDPConfig        `yaml:"xdp"`
-	Agent    AgentSection    `yaml:"agent"`
-	Autoload []ProbeConfig   `yaml:"autoload"`
+	XDP              XDPConfig        `toml:"xdp"`
+	Agent    AgentSection    `toml:"agent"`
+	Autoload []ProbeConfig   `toml:"autoload"`
 }
 
 // AgentSection Agent基础配置
 type AgentSection struct {
-	Name              string        `yaml:"name"`
-	Server            string        `yaml:"server"`
-	RetryDelay        time.Duration `yaml:"retry_delay"`
-	HeartbeatInterval time.Duration `yaml:"heartbeat_interval"`
-	CollectInterval   time.Duration `yaml:"collect_interval"`
+	Name              string        `toml:"name"`
+	Server            string        `toml:"server"`
+	RetryDelay        time.Duration `toml:"retry_delay"`
+	HeartbeatInterval time.Duration `toml:"heartbeat_interval"`
+	CollectInterval   time.Duration `toml:"collect_interval"`
 }
 type ProbeConfig struct {
-	Name    string `yaml:"name"`
-	ID      string `yaml:"id"`
-	Enabled bool   `yaml:"enabled"`
+	Name    string `toml:"name"`
+	ID      string `toml:"id"`
+	Enabled bool   `toml:"enabled"`
 }
 
 // DefaultConfig 返回默认配置
@@ -51,7 +51,7 @@ func Load(path string) (*AgentConfig, error) {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
-	if err := yaml.Unmarshal(data, cfg); err != nil {
+	if _, err := toml.Decode(string(data), cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
@@ -70,7 +70,7 @@ func GenerateDefault(path string) error {
 		{Name: "exec_monitor", ID: "auto-exec-001", Enabled: false},
 	}
 
-	data, err := yaml.Marshal(cfg)
+	data, err := toml.Marshal(cfg)
 	if err != nil {
 		return err
 	}
@@ -80,8 +80,8 @@ func GenerateDefault(path string) error {
 func UpdateGroup(group string) {}
 
 type XDPConfig struct {
-	Enabled    bool   `yaml:"enabled"`
-	Iface      string `yaml:"iface"`
-	ServerIP   string `yaml:"server_ip"`
-	ServerPort int    `yaml:"server_port"`
+	Enabled    bool   `toml:"enabled"`
+	Iface      string `toml:"iface"`
+	ServerIP   string `toml:"server_ip"`
+	ServerPort int    `toml:"server_port"`
 }

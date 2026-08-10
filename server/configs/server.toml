@@ -1,0 +1,12 @@
+# eBPF Sentinel Server 配置
+
+[server]
+http_port = 8080
+grpc_port = 50051
+jwt_secret = "change-me-in-production"
+
+[database]
+path = "sentinel.db"
+
+[log]
+level = "info"

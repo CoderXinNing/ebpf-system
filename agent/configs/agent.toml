@@ -1,0 +1,17 @@
+[agent]
+name = ""
+server = "127.0.0.1:50051"
+retry_delay = "5s"
+heartbeat_interval = "10s"
+collect_interval = "300s"
+
+[[autoload]]
+name = "exec_monitor"
+id = "auto-exec-001"
+enabled = false
+
+[xdp]
+enabled = true
+iface = "ens33"
+server_ip = "172.16.2.141"
+server_port = 9999

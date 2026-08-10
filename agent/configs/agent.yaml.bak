@@ -1,0 +1,18 @@
+agent:
+    name: ""
+    server: 127.0.0.1:50051
+    retry_delay: 5s
+    heartbeat_interval: 10s
+
+autoload:
+    - name: exec_monitor
+      id: auto-exec-001
+      enabled: true
+
+collect_interval: 300s
+
+xdp:
+    enabled: true
+    iface: "ens33"
+    server_ip: "172.16.2.141"
+    server_port: 9999
