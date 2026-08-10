@@ -26,3 +26,4 @@ rules:
         op: "regex"
         value: "curl.*http|wget.*http|bash.*/tmp|python.*/tmp"
     source: "crontab"
+

@@ -123,3 +123,49 @@ func (s *Store) Close() {
 func (s *Store) DB() *sql.DB {
 	return s.db
 }
+
+// AlertRecord 告警记录
+type AlertRecord struct {
+	ID          int64  `json:"id"`
+	RuleName    string `json:"rule_name"`
+	Severity    string `json:"severity"`
+	Description string `json:"description"`
+	AgentID     string `json:"agent_id"`
+	PID         int32  `json:"pid"`
+	Comm        string `json:"comm"`
+	Filename    string `json:"filename"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
+func (s *Store) InitAlertTable() error {
+	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS alerts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		rule_name TEXT, severity TEXT, description TEXT,
+		agent_id TEXT, pid INTEGER, comm TEXT, filename TEXT,
+		created_at INTEGER
+	)`)
+	return err
+}
+
+func (s *Store) SaveAlert(a AlertRecord) error {
+	_, err := s.db.Exec(
+		"INSERT INTO alerts (rule_name, severity, description, agent_id, pid, comm, filename, created_at) VALUES (?,?,?,?,?,?,?,?)",
+		a.RuleName, a.Severity, a.Description, a.AgentID, a.PID, a.Comm, a.Filename, time.Now().Unix(),
+	)
+	return err
+}
+
+func (s *Store) GetAlerts(limit int) ([]AlertRecord, error) {
+	if limit <= 0 { limit = 100 }
+	rows, err := s.db.Query("SELECT id, rule_name, severity, description, agent_id, pid, comm, filename, created_at FROM alerts ORDER BY id DESC LIMIT ?", limit)
+	if err != nil { return nil, err }
+	defer rows.Close()
+
+	var alerts []AlertRecord
+	for rows.Next() {
+		var a AlertRecord
+		rows.Scan(&a.ID, &a.RuleName, &a.Severity, &a.Description, &a.AgentID, &a.PID, &a.Comm, &a.Filename, &a.CreatedAt)
+		alerts = append(alerts, a)
+	}
+	return alerts, nil
+}

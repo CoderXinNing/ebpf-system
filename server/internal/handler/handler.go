@@ -103,6 +103,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"groups": groups})
 		})
 		api.GET("/assets/category", h.AssetsByCategory)
+		api.GET("/alerts", func(c *gin.Context) {
+			alerts, _ := h.Store.GetAlerts(100)
+			c.JSON(200, gin.H{"alerts": alerts})
+		})
 		api.GET("/users", h.roleMiddleware("admin"), h.ListUsers)
 	}
 }

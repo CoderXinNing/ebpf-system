@@ -32,6 +32,7 @@ func main() {
 		log.Fatalf("数据库初始化失败: %v", err)
 	}
 	defer st.Close()
+	st.InitAlertTable()
 
 	am, err := auth.NewAuthManager(st.DB())
 	if err != nil {
@@ -41,6 +42,10 @@ func main() {
 	srv := &Server{}
 	alertEngine = alert.NewEngine("server/configs/rules.yaml", func(a alert.Alert) {
 		log.Printf("🚨 告警: [%s] %s - PID=%d %s", a.Severity, a.RuleName, a.PID, a.Comm)
+		st.SaveAlert(store.AlertRecord{
+			RuleName: a.RuleName, Severity: a.Severity, Description: a.Description,
+			AgentID: a.AgentID, PID: a.PID, Comm: a.Comm, Filename: a.Filename,
+		})
 	})
 	srv.handler = handler.NewHandler(st, am, srv.sendCommand)
 
