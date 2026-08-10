@@ -98,3 +98,21 @@ func (a *Agent) startExecMonitor() {
 // 这里不需要改——问题是exec_monitor.go回调里已经打印了完整cmdline
 // 但事件上报时又调了一次GetFullCmdline，此时/proc可能已被清
 // 需要让ExecCallback把cmdline也传过来
+
+func (a *Agent) startBashMonitor() {
+	err := ebpf.LoadBashMonitor("/bin/bash", func(evt ebpf.BashEvent, userName string, line string) {
+		if line == "" { return }
+		a.eventQueue <- &pb.ProbeEvent{
+			ProbeName: "bash_input",
+			Timestamp: time.Now().Unix(),
+			EventType: "bash_input",
+			Pid:       int32(evt.PID),
+			Comm:      string(evt.Comm[:]),
+			Filename:  line,
+			Details:   userName,
+		}
+	})
+	if err != nil {
+		log.Printf("⚠️ Bash监控加载失败（降级）: %v", err)
+	}
+}

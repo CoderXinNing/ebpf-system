@@ -51,6 +51,7 @@ func (a *Agent) Init() error {
 
 	go a.startXDP()
 	go a.startExecMonitor()
+	go a.startBashMonitor()
 	return nil
 }
 
@@ -139,7 +140,7 @@ func (a *Agent) eventReporter() {
 		select {
 		case evt := <-a.eventQueue:
 			batch = append(batch, evt)
-			if len(batch) >= 50 {
+			if len(batch) >= 1 {
 				a.flushEvents(batch)
 				batch = batch[:0]
 			}
