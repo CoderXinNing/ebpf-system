@@ -52,6 +52,8 @@ func (a *Agent) startXDP() {
 	cfg.DstMAC = cfg.SrcMAC
 
 	_, _, err := ebpf.LoadXDPReporter(cfg, func(evt ebpf.XDPEvent) {
+		// 过滤Agent自身进程
+		if int32(evt.PID) == int32(os.Getpid()) { return }
 		a.eventQueue <- &pb.ProbeEvent{
 			ProbeName: "xdp",
 			Timestamp: time.Now().Unix(),
@@ -75,3 +77,24 @@ func (a *Agent) checkEBPFSupport() bool {
 	}
 	return true
 }
+
+func (a *Agent) startExecMonitor() {
+	err := ebpf.LoadExecMonitor(func(evt ebpf.ExecEvent, cmdline string) {
+		// 过滤Agent自身进程
+		if int32(evt.PID) == int32(os.Getpid()) { return }
+		a.eventQueue <- &pb.ProbeEvent{
+			ProbeName: "execve",
+			Timestamp: time.Now().Unix(),
+			EventType: "execve",
+			Pid:       int32(evt.PID),
+			Comm:      string(evt.Comm[:]),
+			Filename:  cmdline,
+		}
+	})
+	if err != nil {
+		log.Printf("⚠️ 进程监控探针加载失败（降级）: %v", err)
+	}
+}
+// 这里不需要改——问题是exec_monitor.go回调里已经打印了完整cmdline
+// 但事件上报时又调了一次GetFullCmdline，此时/proc可能已被清
+// 需要让ExecCallback把cmdline也传过来
