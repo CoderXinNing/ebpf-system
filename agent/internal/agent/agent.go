@@ -52,6 +52,7 @@ func (a *Agent) Init() error {
 	go a.startXDP()
 	go a.startExecMonitor()
 	go a.startBashMonitor()
+	go a.startTCPMonitor()
 	return nil
 }
 

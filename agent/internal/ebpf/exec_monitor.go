@@ -27,7 +27,7 @@ type ExecCallback func(ExecEvent, string)
 
 var uidCache = make(map[uint32]string)
 
-func resolveUser(uid uint32) string {
+func ResolveUser(uid uint32) string {
 	if name, ok := uidCache[uid]; ok { return name }
 	if u, err := user.LookupId(strconv.Itoa(int(uid))); err == nil {
 		uidCache[uid] = u.Username
@@ -95,7 +95,7 @@ func LoadExecMonitor(callback ExecCallback) error {
 				fullCmd = strings.TrimRight(string(evt.Filename[:]), "\x00")
 			}
 			comm := strings.TrimRight(string(evt.Comm[:]), "\x00")
-			userName := resolveUser(evt.UID)
+			userName := ResolveUser(evt.UID)
 
 			log.Printf("📡 exec: PID=%d UID=%s %s → %s", evt.PID, userName, comm, fullCmd)
 			callback(evt, fullCmd)

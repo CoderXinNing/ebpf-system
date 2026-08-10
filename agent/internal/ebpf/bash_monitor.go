@@ -77,7 +77,7 @@ func LoadBashMonitor(bashPath string, callback BashCallback) error {
 			copy(evt.Line[:], raw[32:288])
 
 			line := strings.TrimRight(string(evt.Line[:]), "\x00")
-		userName := resolveUser(evt.UID)
+		userName := ResolveUser(evt.UID)
 			comm := strings.TrimRight(string(evt.Comm[:]), "\x00")
 			if line != "" {
 				log.Printf("📡 bash: PID=%d UID=%d %s → %s", evt.PID, evt.UID, comm, line)

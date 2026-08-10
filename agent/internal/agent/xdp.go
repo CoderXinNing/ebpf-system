@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"time"
+	"fmt"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/ebpf"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
@@ -114,5 +115,21 @@ func (a *Agent) startBashMonitor() {
 	})
 	if err != nil {
 		log.Printf("⚠️ Bash监控加载失败（降级）: %v", err)
+	}
+}
+
+func (a *Agent) startTCPMonitor() {
+	err := ebpf.LoadTCPMonitor(func(pid uint32, comm string, count uint64) {
+		a.eventQueue <- &pb.ProbeEvent{
+			ProbeName: "tcp_connect",
+			Timestamp: time.Now().Unix(),
+			EventType: "tcp_connect",
+			Pid:       int32(pid),
+			Comm:      comm,
+			Filename:  fmt.Sprintf("外联x%d次", count),
+		}
+	})
+	if err != nil {
+		log.Printf("⚠️ TCP监控加载失败: %v", err)
 	}
 }
