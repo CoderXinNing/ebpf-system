@@ -221,6 +221,7 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 			PID:       evt.Pid,
 			Comm:      evt.Comm,
 			Filename:  evt.Filename,
+			Details:   evt.Details,
 		})
 		if len(h.Events) > 10000 {
 			h.Events = h.Events[len(h.Events)-1000:]

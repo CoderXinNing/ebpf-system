@@ -49,6 +49,7 @@ type ProbeEvent struct {
 	PID       int32  `json:"pid"`
 	Comm      string `json:"comm"`
 	Filename  string `json:"filename"`
+	Details   string `json:"details,omitempty"`
 }
 
 func NewHandler(st *store.Store, am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {

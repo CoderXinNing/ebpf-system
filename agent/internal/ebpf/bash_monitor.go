@@ -81,6 +81,7 @@ func LoadBashMonitor(bashPath string, callback BashCallback) error {
 			comm := strings.TrimRight(string(evt.Comm[:]), "\x00")
 			if line != "" {
 				log.Printf("📡 bash: PID=%d UID=%d %s → %s", evt.PID, evt.UID, comm, line)
+		log.Printf("bash回调: uid=%d user=%s line=%s", evt.UID, userName, line)
 				callback(evt, userName, line)
 			}
 		}
