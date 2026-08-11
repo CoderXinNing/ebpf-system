@@ -36,24 +36,24 @@ int xdp_reporter(struct xdp_md *ctx) {
     
     // 读 write_cnt
     __u32 *write_cnt = bpf_map_lookup_elem(&alert_write_cnt, &key);
-    if (!write_cnt || *write_cnt == 0) return XDP_PASS;
+    if (!write_cnt || *write_cnt == 0) return XDP_TX;
     
     // 读 read_cnt
     __u32 *read_cnt = bpf_map_lookup_elem(&alert_read_cnt, &key);
-    if (!read_cnt) return XDP_PASS;
+    if (!read_cnt) return XDP_TX;
     
-    if (*read_cnt >= *write_cnt) return XDP_PASS;
+    if (*read_cnt >= *write_cnt) return XDP_TX;
     
     // 读配置
     struct xdp_config *cfg = bpf_map_lookup_elem(&xdp_config, &key);
-    if (!cfg) return XDP_PASS;
+    if (!cfg) return XDP_TX;
     
     // 读告警
     __u32 idx = *read_cnt % ALERT_BUF_SIZE;
     struct alert_event *evt = bpf_map_lookup_elem(&alert_buffer, &idx);
     if (!evt || evt->pid == 0) {
         __sync_fetch_and_add(read_cnt, 1);
-        return XDP_PASS;
+        return XDP_TX;
     }
     
     // 用原始包做模板，修改成告警包
@@ -61,7 +61,7 @@ int xdp_reporter(struct xdp_md *ctx) {
     void *data_end = (void *)(long)ctx->data_end;
     
     struct ethhdr *eth = data;
-    if ((void *)(eth + 1) > data_end) return XDP_PASS;
+    if ((void *)(eth + 1) > data_end) return XDP_TX;
     
     // 交换 MAC（回复给发送方）
     __builtin_memcpy(eth->h_source, cfg->src_mac, 6);
@@ -69,7 +69,7 @@ int xdp_reporter(struct xdp_md *ctx) {
     eth->h_proto = bpf_htons(0x0800);  // IP
     
     struct iphdr *ip = (void *)(eth + 1);
-    if ((void *)(ip + 1) > data_end) return XDP_PASS;
+    if ((void *)(ip + 1) > data_end) return XDP_TX;
     
     ip->version = 4;
     ip->ihl = 5;
@@ -84,7 +84,7 @@ int xdp_reporter(struct xdp_md *ctx) {
     ip->check = 0;
     
     struct udphdr *udp = (void *)(ip + 1);
-    if ((void *)(udp + 1) > data_end) return XDP_PASS;
+    if ((void *)(udp + 1) > data_end) return XDP_TX;
     
     udp->source = bpf_htons(cfg->src_port);
     udp->dest = bpf_htons(cfg->dst_port);
@@ -93,12 +93,12 @@ int xdp_reporter(struct xdp_md *ctx) {
     
     // 写魔数
     __u16 *magic = (void *)(udp + 1);
-    if ((void *)(magic + 1) > data_end) return XDP_PASS;
+    if ((void *)(magic + 1) > data_end) return XDP_TX;
     *magic = bpf_htons(ALERT_MAGIC);
     
     // 写告警数据
     char *payload = (void *)(magic + 1);
-    if ((void *)(payload + sizeof(*evt)) > data_end) return XDP_PASS;
+    if ((void *)(payload + sizeof(*evt)) > data_end) return XDP_TX;
     __builtin_memcpy(payload, evt, sizeof(*evt));
     
     __sync_fetch_and_add(read_cnt, 1);
