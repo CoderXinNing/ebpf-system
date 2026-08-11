@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/cilium/ebpf"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
-	"github.com/cilium/ebpf"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -48,17 +51,58 @@ func (a *Agent) Init() error {
 	a.kernelVer = caps.KernelVersion
 	fmt.Print(caps.Summary())
 
+	// 降级决策
+	level := a.decideLevel()
+	log.Printf("🔍 环境级别: %s", level)
 
+	switch level {
+	case "full":
+		go a.startXDP()
+		fallthrough
+	case "ebpf":
+		go a.startExecMonitor()
+		go a.startBashMonitor()
+		go a.startTCPMonitor()
+		fallthrough
+	case "basic":
+		log.Println("✅ Agent运行在基础模式（纯CMDB采集）")
+	case "none":
+		return fmt.Errorf("环境不支持任何功能")
+	}
 
-	go a.startXDP()
-	go a.startExecMonitor()
-	go a.startBashMonitor()
-	go a.startTCPMonitor()
 	return nil
+}
+
+func (a *Agent) decideLevel() string {
+	caps := a.capabilities
+	cfg := a.cfg
+
+	if caps.BTFEnabled && caps.Framework.GoEBPFAvailable {
+		if cfg.XDP.Enabled {
+			return "full"
+		}
+		return "ebpf"
+	}
+
+	if caps.Framework.LibBPFAvailable {
+		return "ebpf"
+	}
+
+	return "basic"
 }
 
 func (a *Agent) Run() {
 	log.Printf("🛡️  eBPF Sentinel Agent  ID: %s", a.id)
+
+	// 信号处理
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		sig := <-sigCh
+		log.Printf("🛑 收到信号 %v，正常退出...", sig)
+		a.Shutdown()
+		os.Exit(0)
+	}()
 
 	a.connectAndRegister()
 	go a.eventReporter()
@@ -75,8 +119,8 @@ func (a *Agent) Run() {
 	}()
 
 	a.runHeartbeatLoop()
-
 }
+
 func (a *Agent) connectAndRegister() {
 	for {
 		conn, err := grpc.Dial(a.cfg.Agent.Server,
@@ -89,10 +133,7 @@ func (a *Agent) connectAndRegister() {
 			continue
 		}
 
-		if xdpHandle != nil {
-		xdpHandle.Close()
-	}
-	if a.conn != nil {
+		if a.conn != nil {
 			a.conn.Close()
 		}
 		a.conn = conn
@@ -173,12 +214,14 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 }
 
 func (a *Agent) Shutdown() {
+	log.Println("🧹 清理资源...")
 	if xdpHandle != nil {
 		xdpHandle.Close()
 	}
 	if a.conn != nil {
 		a.conn.Close()
 	}
+	// FD 由内核在进程退出时自动清理
 }
 
 func cstring(b []byte) string {
@@ -190,11 +233,9 @@ func cstring(b []byte) string {
 	return string(b)
 }
 
-
 func updateHeartbeatMap() {
 	hbMap, err := ebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/agent_heartbeat", nil)
 	if err != nil {
-		log.Printf("HB ERR: %v", err)
 		return
 	}
 	defer hbMap.Close()
