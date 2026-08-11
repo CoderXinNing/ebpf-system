@@ -55,24 +55,13 @@ func (a *Agent) startXDP() {
 	cfg.DstMAC = cfg.SrcMAC
 
 	var err error
-	xdpHandle, err = ebpf.LoadXDPReporter(cfg, func(evt ebpf.XDPEvent) {
-		if int32(evt.PID) == int32(os.Getpid()) {
-			return
-		}
-		a.eventQueue <- &pb.ProbeEvent{
-			ProbeName: "xdp",
-			Timestamp: time.Now().Unix(),
-			EventType: "xdp_packet",
-			Pid:       int32(evt.PID),
-			Comm:      string(evt.Comm[:]),
-			Filename:  string(evt.Filename[:]),
-		}
-	})
+	handle, err := ebpf.LoadXDPReporter(cfg)
 	if err != nil {
 		log.Printf("⚠️ XDP加载失败（降级为纯CMDB）: %v", err)
+		return
 	}
+	xdpHandle = handle
 }
-
 func (a *Agent) checkEBPFSupport() bool {
 	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); err != nil {
 		return false
