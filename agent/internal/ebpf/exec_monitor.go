@@ -42,8 +42,16 @@ func GetFullCmdline(pid uint32) string {
 	if err != nil {
 		return ""
 	}
-	// cmdline用\0分隔，替换为空格
 	return strings.ReplaceAll(strings.TrimRight(string(data), "\x00"), "\x00", " ")
+}
+
+// 默认硬白名单：内核态直接跳过
+var defaultExecWhitelist = []string{
+	"systemd-resolved",
+	"NetworkManager",
+	"snapd",
+	"polkitd",
+	"bpftool",
 }
 
 func LoadExecMonitor(callback ExecCallback) error {
@@ -55,13 +63,25 @@ func LoadExecMonitor(callback ExecCallback) error {
 	if err != nil { return fmt.Errorf("加载spec失败: %w", err) }
 
 	var objs struct {
-		TraceExecve *ebpf.Program `ebpf:"trace_execve"`
-		Events      *ebpf.Map     `ebpf:"events"`
+		TraceExecve    *ebpf.Program `ebpf:"trace_execve"`
+		Events         *ebpf.Map     `ebpf:"events"`
+		ExecWhitelist  *ebpf.Map     `ebpf:"exec_whitelist"`
 	}
 
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {
 		return fmt.Errorf("加载失败: %w", err)
 	}
+
+	// 写入内核态白名单
+	for _, name := range defaultExecWhitelist {
+		var key [16]byte
+		copy(key[:], name)
+		var val uint8 = 1
+		if err := objs.ExecWhitelist.Put(&key, &val); err != nil {
+			log.Printf("⚠️ 白名单写入失败 [%s]: %v", name, err)
+		}
+	}
+	log.Printf("📋 exec白名单: %v", defaultExecWhitelist)
 
 	os.MkdirAll("/sys/fs/bpf/ebpf-sentinel", 0755)
 	objs.TraceExecve.Pin("/sys/fs/bpf/ebpf-sentinel/exec_monitor")
@@ -83,12 +103,12 @@ func LoadExecMonitor(callback ExecCallback) error {
 
 			var evt ExecEvent
 			raw := record.RawSample
-			evt.Timestamp = binary.LittleEndian.Uint64(raw[0:8])
-			evt.PID = binary.LittleEndian.Uint32(raw[8:12])
-			evt.UID = binary.LittleEndian.Uint32(raw[12:16])
-			copy(evt.Comm[:], raw[16:32])
-			copy(evt.Filename[:], raw[32:288])
-
+			// 新结构体只有92bytes，按实际大小解析
+		evt.PID = binary.LittleEndian.Uint32(raw[0:4])
+			evt.UID = binary.LittleEndian.Uint32(raw[8:12])
+			copy(evt.Comm[:], raw[12:28])
+			copy(evt.Filename[:], raw[28:92])
+		
 			// 从/proc补全命令行
 			fullCmd := GetFullCmdline(evt.PID)
 			if fullCmd == "" {
