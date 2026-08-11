@@ -67,7 +67,8 @@ func LoadExecMonitor(callback ExecCallback) error {
 	var objs struct {
 		TraceExecve   *ebpf.Program `ebpf:"trace_execve"`
 		Events        *ebpf.Map     `ebpf:"events"`
-		ExecWhitelist *ebpf.Map     `ebpf:"exec_whitelist"`
+		ExecWhitelist  *ebpf.Map     `ebpf:"exec_whitelist"`
+		AgentHeartbeat *ebpf.Map     `ebpf:"agent_heartbeat"`
 	}
 
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {
@@ -93,6 +94,12 @@ func LoadExecMonitor(callback ExecCallback) error {
 	whPinPath := "/sys/fs/bpf/ebpf-sentinel/exec_whitelist"
 	if err := objs.ExecWhitelist.Pin(whPinPath); err != nil {
 		log.Printf("⚠️ Pin exec白名单失败: %v", err)
+	}
+
+	// Pin 心跳 map
+	hbPinPath := "/sys/fs/bpf/ebpf-sentinel/agent_heartbeat"
+	if err := objs.AgentHeartbeat.Pin(hbPinPath); err != nil {
+		log.Printf("⚠️ Pin 心跳map失败: %v", err)
 	}
 
 	// 写入白名单

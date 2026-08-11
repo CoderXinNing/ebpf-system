@@ -9,6 +9,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
+	"github.com/cilium/ebpf"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -187,4 +188,17 @@ func cstring(b []byte) string {
 		}
 	}
 	return string(b)
+}
+
+
+func updateHeartbeatMap() {
+	hbMap, err := ebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/agent_heartbeat", nil)
+	if err != nil {
+		log.Printf("HB ERR: %v", err)
+		return
+	}
+	defer hbMap.Close()
+	var key uint32 = 0
+	var val uint64 = uint64(time.Now().UnixNano())
+	hbMap.Put(&key, &val)
 }

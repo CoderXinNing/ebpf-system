@@ -39,6 +39,7 @@ func (a *Agent) runHeartbeatLoop() {
 						Timestamp:    time.Now().Unix(),
 						ActiveProbes: 0,
 					})
+					log.Printf("HB UPDATE"); updateHeartbeatMap()
 				}
 			}
 		}()
