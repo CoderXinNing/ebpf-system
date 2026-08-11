@@ -169,3 +169,55 @@ func (s *Store) GetAlerts(limit int) ([]AlertRecord, error) {
 	}
 	return alerts, nil
 }
+
+// EventRecord 事件记录
+type EventRecord struct {
+	ID        int64  `json:"id"`
+	AgentID   string `json:"agent_id"`
+	ProbeName string `json:"probe_name"`
+	Timestamp int64  `json:"timestamp"`
+	EventType string `json:"event_type"`
+	PID       int32  `json:"pid"`
+	Comm      string `json:"comm"`
+	Filename  string `json:"filename"`
+	Details   string `json:"details,omitempty"`
+}
+
+func (s *Store) InitEventTable() error {
+	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		agent_id TEXT, probe_name TEXT, timestamp INTEGER,
+		event_type TEXT, pid INTEGER, comm TEXT,
+		filename TEXT, details TEXT
+	)`)
+	return err
+}
+
+func (s *Store) SaveEvent(e EventRecord) error {
+	_, err := s.db.Exec(
+		"INSERT INTO events (agent_id, probe_name, timestamp, event_type, pid, comm, filename, details) VALUES (?,?,?,?,?,?,?,?)",
+		e.AgentID, e.ProbeName, e.Timestamp, e.EventType, e.PID, e.Comm, e.Filename, e.Details,
+	)
+	return err
+}
+
+func (s *Store) GetEvents(limit int, agentID string) ([]EventRecord, error) {
+	if limit <= 0 { limit = 100 }
+	var rows *sql.Rows
+	var err error
+	if agentID != "" {
+		rows, err = s.db.Query("SELECT id, agent_id, probe_name, timestamp, event_type, pid, comm, filename, details FROM events WHERE agent_id = ? ORDER BY id DESC LIMIT ?", agentID, limit)
+	} else {
+		rows, err = s.db.Query("SELECT id, agent_id, probe_name, timestamp, event_type, pid, comm, filename, details FROM events ORDER BY id DESC LIMIT ?", limit)
+	}
+	if err != nil { return nil, err }
+	defer rows.Close()
+
+	var events []EventRecord
+	for rows.Next() {
+		var e EventRecord
+		rows.Scan(&e.ID, &e.AgentID, &e.ProbeName, &e.Timestamp, &e.EventType, &e.PID, &e.Comm, &e.Filename, &e.Details)
+		events = append(events, e)
+	}
+	return events, nil
+}

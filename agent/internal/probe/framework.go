@@ -171,7 +171,7 @@ func (fw *FrameworkSupport) detectClang() {
 			if len(lines) > 0 {
 				fields := strings.Fields(lines[0])
 				if len(fields) >= 3 {
-					fw.ClangVersion = fields[2]
+					for i, f := range fields { if f == "version" && i+1 < len(fields) { fw.ClangVersion = strings.Split(fields[i+1], "-")[0]; break } }
 				}
 			}
 		}
@@ -201,7 +201,7 @@ func (fw *FrameworkSupport) detectLLVM() {
 			if len(lines) > 0 {
 				fields := strings.Fields(lines[0])
 				if len(fields) >= 3 {
-					fw.LLVMVersion = fields[2]
+					for i, f := range fields { if f == "version" && i+1 < len(fields) { fw.LLVMVersion = strings.Split(fields[i+1], "-")[0]; break } }
 				}
 			}
 		}

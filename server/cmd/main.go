@@ -52,6 +52,7 @@ func main() {
 	}
 	defer st.Close()
 	st.InitAlertTable()
+	st.InitEventTable()
 
 	am, err := auth.NewAuthManager(st.DB())
 	if err != nil {
@@ -204,7 +205,7 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 
 func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.HeartbeatResponse, error) {
 	for _, evt := range req.Events {
-		alertEngine.CheckEvent(req.AgentId, evt.Pid, evt.Comm, evt.Filename, evt.Filename, evt.EventType)
+		alertEngine.CheckEvent(req.AgentId, evt.Pid, evt.Comm, evt.Details, evt.Filename, evt.EventType)
 	}
 	h := s.handler
 	h.EventMu.Lock()
@@ -223,6 +224,16 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 			Filename:  evt.Filename,
 			Details:   evt.Details,
 		})
+			s.handler.Store.SaveEvent(store.EventRecord{
+				AgentID:   req.AgentId,
+				ProbeName: evt.ProbeName,
+				Timestamp: evt.Timestamp,
+				EventType: evt.EventType,
+				PID:       evt.Pid,
+				Comm:      evt.Comm,
+				Filename:  evt.Filename,
+				Details:   evt.Details,
+			})
 		if len(h.Events) > 10000 {
 			h.Events = h.Events[len(h.Events)-1000:]
 		}

@@ -148,15 +148,27 @@ func (h *Handler) ListAgents(c *gin.Context) {
 }
 
 func (h *Handler) ListEvents(c *gin.Context) {
+	agentID := c.Query("agent_id")
+	limit := 100
+	if l := c.Query("limit"); l != "" {
+		n, err := strconv.Atoi(l)
+		if err == nil && n > 0 && n <= 1000 {
+			limit = n
+		}
+	}
+	dbEvents, dbErr := h.Store.GetEvents(limit, agentID)
+	if dbErr == nil && len(dbEvents) > 0 {
+		c.JSON(200, gin.H{"total": len(dbEvents), "events": dbEvents, "source": "sqlite"})
+		return
+	}
 	h.EventMu.RLock()
 	defer h.EventMu.RUnlock()
-	events := h.Events
-	if len(events) > 100 {
-		events = events[len(events)-100:]
+	evts := h.Events
+	if len(evts) > limit {
+		evts = evts[len(evts)-limit:]
 	}
-	c.JSON(200, gin.H{"total": len(h.Events), "events": events})
+	c.JSON(200, gin.H{"total": len(h.Events), "events": evts, "source": "memory"})
 }
-
 func (h *Handler) Command(c *gin.Context) {
 	var req struct {
 		AgentID     string `json:"agent_id"`
