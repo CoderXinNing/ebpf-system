@@ -85,7 +85,8 @@ func LoadXDPReporter(cfg XDPConfig, callback EventCallback) (*XDPHandle, error) 
 
 	// 只用 cilium/ebpf attach，不用 bpftool
 	l, err := link.AttachXDP(link.XDPOptions{
-		Program:   objs.XdpReporter,
+		Flags: 2, // XDP_FLAGS_SKB_MODE (generic)
+			Program:   objs.XdpReporter,
 		Interface: iface.Index,
 	})
 	if err != nil {

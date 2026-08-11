@@ -163,7 +163,12 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	a.client.ReportEvents(ctx, &pb.EventReport{AgentId: a.id, AgentToken: a.token, Events: events})
+	resp, err := a.client.ReportEvents(ctx, &pb.EventReport{AgentId: a.id, AgentToken: a.token, Events: events})
+	if err != nil {
+		log.Printf("⚠️ 事件上报失败: %v", err)
+	} else if !resp.Success {
+		log.Printf("⚠️ 事件上报被拒绝")
+	}
 }
 
 func (a *Agent) Shutdown() {
