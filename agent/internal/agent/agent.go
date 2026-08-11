@@ -88,7 +88,10 @@ func (a *Agent) connectAndRegister() {
 			continue
 		}
 
-		if a.conn != nil {
+		if xdpHandle != nil {
+		xdpHandle.Close()
+	}
+	if a.conn != nil {
 			a.conn.Close()
 		}
 		a.conn = conn
@@ -164,6 +167,9 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 }
 
 func (a *Agent) Shutdown() {
+	if xdpHandle != nil {
+		xdpHandle.Close()
+	}
 	if a.conn != nil {
 		a.conn.Close()
 	}

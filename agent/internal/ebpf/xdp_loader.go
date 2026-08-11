@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -34,10 +33,30 @@ type XDPEvent struct {
 
 type EventCallback func(XDPEvent)
 
-func LoadXDPReporter(cfg XDPConfig, callback EventCallback) (*ebpf.Map, link.Link, error) {
+type XDPHandle struct {
+	Objs   *ebpf.Collection
+	Link   link.Link
+	reader *ringbuf.Reader
+}
+
+func (h *XDPHandle) Close() {
+	if h.reader != nil {
+		h.reader.Close()
+	}
+	if h.Link != nil {
+		h.Link.Close()
+	}
+	if h.Objs != nil {
+		h.Objs.Close()
+	}
+	os.Remove("/sys/fs/bpf/ebpf-sentinel/xdp_reporter")
+	log.Println("🧹 XDP已卸载")
+}
+
+func LoadXDPReporter(cfg XDPConfig, callback EventCallback) (*XDPHandle, error) {
 	spec, err := ebpf.LoadCollectionSpec("probes/templates/xdp_reporter/xdp_reporter.o")
 	if err != nil {
-		return nil, nil, fmt.Errorf("加载spec失败: %w", err)
+		return nil, fmt.Errorf("加载spec失败: %w", err)
 	}
 
 	var objs struct {
@@ -46,14 +65,13 @@ func LoadXDPReporter(cfg XDPConfig, callback EventCallback) (*ebpf.Map, link.Lin
 	}
 
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {
-		return nil, nil, fmt.Errorf("加载程序失败: %w", err)
+		return nil, fmt.Errorf("加载程序失败: %w", err)
 	}
 
-	// Attach到网卡
 	iface, err := net.InterfaceByName(cfg.Iface)
 	if err != nil {
 		objs.XdpReporter.Close()
-		return nil, nil, fmt.Errorf("网卡不存在: %w", err)
+		return nil, fmt.Errorf("网卡不存在: %w", err)
 	}
 
 	// Pin程序到bpffs
@@ -64,32 +82,29 @@ func LoadXDPReporter(cfg XDPConfig, callback EventCallback) (*ebpf.Map, link.Lin
 	} else {
 		log.Printf("📌 XDP已pin到 %s", pinPath)
 	}
+
+	// 只用 cilium/ebpf attach，不用 bpftool
 	l, err := link.AttachXDP(link.XDPOptions{
 		Program:   objs.XdpReporter,
 		Interface: iface.Index,
 	})
 	if err != nil {
 		objs.XdpReporter.Close()
-		return nil, nil, fmt.Errorf("attach失败: %w", err)
+		return nil, fmt.Errorf("XDP attach失败: %w", err)
 	}
 
-	// 自动attach
-	bpftoolCmd := exec.Command("bpftool", "net", "attach", "xdp", "pinned", pinPath, "dev", cfg.Iface)
-	if err := bpftoolCmd.Run(); err != nil {
-		log.Printf("⚠️ 自动attach失败（已pin到bpffs，可手动attach）: %v", err)
-	} else {
-		log.Printf("✅ XDP已attach到 %s", cfg.Iface)
-	}
 	log.Printf("✅ XDP已加载: %s (ring buffer模式)", cfg.Iface)
 
 	// 启动ring buffer读取
+	rd, err := ringbuf.NewReader(objs.Events)
+	if err != nil {
+		l.Close()
+		objs.XdpReporter.Close()
+		return nil, fmt.Errorf("ring buffer创建失败: %w", err)
+	}
+	log.Printf("XDP ringbuf reader创建成功")
+
 	go func() {
-		rd, err := ringbuf.NewReader(objs.Events)
-		log.Printf("XDP ringbuf reader创建成功")
-		if err != nil {
-			log.Printf("⚠️ XDP ring buffer读取失败: %v", err)
-			return
-		}
 		defer rd.Close()
 
 		for {
@@ -112,5 +127,12 @@ func LoadXDPReporter(cfg XDPConfig, callback EventCallback) (*ebpf.Map, link.Lin
 		}
 	}()
 
-	return objs.Events, l, nil
+	return &XDPHandle{
+		Objs: &ebpf.Collection{
+			Programs: map[string]*ebpf.Program{"xdp_reporter": objs.XdpReporter},
+			Maps:     map[string]*ebpf.Map{"events": objs.Events},
+		},
+		Link:   l,
+		reader: rd,
+	}, nil
 }

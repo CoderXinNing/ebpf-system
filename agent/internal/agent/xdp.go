@@ -1,16 +1,17 @@
 package agent
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"time"
-	"fmt"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/ebpf"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 )
+
+var xdpHandle *ebpf.XDPHandle
 
 func (a *Agent) startXDP() {
 	if !a.cfg.XDP.Enabled {
@@ -23,10 +24,11 @@ func (a *Agent) startXDP() {
 		return
 	}
 
-	// 清理旧XDP
-	pinPath := "/sys/fs/bpf/ebpf-sentinel/xdp_reporter"
-	os.Remove(pinPath)
-	exec.Command("bpftool", "net", "detach", "xdp", "dev", a.cfg.XDP.Iface).Run()
+	// 清理旧XDP（如果存在）
+	if xdpHandle != nil {
+		xdpHandle.Close()
+		xdpHandle = nil
+	}
 
 	if _, err := net.InterfaceByName(a.cfg.XDP.Iface); err != nil {
 		log.Printf("⚠️ 网卡 %s 不存在，XDP降级", a.cfg.XDP.Iface)
@@ -52,9 +54,11 @@ func (a *Agent) startXDP() {
 	}
 	cfg.DstMAC = cfg.SrcMAC
 
-	_, _, err := ebpf.LoadXDPReporter(cfg, func(evt ebpf.XDPEvent) {
-		// 过滤Agent自身进程
-		if int32(evt.PID) == int32(os.Getpid()) { return }
+	var err error
+	xdpHandle, err = ebpf.LoadXDPReporter(cfg, func(evt ebpf.XDPEvent) {
+		if int32(evt.PID) == int32(os.Getpid()) {
+			return
+		}
 		a.eventQueue <- &pb.ProbeEvent{
 			ProbeName: "xdp",
 			Timestamp: time.Now().Unix(),
@@ -81,8 +85,9 @@ func (a *Agent) checkEBPFSupport() bool {
 
 func (a *Agent) startExecMonitor() {
 	err := ebpf.LoadExecMonitor(func(evt ebpf.ExecEvent, cmdline string) {
-		// 过滤Agent自身进程
-		if int32(evt.PID) == int32(os.Getpid()) { return }
+		if int32(evt.PID) == int32(os.Getpid()) {
+			return
+		}
 		a.eventQueue <- &pb.ProbeEvent{
 			ProbeName: "execve",
 			Timestamp: time.Now().Unix(),
@@ -96,13 +101,12 @@ func (a *Agent) startExecMonitor() {
 		log.Printf("⚠️ 进程监控探针加载失败（降级）: %v", err)
 	}
 }
-// 这里不需要改——问题是exec_monitor.go回调里已经打印了完整cmdline
-// 但事件上报时又调了一次GetFullCmdline，此时/proc可能已被清
-// 需要让ExecCallback把cmdline也传过来
 
 func (a *Agent) startBashMonitor() {
 	err := ebpf.LoadBashMonitor("/bin/bash", func(evt ebpf.BashEvent, userName string, line string) {
-		if line == "" { return }
+		if line == "" {
+			return
+		}
 		a.eventQueue <- &pb.ProbeEvent{
 			ProbeName: "bash_input",
 			Timestamp: time.Now().Unix(),
