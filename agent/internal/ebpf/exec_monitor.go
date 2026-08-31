@@ -135,7 +135,7 @@ func LoadExecMonitor(callback ExecCallback) error {
 			evt.PID = binary.LittleEndian.Uint32(raw[0:4])
 			evt.UID = binary.LittleEndian.Uint32(raw[8:12])
 			copy(evt.Comm[:], raw[12:28])
-			copy(evt.Filename[:], raw[28:92])
+			copy(evt.Filename[:], raw[28:156])
 
 			fullCmd := GetFullCmdline(evt.PID)
 			if fullCmd == "" {

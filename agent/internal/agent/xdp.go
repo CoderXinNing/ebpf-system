@@ -74,7 +74,8 @@ func (a *Agent) startExecMonitor() {
 			EventType: "execve",
 			Pid:       int32(evt.PID),
 			Comm:      string(evt.Comm[:]),
-			Filename:  cmdline,
+			Filename:  "execve",
+			Details:   cmdline,
 		}
 	})
 	if err != nil {
