@@ -32,3 +32,13 @@ source = "crontab"
 field = "cmdline"
 op = "regex"
 value = "curl.*http|wget.*http|bash.*/tmp|python.*/tmp"
+
+[[rules]]
+name = "热加载测试"
+severity = "LOW"
+description = "测试规则热加载"
+
+[[rules.conditions]]
+field = "comm"
+op = "eq"
+value = "test-hot-reload"

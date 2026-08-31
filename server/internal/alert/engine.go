@@ -48,6 +48,7 @@ type Engine struct {
 	dedupMap  map[string]time.Time
 	mu         sync.RWMutex
 	rules      []Rule
+	rulesPath  string
 	freqCount  map[string][]time.Time // 频率统计
 	OnAlert    func(Alert)
 }
@@ -58,8 +59,38 @@ func NewEngine(rulesPath string, callback func(Alert)) *Engine {
 		freqCount: make(map[string][]time.Time),
 		OnAlert:   callback,
 	}
+	e.rulesPath = rulesPath
 	e.loadRules(rulesPath)
+
+	// 启动规则热加载：每 3 秒检查文件变化
+	go e.watchRules()
+
 	return e
+}
+
+// watchRules 监听规则文件变化，自动热加载
+func (e *Engine) watchRules() {
+	var lastMod time.Time
+
+	if info, err := os.Stat(e.rulesPath); err == nil {
+		lastMod = info.ModTime()
+	}
+
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		info, err := os.Stat(e.rulesPath)
+		if err != nil {
+			continue
+		}
+
+		if info.ModTime() != lastMod {
+			lastMod = info.ModTime()
+			log.Println("🔄 检测到规则文件变化，热加载中...")
+			e.loadRules(e.rulesPath)
+		}
+	}
 }
 
 func (e *Engine) loadRules(path string) {
@@ -70,14 +101,25 @@ func (e *Engine) loadRules(path string) {
 	var config struct {
 		Rules []Rule `yaml:"rules"`
 	}
-	toml.Decode(string(data), &config)
-	log.Printf("📋 告警规则加载: %d条", len(config.Rules))
+	if _, err := toml.Decode(string(data), &config); err != nil {
+		log.Printf("⚠️ 告警规则解析失败: %v", err)
+		return
+	}
+
+	e.mu.Lock()
 	e.rules = config.Rules
+	e.mu.Unlock()
+
+	log.Printf("📋 告警规则加载: %d条", len(config.Rules))
 }
 
 // CheckEvent 检查事件是否触发告警
 func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, source string) {
-	for _, rule := range e.rules {
+	e.mu.RLock()
+	rules := e.rules
+	e.mu.RUnlock()
+
+	for _, rule := range rules {
 		if !e.matchRule(rule, comm, cmdline, filename, source) {
 			continue
 		}

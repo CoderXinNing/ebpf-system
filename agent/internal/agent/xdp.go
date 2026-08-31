@@ -102,8 +102,8 @@ func (a *Agent) startBashMonitor() {
 			EventType: "bash_input",
 			Pid:       int32(evt.PID),
 			Comm:      string(evt.Comm[:]),
-			Filename:  line,
-			Details:   userName,
+			Filename:  "bash_input",
+			Details:   line,
 		}
 	})
 	if err != nil {
