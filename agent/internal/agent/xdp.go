@@ -3,7 +3,6 @@ package agent
 import (
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"time"
 
@@ -24,44 +23,36 @@ func (a *Agent) startXDP() {
 		return
 	}
 
-	// 清理旧XDP（如果存在）
 	if xdpHandle != nil {
 		xdpHandle.Close()
 		xdpHandle = nil
 	}
 
-	if _, err := net.InterfaceByName(a.cfg.XDP.Iface); err != nil {
-		log.Printf("⚠️ 网卡 %s 不存在，XDP降级", a.cfg.XDP.Iface)
-		return
-	}
-
 	cfg := ebpf.XDPConfig{
-		Iface:    a.cfg.XDP.Iface,
-		DstIP:    net.ParseIP(a.cfg.XDP.ServerIP),
-		DstPort:  uint16(a.cfg.XDP.ServerPort),
-		SrcPort:  12345,
+		Iface: a.cfg.XDP.Iface,
 	}
 
-	if iface, err := net.InterfaceByName(cfg.Iface); err == nil {
-		cfg.SrcMAC = iface.HardwareAddr
-		addrs, _ := iface.Addrs()
-		for _, addr := range addrs {
-			if ipnet, ok := addr.(*net.IPNet); ok && ipnet.IP.To4() != nil {
-				cfg.SrcIP = ipnet.IP
-				break
-			}
+	handle, err := ebpf.LoadXDPReporter(cfg, func(evt ebpf.XDPEvent) {
+		if evt.PID == uint32(os.Getpid()) {
+			return
 		}
-	}
-	cfg.DstMAC = cfg.SrcMAC
-
-	var err error
-	handle, err := ebpf.LoadXDPReporter(cfg)
+		a.eventQueue <- &pb.ProbeEvent{
+			ProbeName: "xdp",
+			Timestamp: time.Now().Unix(),
+			EventType: "xdp_alert",
+			Pid:       int32(evt.PID),
+			Comm:      string(evt.Comm[:]),
+			Filename:  "xdp_alert",
+			Details:   string(evt.Details[:]),
+		}
+	})
 	if err != nil {
 		log.Printf("⚠️ XDP加载失败（降级为纯CMDB）: %v", err)
 		return
 	}
 	xdpHandle = handle
 }
+
 func (a *Agent) checkEBPFSupport() bool {
 	if _, err := os.Stat("/sys/kernel/btf/vmlinux"); err != nil {
 		return false
