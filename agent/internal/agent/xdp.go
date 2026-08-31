@@ -64,7 +64,7 @@ func (a *Agent) checkEBPFSupport() bool {
 }
 
 func (a *Agent) startExecMonitor() {
-	err := ebpf.LoadExecMonitor(func(evt ebpf.ExecEvent, cmdline string) {
+	err := ebpf.LoadExecMonitor(a.getProbePath("exec_monitor"), func(evt ebpf.ExecEvent, cmdline string) {
 		if int32(evt.PID) == int32(os.Getpid()) {
 			return
 		}

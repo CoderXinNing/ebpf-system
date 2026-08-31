@@ -56,12 +56,24 @@ var defaultExecWhitelist = []string{
 // 保存原始 FD，不关闭
 var savedPerfFDs []int
 
-func LoadExecMonitor(callback ExecCallback) error {
+func LoadExecMonitor(objPath string, callback ExecCallback) error {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("解除内存锁失败: %w", err)
 	}
 
-	spec, err := ebpf.LoadCollectionSpec("probes/templates/exec_monitor_ebpf/exec_monitor.o")
+	// 尝试复用已有 pin（上次崩溃残留或热重启）
+	progPinPath := "/sys/fs/bpf/ebpf-sentinel/exec_monitor_prog"
+	if _, err := os.Stat(progPinPath); err == nil {
+		log.Printf("🔗 检测到已有exec探针pin，尝试接管...")
+		if err := reusePinnedExecMonitor(progPinPath, callback); err == nil {
+			log.Printf("✅ 已接管已有exec探针")
+			return nil
+		}
+		log.Printf("⚠️ 接管失败，重新加载: %v", err)
+		os.Remove(progPinPath)
+	}
+
+	spec, err := ebpf.LoadCollectionSpec(objPath)
 	if err != nil { return fmt.Errorf("加载spec失败: %w", err) }
 
 	var objs struct {
@@ -76,7 +88,6 @@ func LoadExecMonitor(callback ExecCallback) error {
 	}
 
 	// Pin 程序到 bpffs（脱离 Agent 进程存活）
-	progPinPath := "/sys/fs/bpf/ebpf-sentinel/exec_monitor_prog"
 	os.MkdirAll("/sys/fs/bpf/ebpf-sentinel", 0755)
 	if err := objs.TraceExecve.Pin(progPinPath); err != nil {
 		log.Printf("⚠️ Pin exec程序失败: %v", err)
@@ -214,4 +225,74 @@ func CleanupSavedFDs() {
 	}
 	savedPerfFDs = nil
 	log.Println("🧹 已清理持久化 FD")
+}
+
+
+// reusePinnedExecMonitor 复用已 pin 的 exec 探针
+func reusePinnedExecMonitor(progPinPath string, callback ExecCallback) error {
+	prog, err := ebpf.LoadPinnedProgram(progPinPath, nil)
+	if err != nil {
+		return fmt.Errorf("加载pin程序失败: %w", err)
+	}
+	defer prog.Close()
+
+	// 打开相关 map
+	eventsMap, err := ebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/exec_events", nil)
+	if err != nil {
+		return fmt.Errorf("加载events map失败: %w", err)
+	}
+	defer eventsMap.Close()
+
+	whMap, err := ebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/exec_whitelist", nil)
+	if err != nil {
+		return fmt.Errorf("加载白名单map失败: %w", err)
+	}
+	defer whMap.Close()
+
+	hbMap, err := ebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/agent_heartbeat", nil)
+	if err != nil {
+		return fmt.Errorf("加载心跳map失败: %w", err)
+	}
+	defer hbMap.Close()
+
+	// 写白名单（确保还是最新的）
+	for _, name := range defaultExecWhitelist {
+		var key [16]byte
+		copy(key[:], name)
+		var val uint8 = 1
+		whMap.Put(&key, &val)
+	}
+
+	// 用 perf_event_open 重新 attach
+	progFD := prog.FD()
+	if err := attachTracepointSyscall(progFD, "syscalls", "sys_enter_execve"); err != nil {
+		return fmt.Errorf("重新attach失败: %w", err)
+	}
+
+	// 启动 ring buffer reader
+	go func() {
+		rd, _ := ringbuf.NewReader(eventsMap)
+		if rd == nil { return }
+		defer rd.Close()
+		for {
+			record, err := rd.Read()
+			if err != nil { continue }
+			var evt ExecEvent
+			raw := record.RawSample
+			evt.PID = binary.LittleEndian.Uint32(raw[0:4])
+			evt.UID = binary.LittleEndian.Uint32(raw[8:12])
+			copy(evt.Comm[:], raw[12:28])
+			copy(evt.Filename[:], raw[28:156])
+			fullCmd := GetFullCmdline(evt.PID)
+			if fullCmd == "" {
+				fullCmd = strings.TrimRight(string(evt.Filename[:]), "\x00")
+			}
+			comm := strings.TrimRight(string(evt.Comm[:]), "\x00")
+			userName := ResolveUser(evt.UID)
+			log.Printf("📡 exec: PID=%d UID=%s %s → %s", evt.PID, userName, comm, fullCmd)
+			callback(evt, fullCmd)
+		}
+	}()
+
+	return nil
 }

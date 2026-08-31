@@ -27,6 +27,7 @@ type ProbeConfig struct {
 	Name    string `toml:"name"`
 	ID      string `toml:"id"`
 	Enabled bool   `toml:"enabled"`
+	Path    string `toml:"path"`  // .o 文件路径，为空时用默认
 }
 
 // DefaultConfig 返回默认配置
@@ -67,7 +68,8 @@ func Load(path string) (*AgentConfig, error) {
 func GenerateDefault(path string) error {
 	cfg := DefaultConfig()
 	cfg.Autoload = []ProbeConfig{
-		{Name: "exec_monitor", ID: "auto-exec-001", Enabled: false},
+		{Name: "exec_monitor", ID: "auto-exec-001", Enabled: false,
+			Path: "probes/templates/exec_monitor_ebpf/exec_monitor.o"},
 	}
 
 	data, err := toml.Marshal(cfg)

@@ -243,3 +243,17 @@ func updateHeartbeatMap() {
 	var val uint64 = uint64(time.Now().UnixNano())
 	hbMap.Put(&key, &val)
 }
+
+
+func (a *Agent) getProbePath(name string) string {
+	for _, p := range a.cfg.Autoload {
+		if p.Name == name && p.Path != "" {
+			return p.Path
+		}
+	}
+	// 默认路径
+	paths := map[string]string{
+		"exec_monitor": "probes/templates/exec_monitor_ebpf/exec_monitor.o",
+	}
+	return paths[name]
+}
