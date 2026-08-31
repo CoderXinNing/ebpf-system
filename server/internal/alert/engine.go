@@ -156,6 +156,9 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 			Description: rule.Description,
 			AgentID:     agentID,
 			PID:         pid,
+			Comm:        strings.TrimRight(comm, "\x00"),
+			Filename:    strings.TrimRight(filename, "\x00"),
+			Details:     strings.TrimRight(cmdline, "\x00"),
 			Time:        time.Now(),
 		}
 

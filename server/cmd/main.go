@@ -65,6 +65,7 @@ func main() {
 		st.SaveAlert(store.AlertRecord{
 			RuleName: a.RuleName, Severity: a.Severity, Description: a.Description,
 			AgentID: a.AgentID, PID: a.PID, Comm: a.Comm, Filename: a.Filename,
+			Details: a.Details,
 		})
 	})
 	srv.handler = handler.NewHandler(st, am, srv.sendCommand)
