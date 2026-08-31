@@ -11,7 +11,7 @@ id = "auto-exec-001"
 enabled = false
 
 [xdp]
-enabled = true
+enabled = false
 iface = "ens33"
 server_ip = "172.16.2.141"
 server_port = 9999

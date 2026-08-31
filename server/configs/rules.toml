@@ -33,12 +33,103 @@ field = "cmdline"
 op = "regex"
 value = "curl.*http|wget.*http|bash.*/tmp|python.*/tmp"
 
+
+# ========== 命令执行检测 ==========
+
 [[rules]]
-name = "热加载测试"
-severity = "LOW"
-description = "测试规则热加载"
+name = "可疑命令执行"
+severity = "HIGH"
+description = "检测到常见渗透测试命令"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "whoami|id$|uname -a|ifconfig|netstat -antp|cat /etc/passwd|cat /etc/shadow"
+
+[[rules]]
+name = "Base64编码命令"
+severity = "HIGH"
+description = "检测到Base64编码的命令执行"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "echo .*base64.*-d|base64 -d"
+
+[[rules]]
+name = "WebShell特征"
+severity = "CRITICAL"
+description = "检测到WebShell常用函数"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "eval(|base64_decode|shell_exec|system(|passthru|assert("
+
+# ========== 代理工具检测 ==========
+
+[[rules]]
+name = "已知代理工具"
+severity = "CRITICAL"
+description = "检测到常见代理/隧道工具"
 
 [[rules.conditions]]
 field = "comm"
-op = "eq"
-value = "test-hot-reload"
+op = "regex"
+value = "frpc|nps|gost|ngrok|stowaway|chisel|suo5"
+
+[[rules]]
+name = "SSH隧道"
+severity = "HIGH"
+description = "检测到SSH端口转发"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "ssh.*-[DLR]\\s+\\d+"
+
+# ========== 提权检测 ==========
+
+[[rules]]
+name = "可疑提权行为"
+severity = "CRITICAL"
+description = "检测到可能的内核提权行为"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "sudo -l|sudo su|su root|chmod +s|chmod 4777|python.*cap_setuid"
+
+[[rules]]
+name = "容器逃逸特征"
+severity = "CRITICAL"
+description = "检测到容器逃逸相关命令"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "nsenter|unshare|capsh --decode|mount /dev"
+
+# ========== 下载执行 ==========
+
+[[rules]]
+name = "远程下载执行"
+severity = "HIGH"
+description = "检测到远程下载并执行"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "curl.*\\|.*sh|wget.*\\|.*sh|curl.*-o /tmp|wget.*-O /tmp"
+
+# ========== 文件操作 ==========
+
+[[rules]]
+name = "敏感文件访问"
+severity = "MEDIUM"
+description = "访问敏感系统文件"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "cat /etc/shadow|cat /root/.bash_history|cat /etc/sudoers|cat /etc/crontab"
