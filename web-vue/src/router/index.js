@@ -14,6 +14,7 @@ const routes = [
   { path: '/packages', component: () => import('../views/PackagesView.vue') },
   { path: '/pkg_detail/:name', component: () => import('../views/PkgDetail.vue') },
   { path: '/events', component: () => import('../views/EventsView.vue') },
+  { path: '/alerts', component: () => import('../views/AlertsView.vue') },
   { path: '/probes', component: () => import('../views/ProbesView.vue') },
   { path: '/install', component: () => import('../views/AgentInstall.vue') },
 ]

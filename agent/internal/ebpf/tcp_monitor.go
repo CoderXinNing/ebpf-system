@@ -24,6 +24,16 @@ func LoadTCPMonitor(objPath string, callback TCPCallback) error {
 		return fmt.Errorf("解除内存锁失败: %w", err)
 	}
 
+	probeSpec := &ProbeSpec{
+		Name:    "tcp_monitor",
+		ObjPath: objPath,
+		PinBase: "/sys/fs/bpf/ebpf-sentinel",
+		Maps:    []string{"tcp_conn_stats"},
+	}
+
+	// tcp 不需要持久化，每次启动清理旧 pin
+	probeSpec.CleanPins()
+
 	spec, err := ebpf.LoadCollectionSpec(objPath)
 	if err != nil {
 		return fmt.Errorf("加载spec失败: %w", err)
@@ -45,8 +55,11 @@ func LoadTCPMonitor(objPath string, callback TCPCallback) error {
 	}
 
 	os.MkdirAll("/sys/fs/bpf/ebpf-sentinel", 0755)
-	if err := objs.TraceConnect.Pin("/sys/fs/bpf/ebpf-sentinel/tcp_monitor"); err != nil {
+	if err := objs.TraceConnect.Pin(probeSpec.PinPaths()["prog"]); err != nil {
 		log.Printf("⚠️ Pin tcp失败(已存在则复用): %v", err)
+	}
+	if err := objs.TcpConnStats.Pin(probeSpec.PinPaths()["tcp_conn_stats"]); err != nil {
+		log.Printf("⚠️ Pin tcp stats失败(已存在则复用): %v", err)
 	}
 
 	log.Printf("✅ TCP监控已启动 (tracepoint)")

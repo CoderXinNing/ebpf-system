@@ -51,6 +51,7 @@ const menu = [
   { label: 'Web资产', key: '/web' },
   { label: '软件应用', key: '/packages' },
   { label: '事件流', key: '/events' },
+  { label: '告警中心', key: '/alerts' },
     { label: 'Agent管理', key: 'agent', children: [
       { label: 'Agent列表', key: '/probes' },
       { label: '安装Agent', key: '/install' },
@@ -59,7 +60,7 @@ const menu = [
 
 const titleMap = {
   '/': '资产清点', '/processes': '进程端口', '/web': 'Web资产',
-  '/packages': '软件应用', '/events': '事件流', '/probes': '探针管理'
+  '/packages': '软件应用', '/events': '事件流', '/alerts': '告警中心', '/probes': '探针管理'
 }
 const pageTitle = computed(() => {
   if (route.path.startsWith('/host')) return '主机详情'

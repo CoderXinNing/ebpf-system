@@ -28,6 +28,17 @@ func LoadBashMonitor(objPath string, bashPath string, callback BashCallback) err
 		return fmt.Errorf("解除内存锁失败: %w", err)
 	}
 
+	probeSpec := &ProbeSpec{
+		Name:    "bash_monitor",
+		ObjPath: objPath,
+		PinBase: "/sys/fs/bpf/ebpf-sentinel",
+		Maps:    []string{"events"},
+	}
+
+	// 版本检查 + 复用
+	// bash 不需要持久化，每次启动清理旧 pin
+	probeSpec.CleanPins()
+
 	spec, err := ebpf.LoadCollectionSpec(objPath)
 	if err != nil { return fmt.Errorf("加载spec失败: %w", err) }
 
@@ -54,8 +65,11 @@ func LoadBashMonitor(objPath string, bashPath string, callback BashCallback) err
 	}
 
 	os.MkdirAll("/sys/fs/bpf/ebpf-sentinel", 0755)
-	if err := objs.BashReadline.Pin("/sys/fs/bpf/ebpf-sentinel/bash_monitor"); err != nil {
+	if err := objs.BashReadline.Pin(probeSpec.PinPaths()["prog"]); err != nil {
 		log.Printf("⚠️ Pin bash失败(已存在则复用): %v", err)
+	}
+	if err := objs.Events.Pin(probeSpec.PinPaths()["events"]); err != nil {
+		log.Printf("⚠️ Pin bash events失败(已存在则复用): %v", err)
 	}
 
 	log.Printf("✅ Bash监控已启动: readline")
