@@ -1,36 +1,43 @@
 <template>
-  <div style="display:flex;height:100vh;overflow:hidden">
+  <div class="admin-layout">
     <!-- 侧边栏 -->
-    <div :style="{width: collapsed ? '64px' : '220px', flexShrink:0, background:'linear-gradient(180deg, #001529 0%, #002140 100%)', display:'flex', flexDirection:'column', transition:'width .2s'}">
-      <div style="padding:16px 16px;display:flex;align-items:center;gap:8px;cursor:pointer" @click="collapsed=!collapsed">
-        <div style="width:32px;height:32px;background:#1e6fff;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;flex-shrink:0">🛡</div>
-        <span v-if="!collapsed" style="color:#fff;font-size:16px;font-weight:600;white-space:nowrap">Sentinel</span>
+    <aside class="sidebar" :class="{ collapsed }">
+      <div class="logo-area" @click="collapsed = !collapsed">
+        <div class="logo-icon">🐝</div>
+        <span v-if="!collapsed" class="logo-text">Sentinel</span>
       </div>
-      <n-menu :value="path" :options="menu" @update:value="go" :collapsed="collapsed"
-        :theme-overrides="{ itemColorActive: 'rgba(30,111,255,0.2)', itemTextColor: '#b8c7d9', itemTextColorActive: '#fff' }" />
-    </div>
 
-    <!-- 右侧 -->
-    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#f0f2f5;min-width:0">
-      <div style="height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:#fff;border-bottom:1px solid #e4e7ed;flex-shrink:0">
-        <div style="font-size:15px;font-weight:600;color:#1d2129">{{ pageTitle }}</div>
-        <div style="display:flex;align-items:center;gap:16px">
-          <span style="cursor:pointer;font-size:18px;color:#86909c" @click="showNotify=true">🔔</span>
-          <n-avatar round size="small" style="background:#1e6fff;flex-shrink:0">{{ initial }}</n-avatar>
-          <span style="font-size:13px;color:#4e5969" class="hide-mobile">{{ username }}</span>
-          <span style="color:#e4e7ed" class="hide-mobile">|</span>
-          <span style="cursor:pointer;font-size:13px;color:#86909c" class="hide-mobile" @click="logout">退出</span>
+      <nav class="nav-menu">
+        <div
+          v-for="item in menu"
+          :key="item.key"
+          class="nav-item"
+          :class="{ active: isActive(item.key) }"
+          @click="go(item.key)"
+        >
+          <span class="nav-icon">{{ item.icon }}</span>
+          <span v-if="!collapsed" class="nav-label">{{ item.label }}</span>
         </div>
-      </div>
-      <div style="flex:1;overflow-y:auto;padding:20px 24px">
+      </nav>
+    </aside>
+
+    <!-- 右侧主区 -->
+    <div class="main-area">
+      <!-- 顶栏 -->
+      <header class="topbar">
+        <div class="page-title">{{ pageTitle }}</div>
+        <div class="user-area">
+          <span class="username">{{ username }}</span>
+          <span class="logout" @click="logout">退出</span>
+        </div>
+      </header>
+
+      <!-- 内容区 -->
+      <main class="content">
         <slot />
-      </div>
+      </main>
     </div>
   </div>
-
-  <n-modal v-model:show="showNotify" title="通知" style="width:400px" preset="card" :bordered="false">
-    <n-empty description="暂无通知" />
-  </n-modal>
 </template>
 
 <script setup>
@@ -39,44 +46,182 @@ import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
-const path = computed(() => route.path)
 const collapsed = ref(false)
-const showNotify = ref(false)
 
 const menu = [
-  { label: '资产清点', key: '/' },
-    { label: '主机管理', key: '/hosts' },
-  { label: '端口服务', key: '/processes' },
-    { label: '进程聚合', key: '/proc_agg' },
-  { label: 'Web资产', key: '/web' },
-  { label: '软件应用', key: '/packages' },
-  { label: '事件流', key: '/events' },
-  { label: '告警中心', key: '/alerts' },
-    { label: 'Agent管理', key: 'agent', children: [
-      { label: 'Agent列表', key: '/probes' },
-      { label: '安装Agent', key: '/install' },
-    ] },
+  { label: '仪表盘', key: '/', icon: '📊' },
+  { label: '主机管理', key: '/hosts', icon: '🖥️' },
+  { label: '事件流', key: '/events', icon: '📡' },
+  { label: '告警中心', key: '/alerts', icon: '🚨' },
+  { label: '资产清点', key: '/processes', icon: '📦' },
+  { label: '探针管理', key: '/probes', icon: '🔧' },
 ]
 
 const titleMap = {
-  '/': '资产清点', '/processes': '进程端口', '/web': 'Web资产',
-  '/packages': '软件应用', '/events': '事件流', '/alerts': '告警中心', '/probes': '探针管理'
+  '/': '仪表盘',
+  '/hosts': '主机管理',
+  '/events': '事件流',
+  '/alerts': '告警中心',
+  '/processes': '资产清点',
+  '/probes': '探针管理',
 }
-const pageTitle = computed(() => {
-  if (route.path.startsWith('/host')) return '主机详情'
-  return titleMap[route.path] || 'eBPF Sentinel'
-})
+
+const pageTitle = computed(() => titleMap[route.path] || 'eBPF Sentinel')
+
+function isActive(key) {
+  if (key === '/') return route.path === '/'
+  return route.path.startsWith(key)
+}
+
+function go(key) {
+  router.push(key)
+}
+
+function logout() {
+  localStorage.clear()
+  router.push('/login')
+}
 
 const user = JSON.parse(localStorage.getItem('user') || '{}')
 const username = computed(() => user.username || 'admin')
-const initial = computed(() => (user.username || 'A')[0].toUpperCase())
-
-function go(key) { router.push(key) }
-function logout() { localStorage.clear(); router.push('/login') }
 </script>
 
-<style>
-@media (max-width: 768px) {
-  .hide-mobile { display: none !important; }
+<style scoped>
+.admin-layout {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  background: #E8EDF4;
+  overflow: hidden;
+}
+
+/* 侧边栏 */
+.sidebar {
+  width: 14vw;
+  min-width: 180px;
+  max-width: 240px;
+  background: linear-gradient(180deg, #001529 0%, #002B5C 100%);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.sidebar.collapsed {
+  width: 5vw;
+  min-width: 60px;
+}
+
+.logo-area {
+  display: flex;
+  align-items: center;
+  gap: 0.8vw;
+  padding: 2vh 1vw;
+  cursor: pointer;
+}
+
+.logo-icon {
+  font-size: 1.8vw;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  color: #FFFFFF;
+  font-size: 1.1vw;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nav-menu {
+  flex: 1;
+  padding: 1.5vh 0.6vw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2vh;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.8vw;
+  padding: 1.2vh 0.8vw;
+  border-radius: 0.4vw;
+  cursor: pointer;
+  color: #B8C7D9;
+  transition: background 0.25s, color 0.25s;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #FFFFFF;
+}
+
+.nav-item.active {
+  background: rgba(26, 115, 232, 0.25);
+  color: #FFFFFF;
+}
+
+.nav-icon {
+  font-size: 1.2vw;
+  flex-shrink: 0;
+}
+
+.nav-label {
+  font-size: 0.95vw;
+  white-space: nowrap;
+}
+
+/* 右侧主区 */
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.topbar {
+  height: 6vh;
+  min-height: 48px;
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1vw;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  flex-shrink: 0;
+}
+
+.page-title {
+  font-size: 1.1vw;
+  font-weight: 600;
+  color: #202124;
+}
+
+.user-area {
+  display: flex;
+  align-items: center;
+  gap: 1vw;
+}
+
+.username {
+  font-size: 0.9vw;
+  color: #5F6368;
+}
+
+.logout {
+  font-size: 0.9vw;
+  color: #1A73E8;
+  cursor: pointer;
+}
+
+.logout:hover {
+  text-decoration: underline;
+}
+
+/* 内容区 */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5vh 0.5vw;
 }
 </style>
