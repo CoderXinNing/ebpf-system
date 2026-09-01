@@ -23,12 +23,12 @@ type BashEvent struct {
 
 type BashCallback func(BashEvent, string, string)
 
-func LoadBashMonitor(bashPath string, callback BashCallback) error {
+func LoadBashMonitor(objPath string, bashPath string, callback BashCallback) error {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("解除内存锁失败: %w", err)
 	}
 
-	spec, err := ebpf.LoadCollectionSpec("probes/templates/bash_monitor/bash_monitor.o")
+	spec, err := ebpf.LoadCollectionSpec(objPath)
 	if err != nil { return fmt.Errorf("加载spec失败: %w", err) }
 
 	var objs struct {
@@ -54,7 +54,9 @@ func LoadBashMonitor(bashPath string, callback BashCallback) error {
 	}
 
 	os.MkdirAll("/sys/fs/bpf/ebpf-sentinel", 0755)
-	objs.BashReadline.Pin("/sys/fs/bpf/ebpf-sentinel/bash_monitor")
+	if err := objs.BashReadline.Pin("/sys/fs/bpf/ebpf-sentinel/bash_monitor"); err != nil {
+		log.Printf("⚠️ Pin bash失败(已存在则复用): %v", err)
+	}
 
 	log.Printf("✅ Bash监控已启动: readline")
 

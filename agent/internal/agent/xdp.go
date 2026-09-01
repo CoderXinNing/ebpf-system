@@ -68,6 +68,7 @@ func (a *Agent) startExecMonitor() {
 		if int32(evt.PID) == int32(os.Getpid()) {
 			return
 		}
+		userName := ebpf.ResolveUser(evt.UID)
 		a.eventQueue <- &pb.ProbeEvent{
 			ProbeName: "execve",
 			Timestamp: time.Now().Unix(),
@@ -75,7 +76,7 @@ func (a *Agent) startExecMonitor() {
 			Pid:       int32(evt.PID),
 			Comm:      string(evt.Comm[:]),
 			Filename:  "execve",
-			Details:   cmdline,
+			Details:   userName + ": " + cmdline,
 		}
 	})
 	if err != nil {
@@ -84,7 +85,7 @@ func (a *Agent) startExecMonitor() {
 }
 
 func (a *Agent) startBashMonitor() {
-	err := ebpf.LoadBashMonitor("/bin/bash", func(evt ebpf.BashEvent, userName string, line string) {
+	err := ebpf.LoadBashMonitor(a.getProbePath("bash_monitor"), "/bin/bash", func(evt ebpf.BashEvent, userName string, line string) {
 		if line == "" {
 			return
 		}
@@ -104,7 +105,7 @@ func (a *Agent) startBashMonitor() {
 }
 
 func (a *Agent) startTCPMonitor() {
-	err := ebpf.LoadTCPMonitor(func(pid uint32, comm string, count uint64) {
+	err := ebpf.LoadTCPMonitor(a.getProbePath("tcp_monitor"), func(pid uint32, comm string, count uint64) {
 		a.eventQueue <- &pb.ProbeEvent{
 			ProbeName: "tcp_connect",
 			Timestamp: time.Now().Unix(),

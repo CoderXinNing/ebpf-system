@@ -17,14 +17,14 @@ type TCPCallback func(pid uint32, comm string, count uint64)
 
 var tcpCB TCPCallback
 
-func LoadTCPMonitor(callback TCPCallback) error {
+func LoadTCPMonitor(objPath string, callback TCPCallback) error {
 	tcpCB = callback
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("解除内存锁失败: %w", err)
 	}
 
-	spec, err := ebpf.LoadCollectionSpec("probes/templates/tcp_monitor/tcp_monitor.o")
+	spec, err := ebpf.LoadCollectionSpec(objPath)
 	if err != nil {
 		return fmt.Errorf("加载spec失败: %w", err)
 	}
@@ -45,7 +45,9 @@ func LoadTCPMonitor(callback TCPCallback) error {
 	}
 
 	os.MkdirAll("/sys/fs/bpf/ebpf-sentinel", 0755)
-	objs.TraceConnect.Pin("/sys/fs/bpf/ebpf-sentinel/tcp_monitor")
+	if err := objs.TraceConnect.Pin("/sys/fs/bpf/ebpf-sentinel/tcp_monitor"); err != nil {
+		log.Printf("⚠️ Pin tcp失败(已存在则复用): %v", err)
+	}
 
 	log.Printf("✅ TCP监控已启动 (tracepoint)")
 
