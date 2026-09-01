@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"log"
 	"strconv"
 	"encoding/json"
 	"fmt"
@@ -421,7 +422,24 @@ func (s *Store) CleanExpiredLogs() {
 	alertCutoff := now - int64(alertDays*86400)
 	auditCutoff := now - int64(auditDays*86400)
 
-	s.db.Exec("DELETE FROM events WHERE timestamp < ?", eventCutoff)
-	s.db.Exec("DELETE FROM alerts WHERE created_at < ?", alertCutoff)
-	s.db.Exec("DELETE FROM audit_logs WHERE created_at < ?", auditCutoff)
+	result1, err1 := s.db.Exec("DELETE FROM events WHERE timestamp < ?", eventCutoff)
+	if err1 != nil {
+		log.Printf("⚠️ 清理事件失败: %v", err1)
+	} else if n, _ := result1.RowsAffected(); n > 0 {
+		log.Printf("🧹 清理过期事件: %d条 (保留%d天)", n, eventDays)
+	}
+
+	result2, err2 := s.db.Exec("DELETE FROM alerts WHERE created_at < ?", alertCutoff)
+	if err2 != nil {
+		log.Printf("⚠️ 清理告警失败: %v", err2)
+	} else if n, _ := result2.RowsAffected(); n > 0 {
+		log.Printf("🧹 清理过期告警: %d条 (保留%d天)", n, alertDays)
+	}
+
+	result3, err3 := s.db.Exec("DELETE FROM audit_logs WHERE created_at < ?", auditCutoff)
+	if err3 != nil {
+		log.Printf("⚠️ 清理审计日志失败: %v", err3)
+	} else if n, _ := result3.RowsAffected(); n > 0 {
+		log.Printf("🧹 清理过期审计日志: %d条 (保留%d天)", n, auditDays)
+	}
 }
