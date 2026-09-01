@@ -1,36 +1,33 @@
-# ebpf-sentinel 项目交接文档
+# eBPF Sentinel 项目交接文档
 
-> **最后更新**：2026-08-31
+> **最后更新**：2026-09-01
 > **状态**：v1.0.0-beta 候选
 > **仓库**：https://github.com/CoderXinNing/ebpf-system
-> **维护模式**：Deep Seek 开发 + 用户真实环境测试反馈
 
 ---
 
 ## 〇、当前开发焦点（Active Context）
 
-> ⚠️ **每次会话结束前必须更新此节**，作为 AI 的"短期记忆外挂"
+> ⚠️ **每次会话结束前必须更新此节**
 
-**当前任务**：Beta 收尾
+**当前任务**：Beta 收尾 + 探针管理重构
 
-**正在进行**：
-- [x] 告警规则热加载（已完成）
-- [x] 规则库扩充 12 条（已完成）
-- [ ] **下一步：修复 XDP 断网问题（P0）**
+**已完成（2026-09-01）**：
 
-**最近改动**：
-- bash 事件字段对齐修复（Details 放命令行）
-- 告警规则热加载（3 秒轮询 mtime）
+- 通用探针管理器 ProbeSpec
+- exec 探针完整接管机制
+- bash/tcp 探针路径配置化
+- 探针 enabled/remove 配置化
+- Web 告警页新增
+- exec 事件带用户名
+- 安全通信架构方案确认（PKI + mTLS + RSA）
 
-**已知阻塞**：
-- XDP attach 后导致主机无法访问外网，已临时关闭（enabled=false）
+**下一步**：
 
-**下次开工命令**：
-```bash
-cd ~/ebpf-sentinel
-git pull
-# 先修 XDP 断网，再继续 P0
-```
+- Server 探针名单管理（开放探针核心）
+- PKI + mTLS 实现（安全加固）
+- 攻击演示脚本定稿（P0）
+- README + 部署文档（P0）
 
 ---
 
@@ -39,25 +36,26 @@ git pull
 基于 eBPF 的主机安全监控平台，融合 CMDB 资产清点与实时入侵检测。
 
 **核心设计**：
-- **四层降级架构**：从 LSM 到纯 CMDB 的自动降级
-- **双通道告警**：gRPC 正常通道 + UDP 保底通道
-- **单点采集**：各层不重复采集，内核态白名单过滤
-- **Agent 自决策**：根据环境能力自动选择采集层级
-- **开放探针生态**：预留探针动态加载能力
 
-**项目状态**：长期处于 Beta 状态，正式版交给未来的维护者决定。
+- 四层降级架构
+- 双通道告警
+- 单点采集
+- Agent 自决策
+- 开放探针生态（预留）
+
+项目长期处于 Beta 状态，正式版交给未来的维护者决定。
 
 ---
 
 ## 二、技术栈
 
 | 层 | 技术 |
-| :--- | :--- |
-| **Agent** | Go + cilium/ebpf |
-| **探针** | C (eBPF) + CO-RE + BTF |
-| **Server** | Go + Gin + gRPC + SQLite |
-| **前端** | Vue 3 |
-| **通信** | gRPC + UDP |
+| :-- | :-- |
+| Agent | Go + cilium/ebpf |
+| 探针 | C (eBPF) + CO-RE + BTF |
+| Server | Go + Gin + gRPC + SQLite |
+| 前端 | Vue 3 + Naive UI |
+| 通信 | gRPC + UDP |
 
 ---
 
@@ -66,21 +64,11 @@ git pull
 ```text
 Layer 4: LSM 拦截    （规划中，预留）
     ↓ 内核不支持
-Layer 3: XDP 网络层  （已实现，暂关闭—断网bug待修）
+Layer 3: XDP 网络层  （已实现）
     ↓ 网卡不支持
 Layer 2: eBPF 探针   （已实现：exec/bash/tcp）
     ↓ 内核不支持
 Layer 1: 纯CMDB      （已实现，始终可用）
-```
-
-**降级决策逻辑**：
-```go
-func decideLevel() string {
-    if BTF && GoEBPF && XDP.Enabled → "full"
-    if BTF && GoEBPF              → "ebpf"
-    if libbpf                     → "ebpf"
-    else                          → "basic"
-}
 ```
 
 ---
@@ -88,28 +76,30 @@ func decideLevel() string {
 ## 四、双通道告警
 
 **正常通道**：
+
+```text
 探针 → ring buffer → Agent eventQueue → gRPC → Server → 告警引擎 → SQLite
+```
 
 **保底通道（Agent 崩溃时）**：
-心跳超时(3s) → 探针写共享缓冲 → XDP 读取 → UDP → Server :9999
 
-**心跳机制**：
-- Agent 每 10 秒更新 `agent_heartbeat` Map（日志里显示 `HB UPDATE`）
-- eBPF 探针检查时间戳，超 3 秒判定失联
-- 失联后 exec 事件写入 `alert_buffer`（16 槽位环形队列）
+```text
+心跳超时(3s) → 探针写共享缓冲 → XDP 读取 → UDP → Server :9999
+```
 
 ---
 
-## 五、数据库表结构（Schema）
+## 五、数据库表结构
 
-**events 表**
+### events 表
+
 ```sql
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     agent_id TEXT,
     probe_name TEXT,      -- execve / bash_input / tcp_connect / xdp
     timestamp INTEGER,
-    event_type TEXT,      -- 与 probe_name 相同
+    event_type TEXT,
     pid INTEGER,
     comm TEXT,
     filename TEXT,
@@ -117,22 +107,25 @@ CREATE TABLE IF NOT EXISTS events (
 );
 ```
 
-**alerts 表**
+### alerts 表
+
 ```sql
 CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     rule_name TEXT,
-    severity TEXT,        -- CRITICAL / HIGH / MEDIUM / LOW
+    severity TEXT,
     description TEXT,
     agent_id TEXT,
     pid INTEGER,
     comm TEXT,
     filename TEXT,
+    details TEXT,
     created_at INTEGER
 );
 ```
 
-**asset_snapshots 表**
+### asset_snapshots 表
+
 ```sql
 CREATE TABLE IF NOT EXISTS asset_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,21 +137,10 @@ CREATE TABLE IF NOT EXISTS asset_snapshots (
 );
 ```
 
-**users 表**
-```sql
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT DEFAULT 'viewer'   -- admin / operator / viewer
-);
-```
-
 ---
 
 ## 六、gRPC Proto 核心字段
 
-**RPC 方法**
 ```protobuf
 service Sentinel {
     rpc Register(RegisterRequest) returns (RegisterResponse);
@@ -168,103 +150,94 @@ service Sentinel {
 }
 ```
 
-**ProbeEvent（事件上报核心）**
-```protobuf
-message ProbeEvent {
-    string probe_id = 1;
-    string probe_name = 2;     // "execve" / "bash_input" / "tcp_connect" / "xdp"
-    int64 timestamp = 3;
-    string event_type = 4;     // 与 probe_name 相同
-    int32 pid = 5;
-    string comm = 6;           // 进程名
-    string filename = 7;       // 完整命令行（exec/bash）
-    string details = 8;        // bash: 命令行内容; 其他: 补充信息
-}
-```
+---
 
-**ProbeCommand（命令下发）**
-```protobuf
-message ProbeCommand {
-    enum CommandType {
-        LOAD = 0; UNLOAD = 1; RELOAD = 3;
-        INSTALL = 4; COLLECT = 5; SET_GROUP = 6;
-    }
-    CommandType type = 1;
-    string probe_id = 2;
-    string probe_name = 3;
-    bytes probe_data = 4;      // .o 文件字节
-    string probe_config = 5;   // 探针配置（LSM 策略也走这里）
-    string group_name = 6;
-}
-```
+## 七、探针与 Agent 交互字典
+
+### exec_monitor
+
+- **C 结构体**：`struct exec_event { pid, ppid, uid, comm[16], filename[128] }`
+- **Go 解析**：`raw[0:4]=PID, raw[4:8]=PPID, raw[8:12]=UID, raw[12:28]=Comm, raw[28:156]=Filename`
+- **上报格式**：`Details = "username: cmdline"`
+
+### bash_monitor
+
+- **C 结构体**：`struct bash_event { timestamp, pid, uid, comm[16], line[256] }`
+- **上报格式**：`Details = 命令行内容`
+
+### tcp_monitor
+
+- **C 结构体**：`struct conn_stat { pid, count }`
+- **Go 解析**：`rawVal[0:4]=pid, rawVal[8:16]=count`
+- **上报格式**：`Filename = "外联xN次"`
+
+### xdp_reporter
+
+- **共享缓冲**：`struct alert_event { pid, event_type, timestamp, comm[16], details[96] }`
+- **共享 map**：`alert_buffer`（16 槽位）、`alert_write_cnt`、`alert_read_cnt`、`agent_heartbeat`
 
 ---
 
-## 七、探针与 Agent 交互字典（C ↔ Go 映射）
+## 八、探针动态管理
 
-**exec_monitor**
+### 配置驱动
 
-| C 结构体 | Go 结构体 | 大小 |
-| :--- | :--- | :--- |
-| `struct exec_event { pid, ppid, uid, comm[16], filename[64] }` | `ExecEvent` | 92 bytes |
-
-**Go 解析偏移（exec_monitor.go）**：
-```text
-raw[0:4]   → PID
-raw[4:8]   → PPID（暂未用）
-raw[8:12]  → UID
-raw[12:28] → Comm
-raw[28:92] → Filename
+```toml
+[[autoload]]
+name = "exec_monitor"
+enabled = true    # 是否加载
+remove = true     # Agent 退出时是否清理 pin
+path = "probes/templates/exec_monitor_ebpf/exec_monitor.o"
 ```
 
-**bash_monitor**
-- C: `struct bash_event { timestamp, pid, uid, comm[16], line[256] }`
-- Go 上报：`Details = line`（命令行内容）
+| enabled | remove | 行为 |
+| :--: | :--: | :-- |
+| true | true | 加载 + 退出清理 |
+| true | false | 加载 + 保留 pin |
+| false | — | 不加载 |
 
-**tcp_monitor**
-- C: `struct conn_stat { pid, count }`，HASH map
-- Go 解析：`rawVal[0:4]=pid`, `rawVal[8:16]=count`（注意 4 字节 padding）
+### 通用探针管理器（ProbeSpec）
 
-**xdp_reporter**
-- 共享缓冲：`struct alert_event { pid, event_type, timestamp, comm[16], details[96] }`
-- 共享 map：`alert_buffer`（16 槽位）、`alert_write_cnt`、`alert_read_cnt`、`agent_heartbeat`
+- `ShouldReload()`：.o 比 pin 新则重载
+- `CleanPins()`：清理所有 pin
+- `PinCollection()`：统一 pin 程序 + map
+- `LoadPinnedCollection()`：从 pin 恢复
+
+exec 支持完整接管，bash/tcp 启动时清理旧 pin。
 
 ---
 
-## 八、告警系统
+## 九、告警系统
 
-**规则引擎（server/internal/alert/engine.go）**
 - **支持**：eq / regex / contains / frequency
 - **热加载**：每 3 秒检查文件变化
-- **去重**：同规则+同Agent 30 秒
-- **分级**：CRITICAL / HIGH / MEDIUM / LOW
+- **去重**：同规则 + 同 Agent 30 秒
+- **规则库**：12 条（反弹Shell / WebShell / 代理 / SSH隧道 / 提权 / 容器逃逸 / 下载执行 / 敏感文件 / 可疑命令 / Base64）
 
-**当前规则（12 条）**
-见 `server/configs/rules.toml`
+**CheckEvent 参数顺序**：
 
-**CheckEvent 参数顺序（重要！）**
 ```go
-CheckEvent(agentID, pid, comm, cmdline, filename, source)
-//         agentID  pid  comm  Details  Filename  EventType
+CheckEvent(agentID, pid, comm, cmdline(Details), filename(Filename), source(EventType))
 ```
 
 ---
 
-## 九、编译与部署
+## 十、编译与部署
 
-**Agent（静态编译）**
+### Agent
+
 ```bash
 CGO_ENABLED=0 go build -o bin/agent ./agent/cmd/
-./bin/agent --config agent/configs/agent.toml
 ```
 
-**Server（需 CGO）**
+### Server
+
 ```bash
 CGO_ENABLED=1 go build -o bin/server ./server/cmd/
-./bin/server
 ```
 
-**eBPF .o 编译**
+### eBPF .o
+
 ```bash
 cd probes/templates/xxx
 clang -O2 -g -target bpf -D__TARGET_ARCH_x86_64 \
@@ -272,196 +245,114 @@ clang -O2 -g -target bpf -D__TARGET_ARCH_x86_64 \
     -c xxx.c -o xxx.o
 ```
 
----
+### 前端
 
-## 十、环境兼容与踩坑日志
-
-**测试环境**
-
-| 项 | 值 |
-| :--- | :--- |
-| **系统** | Ubuntu 22.04 |
-| **内核** | 6.8.0-136-generic |
-| **网卡** | ens33（VMware 虚拟网卡） |
-| **Go** | 1.25.0 |
-
-**踩坑记录**
-
-| 日期 | 问题 | 现象 | 解决方案 | 状态 |
-| :--- | :--- | :--- | :--- | :--- |
-| 08-11 | tcp_monitor 无数据 | PERCPU_HASH 遍历 bug | 改普通 HASH + 修正偏移 | ✅ |
-| 08-11 | clang 版本显示 vversion | Ubuntu 输出多了前缀 | 按 "version" 关键词提取 | ✅ |
-| 08-31 | XDP 运行时断网 | XDP_TX 改写原始包 | 改 ring buffer + XDP_PASS | ✅ 已修复 |
-| 08-13 | 心跳 goroutine 不执行 | sed 搞乱代码 | 用 Python 精确修改 | ✅ |
-| 08-31 | 告警规则 TOML 解析失败 | 双引号字符串正则转义 | 用 `\\\\` 转义 | ✅ |
-
-**XDP 断网问题详情**
-- **现象**：XDP attach 后主机无法访问外网
-- **推测**：`xdp_reporter.c` 修改了原始数据包但未恢复
-- **临时方案**：`agent.toml` 里 `xdp.enabled = false`
-- **待修方向**：XDP 只读不写，或复制数据包再修改
-
----
-
-## 十一、已知问题
-
-| # | 问题 | 优先级 | 状态 |
-| :--- | :--- | :--- | :--- |
-| 1 | ~~XDP 运行时导致断网~~ | ~~P0~~ | ✅ 已修复 |
-| 2 | Server/Agent 断连事件可能丢失 | P0 | ❌ |
-| 3 | 前端告警页缺失 | P0 | ❌ |
-| 4 | bash 全量采集无脱敏 | P1 | ❌ |
-| 5 | tcp 聚合无目标 IP/端口 | P1 | ❌ |
-
----
-
-## 十二、协作约定
-
-**修改后必须做的事**
-1. 重新编译验证
-2. 提交 git，commit message 格式：`feat/fix/refactor: 描述`
-3. 更新"当前开发焦点"章节
-
-**Bug 反馈标准格式**
-
-**你反馈问题时提供**：
-```text
-1. 现象：具体报错或异常行为
-2. 环境：内核版本 / 发行版 / 网卡型号
-3. 日志：相关输出（注明是 Agent 还是 Server）
-4. 复现步骤：怎么触发的
-5. 期望行为：应该怎样
+```bash
+cd web-vue
+source ~/.nvm/nvm.sh
+nvm use 20
+npm run dev -- --host 0.0.0.0
 ```
 
-**我修复后输出**：
-```text
-1. 修改的文件和位置
-2. 修改原因
-3. 重新编译命令
-4. 验证方法
-```
+---
 
-**共享头文件规则**
-- `alert_common.h` 改动后，所有引用它的 .o 都要重编译
-- 涉及：`exec_monitor_ebpf` / `xdp_reporter`
+## 十一、环境踩坑日志
+
+| 日期 | 问题 | 解决方案 | 状态 |
+| :--: | :-- | :-- | :--: |
+| 08-11 | tcp_monitor 无数据 | PERCPU_HASH 改 HASH | ✅ |
+| 08-11 | clang 版本显示 vversion | 按关键词提取 | ✅ |
+| 08-13 | XDP 断网 | XDP_TX 改 ring buffer + XDP_PASS | ✅ |
+| 08-31 | exec cmdline 错位 | Details/Filename 字段对齐 | ✅ |
+| 08-31 | 短命进程 cmdline 丢失 | C 代码直接读 argv | ✅ |
+| 08-31 | 重启报 pin file exists | 接管机制 + 版本检查 | ✅ |
+| 09-01 | 探针路径写死 | ProbeSpec 配置化 | ✅ |
 
 ---
 
-## 十三、重要设计决策
-
-| 决策 | 说明 |
-| :--- | :--- |
-| **永远 Beta** | 不追求正式版，持续演进 |
-| **Server 统一告警** | Agent 只采集不判断 |
-| **单点采集** | 各层不重复采 |
-| **内核态白名单** | 零开销过滤 |
-| **持久化 attach** | Agent 崩溃探针不殉葬 |
-| **预编译 .o** | 目标机不需要 clang |
-| **CO-RE + BTF** | 跨内核兼容，门槛 5.4+ |
-
----
-
-## 十四、安全通信架构（PKI + mTLS + RSA）
+## 十二、安全通信架构（PKI + mTLS + RSA）
 
 ### 整体设计
+
+```text
 日常通信：mTLS 双向认证（CA 证书）
 敏感操作：mTLS + RSA 签名双重验证
+```
 
 ### PKI 体系
 
-1. **部署时自动生成**
-   - CA 根证书（自签）
-   - Server 证书（serverAuth 标识）
-   - Agent 证书模板（clientAuth 标识）
-
-2. **Agent 专属证书**
-   - 每台 Agent 部署时生成专属证书
-   - CN 字段 = Agent ID 或主机名
-   - 由 Server CA 签发
-
-3. **集群化导入**
-   - 支持导入已有 CA 根证书
-   - 支持导入已有 Server 证书
-   - 集群共用同一 CA
-
-4. **证书吊销**
-   - Agent 沦陷 → Server 把该证书加入内存黑名单
-   - 实时生效，无需重启
-
-5. **自动续签**
-   - Agent 定期检查证书有效期
-   - 快过期时向 Server 申请新证书
+- 部署时自动生成 CA + Server 证书 + Agent 证书
+- Agent 专属证书，CN = Agent ID 或主机名
+- 集群化支持 CA 导入
+- 证书黑名单实时吊销
+- 自动续签
 
 ### RSA 签名敏感操作
 
-| 操作 | 验证方式 |
-|------|---------|
-| 心跳/资产上报/事件上报 | mTLS |
-| 探针下发 | mTLS + RSA 签名 |
-| 策略下发（LSM 规则） | mTLS + RSA 签名 |
-| 命令执行 | mTLS + RSA 签名 |
-| 配置变更 | mTLS + RSA 签名 |
-
-### Agent 沦陷防护
-
-- 证书黑名单即时踢出
-- client 账户只能访问公共资源
-- 不能登录 Web、不能管理其他 Agent
-
-### Server 沦陷防护（规划）
-
-- 探针下发冷静期（延迟 30 秒）
-- 探针 RSA 签名验证
-- Agent 本地白名单目录
-- Server 最小权限运行
-- 签名私钥离线保存
+| 操作 | 验证 |
+| :-- | :-- |
+| 心跳/资产/事件 | mTLS |
+| 探针下发 | mTLS + RSA |
+| 策略下发 | mTLS + RSA |
+| 命令执行 | mTLS + RSA |
 
 ---
 
-## 十五、LSM 层架构定位
+## 十三、Web API 权限模型（规划）
+
+| 角色 | 权限 |
+| :-- | :-- |
+| 匿名 | 仅 /api/login |
+| client | 公共资源（CA、health） |
+| admin | 全部 |
+| operator | 运维操作 |
+
+Agent 沦陷 → 证书黑名单踢出 + client 账户无法登录 Web。
+
+---
+
+## 十四、LSM 层架构定位
 
 ```text
 LSM 定位：一个"能拦截的探针"
-- 检测到危险命令 → return -EPERM 拦截
-- 同时写告警事件 → 复用现有通道
+- 危险命令 → return -EPERM 拦截
+- 同时写告警 → 复用现有通道
 - 策略下发 → 复用 ProbeCommand.probe_config
-- Server 告警引擎 → 不用改
-- Proto 协议 → 不用改
 ```
 
-**原则**：LSM 是探针，不是新系统。不新增通信协议，不修改告警引擎。
+**原则**：LSM 是探针，不是新系统。
 
 ---
 
 ## 十五、待办清单
 
-**P0（Beta 收尾）**
+### P0（Beta 收尾）
+
 - [x] 告警规则热加载
-- [x] 规则库扩充 12 条
+- [x] 规则库扩充
 - [x] XDP 断网修复
-- [x] 断连重连稳定性（验证通过，事件丢失可接受）
-- [ ] 前端告警页
-- [ ] 攻击演示脚本
+- [x] 断连重连
+- [x] 告警详情字段
+- [x] 探针动态管理
+- [ ] 攻击演示脚本定稿
 - [ ] README + 部署文档
 
-**P1**
+### P1
+
 - [ ] 配置文件注释完善
-- [ ] 关键错误处理补全
 - [ ] Agent 运行时 preflight 自检
+- [ ] Server 探针名单管理
 
-**P2**
-- [ ] 多 XDP 共存（libxdp）
-- [ ] XDP 所有权检测
-- [ ] 规则按主机/分组差异化
-- [ ] Agent 边缘告警
+### P2
 
-**P3**
+- [ ] PKI + mTLS 实现
+- [ ] 多 XDP 共存
+- [ ] 规则按主机差异化
+
+### P3
+
 - [ ] Java 内存马检测
 - [ ] 开放探针 API
 - [ ] LSM 拦截
-- [ ] 前端重构（Google+深信服风格）
-- [ ] CentOS 7 eBPF 兼容（自带 BTF）
-
----
-
-**完整版已包含全部 5 项补充内容。保存为 `HANDOVER.md`，任何会话拿到它都能无缝接手。**
+- [ ] 前端重构
+- [ ] CentOS 7 eBPF 兼容
