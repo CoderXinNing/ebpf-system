@@ -11,15 +11,15 @@ value = "/dev/tcp|bash -i|nc -e|python -c.*socket|perl -e.*socket"
 [[rules]]
 name = "SSH暴力破解"
 severity = "HIGH"
-description = "短时间内大量SSH登录失败"
+description = "短时间内大量SSH连接尝试"
 
 [[rules.conditions]]
-field = "comm"
-op = "eq"
-value = "sshd"
+field = "cmdline"
+op = "regex"
+value = "ssh.*root@|ssh.*admin@"
 
 [rules.frequency]
-count = 5
+count = 3
 window_sec = 10
 
 [[rules]]
@@ -49,12 +49,12 @@ value = "whoami|id$|uname -a|ifconfig|netstat -antp|cat /etc/passwd|cat /etc/sha
 [[rules]]
 name = "Base64编码命令"
 severity = "HIGH"
-description = "检测到Base64编码的命令执行"
+description = "检测到Base64解码执行"
 
 [[rules.conditions]]
 field = "cmdline"
 op = "regex"
-value = "echo .*base64.*-d|base64 -d"
+value = "base64.*-d|base64.*--decode"
 
 [[rules]]
 name = "WebShell特征"
