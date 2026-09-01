@@ -170,6 +170,7 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 	}
 	agent.LastSeen = req.Timestamp
 	agent.ActiveProbes = req.ActiveProbes
+	agent.ProbeDetails = req.ProbeDetails
 	agentID := req.AgentId
 	h.Mu.Unlock()
 	stream.Send(&pb.HeartbeatResponse{Success: true})
@@ -184,6 +185,7 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 			if a, ok := h.Agents[req.AgentId]; ok {
 				a.LastSeen = req.Timestamp
 				a.ActiveProbes = req.ActiveProbes
+				a.ProbeDetails = req.ProbeDetails
 			}
 			h.Mu.Unlock()
 		}

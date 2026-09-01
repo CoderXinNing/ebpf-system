@@ -33,6 +33,7 @@ type AgentInfo struct {
 	Version     string            `json:"version"`
 	Group       string            `json:"group"`
 	ActiveProbes int32             `json:"active_probes"`
+	ProbeDetails string            `json:"probe_details"`
 	LastSeen     int64             `json:"last_seen"`
 	FirstSeen    int64             `json:"first_seen"`
 	Framework    *pb.FrameworkInfo `json:"framework"`

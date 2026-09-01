@@ -37,7 +37,8 @@ func (a *Agent) runHeartbeatLoop() {
 						AgentId:      a.id,
 						AgentToken:   a.token,
 						Timestamp:    time.Now().Unix(),
-						ActiveProbes: 0,
+						ActiveProbes: int32(len(a.probeStatus)),
+						ProbeDetails: a.getProbeDetailsJSON(),
 					})
 					log.Printf("HB UPDATE"); updateHeartbeatMap()
 				}

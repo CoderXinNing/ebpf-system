@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"fmt"
 	"log"
 	"os"
@@ -394,13 +395,11 @@ func (a *Agent) startExecMonitorWithStatus(name string) {
 }
 
 func (a *Agent) startBashMonitorWithStatus(name string) {
-	defer func() {
-		if r := recover(); r != nil {
-			a.probeStatus[name] = fmt.Sprintf("failed: %v", r)
-			log.Printf("❌ %s 加载失败: %v", name, r)
-		}
-	}()
-	a.startBashMonitor()
+	if err := a.startBashMonitor(); err != nil {
+		a.probeStatus[name] = fmt.Sprintf("failed: %v", err)
+		log.Printf("❌ %s 加载失败: %v", name, err)
+		return
+	}
 	a.probeStatus[name] = "loaded"
 }
 
@@ -414,3 +413,17 @@ func (a *Agent) startTCPMonitorWithStatus(name string) {
 	a.startTCPMonitor()
 	a.probeStatus[name] = "loaded"
 }
+
+
+func (a *Agent) getProbeDetailsJSON() string {
+	if len(a.probeStatus) == 0 {
+		return "{}"
+	}
+	parts := make([]string, 0, len(a.probeStatus))
+	for name, status := range a.probeStatus {
+		parts = append(parts, fmt.Sprintf(`"%s":"%s"`, name, status))
+	}
+	return "{" + strings.Join(parts, ",") + "}"
+}
+
+

@@ -84,7 +84,7 @@ func (a *Agent) startExecMonitor() {
 	}
 }
 
-func (a *Agent) startBashMonitor() {
+func (a *Agent) startBashMonitor() error {
 	err := ebpf.LoadBashMonitor(a.getProbePath("bash_monitor"), "/bin/bash", func(evt ebpf.BashEvent, userName string, line string) {
 		if line == "" {
 			return
@@ -101,7 +101,9 @@ func (a *Agent) startBashMonitor() {
 	})
 	if err != nil {
 		log.Printf("⚠️ Bash监控加载失败（降级）: %v", err)
+		return err
 	}
+	return nil
 }
 
 func (a *Agent) startTCPMonitor() {
