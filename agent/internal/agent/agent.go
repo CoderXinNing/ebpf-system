@@ -21,6 +21,7 @@ const AgentVersion = "1.0.0"
 
 type Agent struct {
 	id, hostname, kernelVer, ipAddr, token string
+	level        string
 	cfg          *config.AgentConfig
 	capabilities *probe.AgentCapabilities
 	eventQueue   chan *pb.ProbeEvent
@@ -51,34 +52,12 @@ func (a *Agent) Init() error {
 	a.kernelVer = caps.KernelVersion
 	fmt.Print(caps.Summary())
 
-	// 降级决策
+	// 降级决策先确定环境能力，但探针加载延后到注册后查名单
 	level := a.decideLevel()
 	log.Printf("🔍 环境级别: %s", level)
+	a.level = level
 
-	switch level {
-	case "full":
-		go a.startXDP()
-		fallthrough
-	case "ebpf":
-		if a.isProbeEnabled("exec_monitor") {
-			go a.startExecMonitor()
-		} else {
-			log.Println("🚫 exec_monitor 配置未启用，跳过")
-		}
-		if a.isProbeEnabled("bash_monitor") {
-			go a.startBashMonitor()
-		} else {
-			log.Println("🚫 bash_monitor 配置未启用，跳过")
-		}
-		if a.isProbeEnabled("tcp_monitor") {
-			go a.startTCPMonitor()
-		} else {
-			log.Println("🚫 tcp_monitor 配置未启用，跳过")
-		}
-		fallthrough
-	case "basic":
-		log.Println("✅ Agent运行在基础模式（纯CMDB采集）")
-	case "none":
+	if level == "none" {
 		return fmt.Errorf("环境不支持任何功能")
 	}
 
@@ -116,14 +95,31 @@ func (a *Agent) Run() {
 		os.Exit(0)
 	}()
 
-	a.connectAndRegister()
+	if err := a.connectAndRegister(); err != nil {
+		log.Println("⚠️ Server不可达，进入离线保命模式")
+		// 后台重试连接（指数退避）
+		go a.retryConnectLoop()
+	} else {
+		// 注册后查询探针名单
+		probes := a.fetchProbeList()
+		if probes == nil {
+			log.Println("⚠️ 名单查询失败，不加载探针")
+		} else {
+			a.loadProbesByList(probes)
+		}
+	}
+
 	go a.eventReporter()
 	go func() {
 		time.Sleep(3 * time.Second)
 		a.collectAndReportAssets()
 	}()
 	go func() {
-		ticker := time.NewTicker(a.cfg.Agent.CollectInterval)
+		interval := a.cfg.Agent.CollectInterval
+		if a.client == nil {
+			interval = 1 * time.Hour  // 离线时降频
+		}
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
 			a.collectAndReportAssets()
@@ -133,16 +129,17 @@ func (a *Agent) Run() {
 	a.runHeartbeatLoop()
 }
 
-func (a *Agent) connectAndRegister() {
+func (a *Agent) connectAndRegister() error {
 	for {
-		conn, err := grpc.Dial(a.cfg.Agent.Server,
+		dialCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		conn, err := grpc.DialContext(dialCtx, a.cfg.Agent.Server,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		)
+		cancel()
 		if err != nil {
 			log.Printf("❌ 连接失败: %v", err)
-			time.Sleep(a.cfg.Agent.RetryDelay)
-			continue
+			return err
 		}
 
 		if a.conn != nil {
@@ -154,10 +151,9 @@ func (a *Agent) connectAndRegister() {
 
 		if err := a.register(); err != nil {
 			log.Printf("❌ %v", err)
-			time.Sleep(a.cfg.Agent.RetryDelay)
-			continue
+			return err
 		}
-		break
+		return nil
 	}
 }
 
@@ -213,6 +209,7 @@ func (a *Agent) eventReporter() {
 
 func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 	if a.client == nil || a.token == "" {
+		log.Println("⚠️ Server未连接，跳过事件上报")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -293,4 +290,76 @@ func (a *Agent) isProbeEnabled(name string) bool {
 		}
 	}
 	return false
+}
+
+
+func (a *Agent) fetchProbeList() []*pb.ProbeInfo {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := a.client.GetProbeList(ctx, &pb.ProbeListRequest{
+		AgentId:    a.id,
+		AgentToken: a.token,
+	})
+	if err != nil {
+		log.Printf("⚠️ 查询探针名单失败: %v", err)
+		return nil
+	}
+	if !resp.Success {
+		log.Printf("⚠️ 探针名单查询被拒绝: %s", resp.Message)
+		return nil
+	}
+	log.Printf("📋 收到探针名单: %d个", len(resp.Probes))
+	return resp.Probes
+}
+
+func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
+	for _, p := range probes {
+		if !p.Enabled {
+			log.Printf("🚫 %s 名单中未启用，跳过", p.Name)
+			continue
+		}
+		log.Printf("▶️ 加载探针: %s", p.Name)
+		switch p.Name {
+		case "exec_monitor":
+			go a.startExecMonitor()
+		case "bash_monitor":
+			go a.startBashMonitor()
+		case "tcp_monitor":
+			go a.startTCPMonitor()
+		case "xdp_reporter":
+			if a.level == "full" {
+				go a.startXDP()
+			}
+		default:
+			log.Printf("⚠️ 未知探针: %s", p.Name)
+		}
+	}
+}
+
+
+func (a *Agent) retryConnectLoop() {
+	backoff := []time.Duration{3, 6, 12, 30, 60}
+	idx := 0
+	for {
+		wait := backoff[idx]
+		if idx < len(backoff)-1 {
+			idx++
+		}
+		time.Sleep(wait * time.Second)
+		log.Printf("🔄 尝试重连 Server (间隔 %ds)...", int(wait.Seconds()))
+		if err := a.connectAndRegister(); err != nil {
+			log.Printf("⚠️ 重连失败: %v", err)
+			continue
+		}
+		log.Println("✅ 重连成功！")
+		// 重连后加载探针
+		probes := a.fetchProbeList()
+		if probes != nil {
+			a.loadProbesByList(probes)
+		}
+		// 补报资产
+		a.collectAndReportAssets()
+		return
+	}
 }

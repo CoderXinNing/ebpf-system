@@ -164,6 +164,10 @@ func (a *Agent) collectAndReportAssets() {
 			MountPoint: d.MountPoint, UsedMb: int32(d.UsedMB), TotalMb: int32(d.TotalMB), Percent: d.Percent,
 		})
 	}
+	if a.client == nil || a.token == "" {
+		log.Println("⚠️ Server未连接，跳过资产上报")
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if _, err := a.client.ReportAssets(ctx, assetReq); err != nil {
