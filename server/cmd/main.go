@@ -289,3 +289,49 @@ func loadConfig(path string) *ServerConfig {
 	}
 	return &cfg
 }
+
+
+// probeLists 内存探针名单（agent_id -> 探针列表）
+var probeLists = map[string][]*pb.ProbeInfo{
+	// 默认所有主机都加载这三个探针
+	// 后续可以通过管理接口动态调整
+}
+
+func (s *Server) GetProbeList(ctx context.Context, req *pb.ProbeListRequest) (*pb.ProbeListResponse, error) {
+	// 验证 token
+	h := s.handler
+	h.Mu.RLock()
+	agent, ok := h.Agents[req.AgentId]
+	h.Mu.RUnlock()
+	if !ok || agent.Token != req.AgentToken {
+		return &pb.ProbeListResponse{Success: false, Message: "认证失败"}, nil
+	}
+
+	// 从 SQLite 查名单
+	configs, err := s.handler.Store.GetProbeConfigs(req.AgentId)
+	if err != nil {
+		return &pb.ProbeListResponse{Success: false, Message: "查询失败"}, nil
+	}
+
+	// 如果没有配置，返回默认名单
+	if len(configs) == 0 {
+		configs = []store.ProbeConfigRecord{
+			{AgentID: req.AgentId, ProbeName: "exec_monitor", Enabled: true, Remove: true, Path: "probes/templates/exec_monitor_ebpf/exec_monitor.o"},
+			{AgentID: req.AgentId, ProbeName: "bash_monitor", Enabled: true, Remove: true, Path: "probes/templates/bash_monitor/bash_monitor.o"},
+			{AgentID: req.AgentId, ProbeName: "tcp_monitor", Enabled: true, Remove: true, Path: "probes/templates/tcp_monitor/tcp_monitor.o"},
+		}
+	}
+
+	probes := make([]*pb.ProbeInfo, 0, len(configs))
+	for _, cfg := range configs {
+		probes = append(probes, &pb.ProbeInfo{
+			Name:    cfg.ProbeName,
+			Enabled: cfg.Enabled,
+			Remove:  cfg.Remove,
+			Path:    cfg.Path,
+		})
+	}
+
+	log.Printf("📋 %s 查询探针名单: %d个", req.AgentId, len(probes))
+	return &pb.ProbeListResponse{Success: true, Probes: probes}, nil
+}

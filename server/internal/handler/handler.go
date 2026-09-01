@@ -90,6 +90,11 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"success": true})
 		})
 		api.POST("/command", h.roleMiddleware("admin", "operator"), h.Command)
+
+		// 探针管理
+		api.GET("/probes/config", h.roleMiddleware("admin", "operator"), h.ListProbeConfigs)
+		api.POST("/probes/deploy", h.roleMiddleware("admin"), h.DeployProbe)
+		api.POST("/probes/destroy", h.roleMiddleware("admin"), h.DestroyProbe)
 		api.GET("/assets", h.AssetsOverview)
 		api.GET("/assets/:agent_id", h.AssetDetail)
 		api.GET("/groups", func(c *gin.Context) {
@@ -439,4 +444,79 @@ func (h *Handler) roleMiddleware(roles ...string) gin.HandlerFunc {
 		c.JSON(403, gin.H{"error": "权限不足"})
 		c.Abort()
 	}
+}
+
+// ListProbeConfigs 查询探针配置
+func (h *Handler) ListProbeConfigs(c *gin.Context) {
+	agentID := c.Query("agent_id")
+	if agentID == "" {
+		c.JSON(400, gin.H{"error": "缺少agent_id"})
+		return
+	}
+	configs, err := h.Store.GetProbeConfigs(agentID)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(200, gin.H{"configs": configs})
+}
+
+// DeployProbe 下发/更新探针配置
+func (h *Handler) DeployProbe(c *gin.Context) {
+	var req struct {
+		AgentID   string `json:"agent_id"`
+		ProbeName string `json:"probe_name"`
+		Enabled   bool   `json:"enabled"`
+		Remove    bool   `json:"remove"`
+		Path      string `json:"path"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "参数错误"})
+		return
+	}
+	if req.AgentID == "" || req.ProbeName == "" {
+		c.JSON(400, gin.H{"error": "agent_id和probe_name必填"})
+		return
+	}
+	if req.Path == "" {
+		// 默认路径
+		paths := map[string]string{
+			"exec_monitor": "probes/templates/exec_monitor_ebpf/exec_monitor.o",
+			"bash_monitor": "probes/templates/bash_monitor/bash_monitor.o",
+			"tcp_monitor":  "probes/templates/tcp_monitor/tcp_monitor.o",
+		}
+		req.Path = paths[req.ProbeName]
+	}
+
+	err := h.Store.UpsertProbeConfig(store.ProbeConfigRecord{
+		AgentID:   req.AgentID,
+		ProbeName: req.ProbeName,
+		Enabled:   req.Enabled,
+		Remove:    req.Remove,
+		Path:      req.Path,
+	})
+	if err != nil {
+		c.JSON(500, gin.H{"error": "保存失败"})
+		return
+	}
+	log.Printf("📋 探针下发: %s -> %s (enabled=%v)", req.AgentID, req.ProbeName, req.Enabled)
+	c.JSON(200, gin.H{"success": true, "message": "已下发"})
+}
+
+// DestroyProbe 销毁探针配置
+func (h *Handler) DestroyProbe(c *gin.Context) {
+	var req struct {
+		AgentID   string `json:"agent_id"`
+		ProbeName string `json:"probe_name"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.Store.DeleteProbeConfig(req.AgentID, req.ProbeName); err != nil {
+		c.JSON(500, gin.H{"error": "删除失败"})
+		return
+	}
+	log.Printf("🗑️ 探针销毁: %s -> %s", req.AgentID, req.ProbeName)
+	c.JSON(200, gin.H{"success": true, "message": "已销毁"})
 }

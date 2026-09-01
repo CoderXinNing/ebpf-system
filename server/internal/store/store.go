@@ -30,6 +30,17 @@ func NewStore(dbPath string) (*Store, error) {
 			password TEXT NOT NULL,
 			role TEXT DEFAULT 'viewer'
 		)`,
+		// 探针配置
+		`CREATE TABLE IF NOT EXISTS probe_configs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			agent_id TEXT NOT NULL,
+			probe_name TEXT NOT NULL,
+			enabled INTEGER DEFAULT 1,
+			remove INTEGER DEFAULT 1,
+			path TEXT,
+			updated_at INTEGER,
+			UNIQUE(agent_id, probe_name)
+		)`,
 		// 主机资产快照
 		`CREATE TABLE IF NOT EXISTS asset_snapshots (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -221,4 +232,63 @@ func (s *Store) GetEvents(limit int, agentID string) ([]EventRecord, error) {
 		events = append(events, e)
 	}
 	return events, nil
+}
+
+// ProbeConfigRecord 探针配置
+type ProbeConfigRecord struct {
+	ID        int64  `json:"id"`
+	AgentID   string `json:"agent_id"`
+	ProbeName string `json:"probe_name"`
+	Enabled   bool   `json:"enabled"`
+	Remove    bool   `json:"remove"`
+	Path      string `json:"path"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+// UpsertProbeConfig 插入或更新探针配置
+func (s *Store) UpsertProbeConfig(r ProbeConfigRecord) error {
+	enabled := 0
+	if r.Enabled { enabled = 1 }
+	remove := 0
+	if r.Remove { remove = 1 }
+
+	_, err := s.db.Exec(
+		`INSERT INTO probe_configs (agent_id, probe_name, enabled, remove, path, updated_at)
+		 VALUES (?,?,?,?,?,?)
+		 ON CONFLICT(agent_id, probe_name) DO UPDATE SET
+		 enabled=excluded.enabled, remove=excluded.remove, path=excluded.path, updated_at=excluded.updated_at`,
+		r.AgentID, r.ProbeName, enabled, remove, r.Path, time.Now().Unix(),
+	)
+	return err
+}
+
+// GetProbeConfigs 获取指定主机的探针配置
+func (s *Store) GetProbeConfigs(agentID string) ([]ProbeConfigRecord, error) {
+	rows, err := s.db.Query(
+		"SELECT id, agent_id, probe_name, enabled, remove, path, updated_at FROM probe_configs WHERE agent_id = ?",
+		agentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var configs []ProbeConfigRecord
+	for rows.Next() {
+		var c ProbeConfigRecord
+		var enabled, remove int
+		var path sql.NullString
+		rows.Scan(&c.ID, &c.AgentID, &c.ProbeName, &enabled, &remove, &path, &c.UpdatedAt)
+		c.Enabled = enabled == 1
+		c.Remove = remove == 1
+		c.Path = path.String
+		configs = append(configs, c)
+	}
+	return configs, nil
+}
+
+// DeleteProbeConfig 删除探针配置
+func (s *Store) DeleteProbeConfig(agentID, probeName string) error {
+	_, err := s.db.Exec("DELETE FROM probe_configs WHERE agent_id = ? AND probe_name = ?", agentID, probeName)
+	return err
 }
