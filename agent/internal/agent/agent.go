@@ -27,6 +27,8 @@ type Agent struct {
 	eventQueue   chan *pb.ProbeEvent
 	conn         *grpc.ClientConn
 	client       pb.SentinelClient
+	probeStatus  map[string]string // probe_name -> "loaded" / "failed: reason"
+	probePaths   map[string]string // probe_name -> path from Server
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -40,6 +42,8 @@ func New(cfg *config.AgentConfig) *Agent {
 		ipAddr:     getIPAddress(),
 		cfg:        cfg,
 		eventQueue: make(chan *pb.ProbeEvent, 1000),
+		probeStatus: make(map[string]string),
+		probePaths:  make(map[string]string),
 	}
 }
 
@@ -268,6 +272,10 @@ func updateHeartbeatMap() {
 
 
 func (a *Agent) getProbePath(name string) string {
+	// 优先从 Server 名单拿
+	if path, ok := a.probePaths[name]; ok && path != "" {
+		return path
+	}
 	for _, p := range a.cfg.Autoload {
 		if p.Name == name && p.Path != "" {
 			return p.Path
@@ -317,21 +325,30 @@ func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
 	for _, p := range probes {
 		if !p.Enabled {
 			log.Printf("🚫 %s 名单中未启用，跳过", p.Name)
+			a.probeStatus[p.Name] = "disabled"
 			continue
 		}
 		log.Printf("▶️ 加载探针: %s", p.Name)
+		a.probePaths[p.Name] = p.Path
 		switch p.Name {
 		case "exec_monitor":
-			go a.startExecMonitor()
+			a.probeStatus[p.Name] = "loading"
+			go a.startExecMonitorWithStatus(p.Name)
 		case "bash_monitor":
-			go a.startBashMonitor()
+			a.probeStatus[p.Name] = "loading"
+			go a.startBashMonitorWithStatus(p.Name)
 		case "tcp_monitor":
-			go a.startTCPMonitor()
+			a.probeStatus[p.Name] = "loading"
+			go a.startTCPMonitorWithStatus(p.Name)
 		case "xdp_reporter":
 			if a.level == "full" {
+				a.probeStatus[p.Name] = "loading"
 				go a.startXDP()
+			} else {
+				a.probeStatus[p.Name] = "skipped: xdp not available"
 			}
 		default:
+			a.probeStatus[p.Name] = "unknown probe"
 			log.Printf("⚠️ 未知探针: %s", p.Name)
 		}
 	}
@@ -362,4 +379,38 @@ func (a *Agent) retryConnectLoop() {
 		a.collectAndReportAssets()
 		return
 	}
+}
+
+
+func (a *Agent) startExecMonitorWithStatus(name string) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.probeStatus[name] = fmt.Sprintf("failed: %v", r)
+			log.Printf("❌ %s 加载失败: %v", name, r)
+		}
+	}()
+	a.startExecMonitor()
+	a.probeStatus[name] = "loaded"
+}
+
+func (a *Agent) startBashMonitorWithStatus(name string) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.probeStatus[name] = fmt.Sprintf("failed: %v", r)
+			log.Printf("❌ %s 加载失败: %v", name, r)
+		}
+	}()
+	a.startBashMonitor()
+	a.probeStatus[name] = "loaded"
+}
+
+func (a *Agent) startTCPMonitorWithStatus(name string) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.probeStatus[name] = fmt.Sprintf("failed: %v", r)
+			log.Printf("❌ %s 加载失败: %v", name, r)
+		}
+	}()
+	a.startTCPMonitor()
+	a.probeStatus[name] = "loaded"
 }
