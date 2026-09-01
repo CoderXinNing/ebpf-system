@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme="darkTheme" :theme-overrides="theme">
+  <n-config-provider :theme-overrides="theme">
     <n-message-provider>
       <n-notification-provider>
         <n-dialog-provider>
@@ -11,50 +11,101 @@
 </template>
 
 <script setup>
-import { darkTheme } from 'naive-ui'
 const theme = {
   common: {
-    bodyColor: '#f0f2f5',
-    cardColor: '#ffffff',
-    inputColor: '#ffffff',
-    borderColor: '#e4e7ed',
-    primaryColor: '#1e6fff',
-    primaryColorHover: '#3d85ff',
-    borderRadius: '4px',
-    fontSizeSmall: '13px',
-    fontSizeMedium: '14px',
-    textColor1: '#1d2129',
-    textColor2: '#4e5969',
-    textColor3: '#86909c',
-    modalColor: '#ffffff',
+    bodyColor: '#E8EDF4',
+    cardColor: '#FFFFFF',
+    primaryColor: '#1A73E8',
+    primaryColorHover: '#1765CC',
+    borderRadius: '0.6vw',
+    fontSizeSmall: '0.85vw',
+    fontSizeMedium: '0.95vw',
+    fontSizeLarge: '1.1vw',
+    textColor1: '#202124',
+    textColor2: '#5F6368',
+    textColor3: '#9AA0A6',
   },
-  Card: { paddingMedium: '20px', borderRadius: '8px' },
-  DataTable: { thPaddingSmall: '10px 16px', tdPaddingSmall: '10px 16px' },
-  Menu: { itemHeight: '44px', borderRadius: '6px' },
-  Layout: { siderColor: '#001529' },
-  Modal: { borderRadius: '12px' },
-  Dialog: { borderRadius: '12px', titleFontSize: '18px', titleFontWeight: '600' },
-  Button: { borderRadiusMedium: '6px' }
+  Card: {
+    borderRadius: '0.8vw',
+    paddingMedium: '1.5vh 1.2vw',
+  },
+  DataTable: {
+    thPaddingSmall: '1vh 0.8vw',
+    tdPaddingSmall: '1vh 0.8vw',
+    borderRadius: '0.6vw',
+  },
+  Button: {
+    borderRadiusMedium: '0.5vw',
+    heightMedium: '4vh',
+  },
+  Input: {
+    borderRadius: '0.5vw',
+    heightMedium: '4vh',
+  },
 }
 </script>
 
 <style>
-html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #f0f2f5; font-family: -apple-system, 'Segoe UI', 'PingFang SC', sans-serif; color: #1d2129; }
-a { color: #1e6fff; text-decoration: none; }
-.n-modal-mask { background: rgba(0,0,0,.3) !important; }
-.n-modal .n-card { border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,.08); background: #fff !important; color: #1d2129 !important; }
-.n-modal .n-card > .n-card-header { font-size: 18px; font-weight: 600; color: #1d2129 !important; border-bottom: 1px solid #f0f2f5; }
-.n-input { border: 1px solid #d0d5dd !important; border-radius: 6px !important; }
-.n-select .n-base-selection { border: 1px solid #d0d5dd !important; border-radius: 6px !important; }
-  .n-select .n-base-selection__label { background: #fff !important; }
-.n-input .n-input__input-el { color: #1d2129 !important; font-weight: 500; }
-.n-input .n-input__placeholder { color: #999 !important; }
-.n-select .n-base-selection { background: #fff !important; }
-.n-select .n-base-selection-label { color: #1d2129 !important; font-weight: 500; }
-.n-select .n-base-selection-placeholder { color: #999 !important; }
-.n-base-select-menu .n-base-select-option { color: #333 !important; background: #fff !important; }
-.n-base-select-menu .n-base-select-option.n-base-select-option--selected { color: #1e6fff !important; background: #e8f0fe !important; }
-.n-base-select-menu .n-base-select-option:hover { background: #f5f6f8 !important; }
-.n-base-select-menu { padding: 0 !important; }
-.n-base-select-menu .n-scrollbar-content { padding: 4px 0 !important; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #E8EDF4;
+  font-family: Arial, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #202124;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* 全局卡片 */
+.n-card {
+  border-radius: 0.8vw !important;
+  box-shadow: 0 0.3vh 1.5vh rgba(0,0,0,0.04) !important;
+}
+
+/* 全局表格 */
+.n-data-table {
+  border-radius: 0.6vw;
+}
+
+/* 全局按钮 */
+.n-button {
+  border-radius: 0.5vw !important;
+  transition: all 0.25s !important;
+}
+
+/* 全局卡片间距 */
+.n-card {
+  margin-bottom: 1vh;
+}
+
+/* 全局表格容器 */
+.n-card .n-data-table {
+  font-size: 0.85vw;
+}
+
+/* 全局标签页 */
+.n-tabs .n-tabs-tab {
+  font-size: 0.9vw;
+  padding: 0.8vh 1vw;
+}
+
+/* 全局描述列表 */
+.n-descriptions {
+  font-size: 0.85vw;
+}
+
+.n-button:hover {
+  transform: translateY(-0.1vh);
+  box-shadow: 0 0.4vh 1.2vh rgba(26,115,232,0.2);
+}
 </style>

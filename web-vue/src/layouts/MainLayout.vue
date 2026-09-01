@@ -8,16 +8,43 @@
       </div>
 
       <nav class="nav-menu">
-        <div
-          v-for="item in menu"
-          :key="item.key"
-          class="nav-item"
-          :class="{ active: isActive(item.key) }"
-          @click="go(item.key)"
-        >
-          <span class="nav-icon">{{ item.icon }}</span>
-          <span v-if="!collapsed" class="nav-label">{{ item.label }}</span>
-        </div>
+        <template v-for="item in menu" :key="item.key">
+          <!-- 有子菜单 -->
+          <div v-if="item.children" class="nav-group">
+            <div
+              class="nav-item"
+              :class="{ active: isGroupActive(item) }"
+              @click="toggleGroup(item.key)"
+            >
+              <span class="nav-icon">{{ item.icon }}</span>
+              <span v-if="!collapsed" class="nav-label">{{ item.label }}</span>
+              <span v-if="!collapsed" class="nav-arrow" :class="{ open: openGroups.includes(item.key) }">▾</span>
+            </div>
+            <div v-if="!collapsed && openGroups.includes(item.key)" class="nav-children">
+              <div
+                v-for="child in item.children"
+                :key="child.key"
+                class="nav-item child"
+                :class="{ active: isActive(child.key) }"
+                @click="go(child.key)"
+              >
+                <span class="nav-icon">{{ child.icon }}</span>
+                <span class="nav-label">{{ child.label }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 无子菜单 -->
+          <div
+            v-else
+            class="nav-item"
+            :class="{ active: isActive(item.key) }"
+            @click="go(item.key)"
+          >
+            <span class="nav-icon">{{ item.icon }}</span>
+            <span v-if="!collapsed" class="nav-label">{{ item.label }}</span>
+          </div>
+        </template>
       </nav>
     </aside>
 
@@ -41,20 +68,54 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
 const collapsed = ref(false)
+const openGroups = ref([])
 
 const menu = [
   { label: '仪表盘', key: '/', icon: '📊' },
-  { label: '主机管理', key: '/hosts', icon: '🖥️' },
-  { label: '事件流', key: '/events', icon: '📡' },
-  { label: '告警中心', key: '/alerts', icon: '🚨' },
-  { label: '资产清点', key: '/processes', icon: '📦' },
-  { label: '探针管理', key: '/probes', icon: '🔧' },
+  {
+    label: '资产管理',
+    key: 'asset',
+    icon: '📦',
+    children: [
+      { label: '主机管理', key: '/hosts', icon: '🖥️' },
+      { label: '资产清点', key: '/processes', icon: '📋' },
+    ],
+  },
+  {
+    label: '分析中心',
+    key: 'analysis',
+    icon: '📊',
+    children: [
+      { label: '事件流', key: '/events', icon: '📡' },
+      { label: '告警中心', key: '/alerts', icon: '🚨' },
+    ],
+  },
+  {
+    label: 'Agent管理',
+    key: 'agent',
+    icon: '🤖',
+    children: [
+      { label: 'Agent部署', key: '/install', icon: '📥' },
+      { label: 'eBPF探针下发', key: '/probes', icon: '🔧' },
+    ],
+  },
+  {
+    label: '系统设置',
+    key: 'system',
+    icon: '⚙️',
+    children: [
+      { label: '用户管理', key: '/users', icon: '👤' },
+      { label: '日志审计', key: '/logs', icon: '📋' },
+      { label: '日志管理', key: '/log-settings', icon: '⚙️' },
+      { label: '关于系统', key: '/about', icon: 'ℹ️' },
+    ],
+  },
 ]
 
 const titleMap = {
@@ -73,11 +134,60 @@ function isActive(key) {
   return route.path.startsWith(key)
 }
 
+function isGroupActive(group) {
+  return group.children.some(child => isActive(child.key))
+}
+
+function toggleGroup(key) {
+  const idx = openGroups.value.indexOf(key)
+  if (idx >= 0) {
+    openGroups.value.splice(idx, 1)
+  } else {
+    openGroups.value.push(key)
+  }
+}
+
+// 监听路由变化，自动展开当前分组
+watch(() => route.path, () => {
+  menu.forEach(item => {
+    if (item.children && isGroupActive(item)) {
+      if (!openGroups.value.includes(item.key)) {
+        openGroups.value.push(item.key)
+      }
+    }
+  })
+}, { immediate: true })
+
+// 详情页等子路由也要保持父分组展开
+watch(() => route.path, () => {
+  menu.forEach(item => {
+    if (item.children) {
+      const isChildRoute = item.children.some(child => {
+        if (child.key === '/hosts') return route.path.startsWith('/host')
+        if (child.key === '/processes') return route.path.startsWith('/proc')
+        return route.path.startsWith(child.key)
+      })
+      if (isChildRoute && !openGroups.value.includes(item.key)) {
+        openGroups.value.push(item.key)
+      }
+    }
+  })
+}, { immediate: true })
+
 function go(key) {
   router.push(key)
 }
 
-function logout() {
+async function logout() {
+  const token = localStorage.getItem('token')
+  try {
+    await fetch('/api/logout', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    })
+  } catch (e) {
+    // 忽略
+  }
   localStorage.clear()
   router.push('/login')
 }
@@ -169,6 +279,31 @@ const username = computed(() => user.username || 'admin')
 .nav-label {
   font-size: 0.95vw;
   white-space: nowrap;
+}
+
+.nav-arrow {
+  margin-left: auto;
+  font-size: 0.7vw;
+  transition: transform 0.3s;
+}
+
+.nav-arrow.open {
+  transform: rotate(180deg);
+}
+
+.nav-children {
+  padding-left: 1vw;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2vh;
+}
+
+.nav-item.child {
+  padding-left: 0.8vw;
+}
+
+.nav-item.child .nav-label {
+  font-size: 0.85vw;
 }
 
 /* 右侧主区 */

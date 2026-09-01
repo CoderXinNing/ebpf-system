@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -88,6 +89,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			}
 			h.Mu.Unlock()
 			log.Printf("📋 移动主机: %v -> %s", req.AgentIDs, req.Group)
+			h.Store.SaveAuditLog(h.getUsername(c), "移动主机", fmt.Sprintf("%v -> %s", req.AgentIDs, req.Group), c.ClientIP())
 			c.JSON(200, gin.H{"success": true})
 		})
 		api.POST("/command", h.roleMiddleware("admin", "operator"), h.Command)
@@ -99,15 +101,31 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/assets", h.AssetsOverview)
 		api.GET("/assets/:agent_id", h.AssetDetail)
 		api.GET("/groups", func(c *gin.Context) {
-			h.Mu.RLock()
-			defer h.Mu.RUnlock()
-			groups := make(map[string]int)
-			for _, a := range h.Agents {
-				g := a.Group
-				if g == "" { g = "默认组" }
-				groups[g]++
-			}
+			groups, _ := h.Store.GetGroups()
 			c.JSON(200, gin.H{"groups": groups})
+		})
+		api.POST("/groups", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
+			var req struct { Name string `json:"name"` }
+			c.BindJSON(&req)
+			if req.Name == "" {
+				c.JSON(400, gin.H{"error": "组名不能为空"})
+				return
+			}
+			if err := h.Store.CreateGroup(req.Name); err != nil {
+				c.JSON(500, gin.H{"error": "创建失败"})
+				return
+			}
+			log.Printf("📋 创建分组: %s", req.Name)
+			c.JSON(200, gin.H{"success": true})
+		})
+		api.DELETE("/groups/:name", h.roleMiddleware("admin"), func(c *gin.Context) {
+			name := c.Param("name")
+			if err := h.Store.DeleteGroup(name); err != nil {
+				c.JSON(500, gin.H{"error": "删除失败"})
+				return
+			}
+			log.Printf("🗑️ 删除分组: %s", name)
+			c.JSON(200, gin.H{"success": true})
 		})
 		api.GET("/assets/category", h.AssetsByCategory)
 		api.GET("/alerts", func(c *gin.Context) {
@@ -115,6 +133,41 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"alerts": alerts})
 		})
 		api.GET("/users", h.roleMiddleware("admin"), h.ListUsers)
+
+		// 审计日志
+		api.POST("/logout", h.authMiddleware, func(c *gin.Context) {
+			h.Store.SaveAuditLog(h.getUsername(c), "注销", "退出登录", c.ClientIP())
+			c.JSON(200, gin.H{"success": true})
+		})
+
+		api.GET("/logs", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
+			logs, _ := h.Store.GetAuditLogs(200)
+			c.JSON(200, gin.H{"logs": logs})
+		})
+
+		// 日志设置
+		api.GET("/log-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
+			eventDays, _ := h.Store.GetLogSetting("event_days")
+			alertDays, _ := h.Store.GetLogSetting("alert_days")
+			auditDays, _ := h.Store.GetLogSetting("audit_days")
+			c.JSON(200, gin.H{
+				"event_days": eventDays,
+				"alert_days": alertDays,
+				"audit_days": auditDays,
+			})
+		})
+		api.POST("/log-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
+			var req struct {
+				EventDays string `json:"event_days"`
+				AlertDays string `json:"alert_days"`
+				AuditDays string `json:"audit_days"`
+			}
+			c.BindJSON(&req)
+			if req.EventDays != "" { h.Store.SetLogSetting("event_days", req.EventDays) }
+			if req.AlertDays != "" { h.Store.SetLogSetting("alert_days", req.AlertDays) }
+			if req.AuditDays != "" { h.Store.SetLogSetting("audit_days", req.AuditDays) }
+			c.JSON(200, gin.H{"success": true})
+		})
 	}
 }
 
@@ -123,10 +176,12 @@ func (h *Handler) Login(c *gin.Context) {
 	c.BindJSON(&req)
 	user, err := h.Auth.VerifyPassword(req.Username, req.Password)
 	if err != nil {
+		h.Store.SaveAuditLog(req.Username, "登录失败", "密码错误", c.ClientIP())
 		c.JSON(401, gin.H{"error": "用户名或密码错误"})
 		return
 	}
 	token, _ := h.Auth.GenerateToken(user)
+	h.Store.SaveAuditLog(user.Username, "登录成功", "Web登录", c.ClientIP())
 	c.JSON(200, gin.H{"token": token, "user": user})
 }
 
@@ -501,6 +556,7 @@ func (h *Handler) DeployProbe(c *gin.Context) {
 		return
 	}
 	log.Printf("📋 探针下发: %s -> %s (enabled=%v)", req.AgentID, req.ProbeName, req.Enabled)
+	h.Store.SaveAuditLog(h.getUsername(c), "下发探针", fmt.Sprintf("%s -> %s enabled=%v", req.AgentID, req.ProbeName, req.Enabled), c.ClientIP())
 	c.JSON(200, gin.H{"success": true, "message": "已下发"})
 }
 
@@ -519,5 +575,16 @@ func (h *Handler) DestroyProbe(c *gin.Context) {
 		return
 	}
 	log.Printf("🗑️ 探针销毁: %s -> %s", req.AgentID, req.ProbeName)
+	h.Store.SaveAuditLog(h.getUsername(c), "销毁探针", fmt.Sprintf("%s -> %s", req.AgentID, req.ProbeName), c.ClientIP())
 	c.JSON(200, gin.H{"success": true, "message": "已销毁"})
+}
+
+
+func (h *Handler) getUsername(c *gin.Context) string {
+	if u, ok := c.Get("user"); ok {
+		if user, ok := u.(*auth.User); ok {
+			return user.Username
+		}
+	}
+	return "unknown"
 }

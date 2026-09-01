@@ -1,203 +1,320 @@
 <template>
   <Layout>
-    <div style="display:flex;gap:16px;height:calc(100vh - 120px)">
-      <div style="width:240px;flex-shrink:0;background:#fff;border-radius:8px;padding:16px;display:flex;flex-direction:column">
-        <n-input v-model:value="groupSearch" placeholder="搜索业务组..." size="small" clearable style="margin-bottom:12px" />
-        <div style="flex:1;overflow-y:auto">
-			<n-button size="small" dashed @click="showAddGroup=true" style="margin-bottom:8px;width:100%">+ 新建业务组</n-button>
-          <div v-for="item in treeList" :key="item.key"
-            style="padding:8px 12px;cursor:pointer;border-radius:4px;font-size:13px;margin-bottom:2px;display:flex;justify-content:space-between"
-            :style="{background: selectedGroup===item.key ? '#e8f0fe' : 'transparent', fontWeight: selectedGroup===item.key ? '600' : 'normal'}"
-            @click="selectedGroup = item.key">
-            <span>{{ item.label }}</span>
-            <div style="display:flex;align-items:center;gap:4px">
-            <span style="color:#999">{{ item.count }}</span>
-            <span v-if="item.key!=='all' && item.key!=='未分组'" style="cursor:pointer;font-size:14px;color:#ccc" @click.stop="deleteGroup(item.key)" title="删除分组">×</span>
-          </div>
+    <div class="host-manage">
+      <!-- 左侧分组树 -->
+      <div class="group-panel">
+        <div class="panel-header">
+          <span class="panel-title">分组</span>
+          <n-button size="tiny" @click="showAddGroup = true">+</n-button>
+        </div>
+        <div class="group-list">
+          <div
+            v-for="g in groups"
+            :key="g.name"
+            class="group-item"
+            :class="{ active: selectedGroup === g.name, 'can-delete': g.name !== '全部' && g.name !== '未分组' }"
+            @click="selectedGroup = g.name"
+          >
+            <span class="group-name">{{ g.name }}</span>
+            <div class="group-actions">
+              <span class="group-count">{{ g.count }}</span>
+              <span class="group-del" :class="{ 'can-delete': g.name !== '全部' && g.name !== '未分组' }" @click.stop="delGroup(g.name)">✕</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div style="flex:1;min-width:0">
-        <n-card size="small" :bordered="false">
-          <div style="display:flex;gap:8px;margin-bottom:12px">
-            <n-input v-model:value="ipFilter" placeholder="搜索IP..." size="small" style="width:160px" clearable />
-            <span style="font-size:13px;color:#666;line-height:28px">{{ filtered.length }}台</span>
-            <n-button v-if="checkedKeys.length>0" size="small" @click="showMove=true">移动到 ({{ checkedKeys.length }})</n-button>
+      <!-- 右侧主机表 -->
+      <div class="host-panel">
+        <div class="panel-header">
+          <span class="panel-title">主机列表</span>
+          <div class="header-actions">
+            <n-input
+              v-model:value="searchText"
+              placeholder="搜索主机名 / IP"
+              size="small"
+              clearable
+              style="width: 15vw"
+            />
+            <span class="host-count">共 {{ filteredAgents.length }} 台</span>
+            <n-button
+              v-if="selectedAgents.length > 0"
+              size="small"
+              type="primary"
+              @click="showMove = true"
+            >
+              移动 ({{ selectedAgents.length }})
+            </n-button>
           </div>
-          <n-data-table :columns="cols" :data="filtered" size="small" :bordered="false" :pagination="pagination" :row-key="(r) => r.id" @update:checked-row-keys="onCheck" />
-        </n-card>
+        </div>
+        <n-data-table
+          :columns="cols"
+          :data="filteredAgents"
+          :bordered="false"
+          size="small"
+          :pagination="pagination"
+          :row-key="(r) => r.id"
+          @update:checked-row-keys="onCheck"
+        />
       </div>
     </div>
-      <n-modal v-model:show="showAddGroup" title="新建业务组" style="width:400px" preset="card" :bordered="false">
-      <n-input v-model:value="newGroupName" placeholder="输入组名" style="margin-bottom:12px" />
-      <n-button type="primary" @click="createGroup">创建</n-button>
+
+    <!-- 添加组弹窗 -->
+    <n-modal v-model:show="showAddGroup" preset="dialog" title="添加分组">
+      <n-input v-model:value="newGroupName" placeholder="组名" />
+      <template #action>
+        <n-button @click="showAddGroup = false">取消</n-button>
+        <n-button type="primary" @click="addGroup">确定</n-button>
+      </template>
     </n-modal>
 
-    <n-modal v-model:show="showMove" title="移动到业务组" style="width:400px" preset="card" :bordered="false">
-      <n-select v-model:value="targetGroup" :options="groupOpts" placeholder="选择目标组" style="margin-bottom:12px" />
-      <n-button type="primary" @click="doMove">确定移动</n-button>
+    <!-- 移动弹窗 -->
+    <n-modal v-model:show="showMove" preset="dialog" title="移动到分组">
+      <n-select v-model:value="moveTarget" :options="groupOptions" />
+      <template #action>
+        <n-button @click="showMove = false">取消</n-button>
+        <n-button type="primary" @click="moveHosts">确定</n-button>
+      </template>
     </n-modal>
   </Layout>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, h } from 'vue'
+import { ref, computed, h } from 'vue'
 import { api } from '../api'
 import Layout from '../layouts/MainLayout.vue'
 
 const agents = ref([])
-const groupSearch = ref('')
-const selectedGroup = ref('all')
-const ipFilter = ref('')
-const treeList = ref([])
-const checkedKeys = ref([])
-const showMove = ref(false)
-const targetGroup = ref(null)
+const serverGroups = ref([])
+const selectedGroup = ref('全部')
+const selectedAgents = ref([])
+const searchText = ref('')
 const showAddGroup = ref(false)
-const newGroupName = ref()
+const showMove = ref(false)
+const newGroupName = ref('')
+const moveTarget = ref('')
+const pagination = ref({ pageSize: 15 })
 
-const pagination = reactive({
-  page: 1, pageSize: 20, showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  onUpdatePage: (p) => { pagination.page = p },
-  onUpdatePageSize: (s) => { pagination.pageSize = s; pagination.page = 1 }
+const groups = computed(() => {
+  const map = new Map()
+  map.set('全部', { name: '全部', count: agents.value.length })
+  agents.value.forEach(a => {
+    const g = a.group || '未分组'
+    if (!map.has(g)) map.set(g, { name: g, count: 0 })
+    map.get(g).count++
+  })
+  // 合并 Server 上创建的空组
+  serverGroups.value.forEach(name => {
+    if (!map.has(name)) map.set(name, { name, count: 0 })
+  })
+  return Array.from(map.values())
 })
 
-const cols = [
-  { type: 'selection', minWidth: 40 },
-  { title: '主机IP', key: 'ip_addr', minWidth: 130 },
-  { title: '主机名', key: 'hostname', minWidth: 140 },
-  { title: '业务组', key: 'group', minWidth: 100 },
-  { title: 'OS', key: 'os', minWidth: 160 },
-  { title: '操作', key: 'id', minWidth: 80, render: (row) => h('a', { href: '#/host/' + row.id, style: 'color:#1e6fff' }, '详情') }
-]
+const groupOptions = computed(() =>
+  groups.value.filter(g => g.name !== '全部').map(g => ({ label: g.name, value: g.name }))
+)
 
-const groupOpts = computed(() => {
-  const names = [...new Set(agents.value.map(a => a.group || '未分组'))]
-  const custom = JSON.parse(localStorage.getItem("custom_groups") || "[]")
-  custom.forEach(g => { if (!names.includes(g)) names.push(g) })
-  return names.map(g => ({ label: g, value: g }))
-})
-
-const filtered = computed(() => {
+const filteredAgents = computed(() => {
   let list = agents.value
-  if (selectedGroup.value !== 'all') {
-    list = list.filter(a => {
-      const g = a.group || '未分组'
-      return g === selectedGroup.value
-    })
+  if (selectedGroup.value !== '全部') {
+    list = list.filter(a => (a.group || '未分组') === selectedGroup.value)
   }
-  if (ipFilter.value) {
-    list = list.filter(a => a.ip_addr && a.ip_addr.includes(ipFilter.value))
+  const kw = searchText.value.trim().toLowerCase()
+  if (kw) {
+    list = list.filter(a => {
+      const hostname = (a.hostname || '').toLowerCase()
+      const ip = (a.ip_addr || '').toLowerCase()
+      return hostname.includes(kw) || ip.includes(kw)
+    })
   }
   return list
 })
 
-function createGroup() {
+const cols = [
+  { type: 'selection' },
+  { title: '主机名', key: 'hostname', minWidth: 130 },
+  { title: 'IP', key: 'ip_addr', minWidth: 120 },
+  { title: '分组', key: 'group', minWidth: 90, render: (r) => r.group || '未分组' },
+  { title: '探针', key: 'active_probes', minWidth: 70 },
+  { title: '状态', key: 'last_seen', minWidth: 90, render: (r) => {
+    const online = Date.now() / 1000 - r.last_seen < 60
+    return h('span', { style: { color: online ? '#18A058' : '#D03050' } }, online ? '在线' : '离线')
+  }},
+  { title: '操作', key: 'id', width: 70, render: (r) => h('a', { href: '#/host/' + r.id }, '详情') },
+]
+
+function onCheck(keys) {
+  selectedAgents.value = keys
+}
+
+async function addGroup() {
   if (!newGroupName.value) return
-  // 暂存localStorage
-  const custom = JSON.parse(localStorage.getItem("custom_groups") || "[]")
-  if (!custom.includes(newGroupName.value)) {
-    custom.push(newGroupName.value)
-    localStorage.setItem("custom_groups", JSON.stringify(custom))
-  }
+  const token = localStorage.getItem('token')
+  await fetch('/api/groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ name: newGroupName.value })
+  })
   newGroupName.value = ''
   showAddGroup.value = false
-  buildTree()
+  load()
 }
 
-function deleteGroup(name) {
-  if (confirm("删除分组 \"" + name + "\" ?")) {
-    const custom = JSON.parse(localStorage.getItem("custom_groups") || "[]")
-    const idx = custom.indexOf(name)
-    if (idx >= 0) {
-      custom.splice(idx, 1)
-      localStorage.setItem("custom_groups", JSON.stringify(custom))
-    }
-    buildTree()
-  }
+async function delGroup(name) {
+  const token = localStorage.getItem('token')
+  await fetch('/api/groups/' + name, {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  if (selectedGroup.value === name) selectedGroup.value = '全部'
+  load()
 }
 
-function onCheck(keys) { checkedKeys.value = keys }
-
-function doMove() {
-  if (!targetGroup.value || checkedKeys.value.length === 0) return
-	api.moveHosts(checkedKeys.value, targetGroup.value).then(() => { message.success("已移动"); showMove.value = false; checkedKeys.value = [] }).catch(e => message.error("移动失败"))
-			// 记录组名
-			const custom = JSON.parse(localStorage.getItem("custom_groups") || "[]")
-			if (!custom.includes(targetGroup.value)) {
-				custom.push(targetGroup.value)
-				localStorage.setItem("custom_groups", JSON.stringify(custom))
-			}
+async function moveHosts() {
+  if (!moveTarget.value || selectedAgents.value.length === 0) return
+  const token = localStorage.getItem('token')
+  await fetch('/api/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ agent_ids: selectedAgents.value, group: moveTarget.value })
+  })
   showMove.value = false
-  checkedKeys.value = []
+  selectedAgents.value = []
+  load()
 }
 
-function buildTree() {
-  const map = {}
-  agents.value.forEach(a => {
-    const g = a.group || '未分组'
-    if (!map[g]) map[g] = 0
-    map[g]++
-  })
-  const list = [{ label: '全部主机', key: 'all', count: agents.value.length }]
-  Object.entries(map).forEach(([name, count]) => {
-    if (!groupSearch.value || name.includes(groupSearch.value)) {
-      list.push({ label: name, key: name, count })
-    }
-  })
-  const custom = JSON.parse(localStorage.getItem("custom_groups") || "[]")
-  custom.forEach(g => {
-    if (!map[g]) list.push({ label: g, key: g, count: 0 })
-  })
-	
-  // 固定顺序：全部主机 → 未分组 → 其他
-  const fixed = [list.find(item => item.key === "all")]
-  const ungrouped = list.find(item => item.key === "未分组") || { label: "未分组", key: "未分组", count: 0 }
-  fixed.push(ungrouped)
-  list.forEach(item => {
-    if (item.key !== "all" && item.key !== "未分组") fixed.push(item)
-  })
-  treeList.value = fixed
-	// 合并localStorage里所有历史组
-	const savedGroups = JSON.parse(localStorage.getItem("custom_groups") || "[]")
-	savedGroups.forEach(g => {
-		if (!list.find(item => item.key === g)) {
-			list.push({ label: g, key: g, count: 0 })
-		}
-	})
+async function load() {
+  const token = localStorage.getItem('token')
+  const [data, groupResp] = await Promise.all([
+    api.getAgents(),
+    fetch('/api/groups', { headers: { 'Authorization': 'Bearer ' + token } }).then(r => r.json()),
+  ])
+  agents.value = data.agents || []
+  serverGroups.value = groupResp.groups || []
 }
 
-onMounted(async () => {
-  try {
-    const agRes = await api.getAgents()
-    const asRes = await api.getAssets()
-
-    const agentList = agRes.agents || []
-    const assetList = asRes.agents || []
-
-    const assetMap = {}
-    assetList.forEach(item => {
-      assetMap[item.agent_id] = item
-    })
-
-    agents.value = agentList.map(a => {
-      const asset = assetMap[a.id] || {}
-      return {
-        id: a.id,
-        hostname: a.hostname,
-        ip_addr: a.ip_addr,
-        group: a.group || '未分组',
-        last_seen: a.last_seen,
-        os: asset.os || a.kernel_info?.version || '-',
-        active_probes: a.active_probes,
-      }
-    })
-
-    buildTree()
-  } catch (e) {
-    console.error('加载失败:', e)
-  }
-})
+load()
+setInterval(load, 15000)
 </script>
+
+<style scoped>
+.host-manage {
+  display: flex;
+  gap: 1vw;
+  height: 100%;
+}
+
+.group-panel {
+  width: 15vw;
+  min-width: 140px;
+  background: #FFFFFF;
+  border-radius: 0.8vw;
+  padding: 1.5vh 0.8vw;
+  box-shadow: 0 0.3vh 1.5vh rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.host-panel {
+  flex: 1;
+  background: #FFFFFF;
+  border-radius: 0.8vw;
+  padding: 1.5vh 1.2vw;
+  box-shadow: 0 0.3vh 1.5vh rgba(0,0,0,0.04);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1vh;
+}
+
+.panel-title {
+  font-size: 1vw;
+  font-weight: 600;
+  color: #202124;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1vw;
+}
+
+.host-count {
+  font-size: 0.85vw;
+  color: #5F6368;
+}
+
+.group-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3vh;
+}
+
+.group-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1vh 0.8vw;
+  border-radius: 0.5vw;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.9vw;
+}
+
+.group-item:hover {
+  background: #F1F3F4;
+}
+
+.group-item.active {
+  background: rgba(26, 115, 232, 0.1);
+  color: #1A73E8;
+  font-weight: 500;
+}
+
+.group-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4vw;
+  min-width: 2.5vw;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.group-count {
+  background: #F1F3F4;
+  border-radius: 1vw;
+  padding: 0.2vh 0.5vw;
+  font-size: 0.75vw;
+  color: #5F6368;
+  min-width: 1.5vw;
+  text-align: center;
+}
+
+.group-del {
+  font-size: 0.7vw;
+  color: #D03050;
+  opacity: 0;
+  transition: opacity 0.2s;
+  width: 1vw;
+  text-align: center;
+  flex-shrink: 0;
+  visibility: hidden;
+}
+
+.group-item.can-delete .group-del {
+  visibility: visible;
+}
+
+.group-item.can-delete:hover .group-del {
+  opacity: 1;
+}
+
+.group-item:hover .group-del {
+  opacity: 1;
+}
+</style>

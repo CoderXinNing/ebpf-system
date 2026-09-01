@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"strconv"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -29,6 +30,27 @@ func NewStore(dbPath string) (*Store, error) {
 			username TEXT UNIQUE NOT NULL,
 			password TEXT NOT NULL,
 			role TEXT DEFAULT 'viewer'
+		)`,
+		// 操作审计日志
+		`CREATE TABLE IF NOT EXISTS audit_logs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER,
+			username TEXT,
+			action TEXT,
+			detail TEXT,
+			ip TEXT,
+			created_at INTEGER
+		)`,
+		// 日志保留天数配置
+		`CREATE TABLE IF NOT EXISTS log_settings (
+			key TEXT PRIMARY KEY,
+			value TEXT
+		)`,
+		// 主机分组
+		`CREATE TABLE IF NOT EXISTS host_groups (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT UNIQUE NOT NULL,
+			created_at INTEGER
 		)`,
 		// 探针配置
 		`CREATE TABLE IF NOT EXISTS probe_configs (
@@ -291,4 +313,115 @@ func (s *Store) GetProbeConfigs(agentID string) ([]ProbeConfigRecord, error) {
 func (s *Store) DeleteProbeConfig(agentID, probeName string) error {
 	_, err := s.db.Exec("DELETE FROM probe_configs WHERE agent_id = ? AND probe_name = ?", agentID, probeName)
 	return err
+}
+
+// ========== 主机分组 ==========
+
+// CreateGroup 创建分组
+func (s *Store) CreateGroup(name string) error {
+	_, err := s.db.Exec("INSERT INTO host_groups (name, created_at) VALUES (?, ?)", name, time.Now().Unix())
+	return err
+}
+
+// DeleteGroup 删除分组
+func (s *Store) DeleteGroup(name string) error {
+	_, err := s.db.Exec("DELETE FROM host_groups WHERE name = ?", name)
+	return err
+}
+
+// GetGroups 获取所有分组
+func (s *Store) GetGroups() ([]string, error) {
+	rows, err := s.db.Query("SELECT name FROM host_groups ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var groups []string
+	for rows.Next() {
+		var name string
+		rows.Scan(&name)
+		groups = append(groups, name)
+	}
+	return groups, nil
+}
+
+// ========== 审计日志 ==========
+
+// SaveAuditLog 保存操作日志
+func (s *Store) SaveAuditLog(username, action, detail, ip string) error {
+	_, err := s.db.Exec(
+		"INSERT INTO audit_logs (username, action, detail, ip, created_at) VALUES (?,?,?,?,?)",
+		username, action, detail, ip, time.Now().Unix(),
+	)
+	return err
+}
+
+// GetAuditLogs 获取审计日志
+func (s *Store) GetAuditLogs(limit int) ([]map[string]interface{}, error) {
+	if limit <= 0 { limit = 100 }
+	rows, err := s.db.Query("SELECT id, username, action, detail, ip, created_at FROM audit_logs ORDER BY id DESC LIMIT ?", limit)
+	if err != nil { return nil, err }
+	defer rows.Close()
+
+	var logs []map[string]interface{}
+	for rows.Next() {
+		var id int64
+		var username, action, detail, ip string
+		var createdAt int64
+		rows.Scan(&id, &username, &action, &detail, &ip, &createdAt)
+		logs = append(logs, map[string]interface{}{
+			"id": id, "username": username, "action": action,
+			"detail": detail, "ip": ip, "created_at": createdAt,
+		})
+	}
+	return logs, nil
+}
+
+// ========== 日志设置 ==========
+
+// SetLogSetting 设置日志保留天数
+func (s *Store) SetLogSetting(key, value string) error {
+	_, err := s.db.Exec(
+		"INSERT INTO log_settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+		key, value,
+	)
+	return err
+}
+
+// GetLogSetting 获取设置
+func (s *Store) GetLogSetting(key string) (string, error) {
+	var value string
+	err := s.db.QueryRow("SELECT value FROM log_settings WHERE key = ?", key).Scan(&value)
+	if err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+// CleanExpiredLogs 清理过期日志
+func (s *Store) CleanExpiredLogs() {
+	// 读取保留天数
+	eventDays := 30
+	alertDays := 90
+	auditDays := 180
+
+	if v, err := s.GetLogSetting("event_days"); err == nil && v != "" {
+		if d, err := strconv.Atoi(v); err == nil { eventDays = d }
+	}
+	if v, err := s.GetLogSetting("alert_days"); err == nil && v != "" {
+		if d, err := strconv.Atoi(v); err == nil { alertDays = d }
+	}
+	if v, err := s.GetLogSetting("audit_days"); err == nil && v != "" {
+		if d, err := strconv.Atoi(v); err == nil { auditDays = d }
+	}
+
+	now := time.Now().Unix()
+	eventCutoff := now - int64(eventDays*86400)
+	alertCutoff := now - int64(alertDays*86400)
+	auditCutoff := now - int64(auditDays*86400)
+
+	s.db.Exec("DELETE FROM events WHERE timestamp < ?", eventCutoff)
+	s.db.Exec("DELETE FROM alerts WHERE created_at < ?", alertCutoff)
+	s.db.Exec("DELETE FROM audit_logs WHERE created_at < ?", auditCutoff)
 }

@@ -16,6 +16,10 @@ const routes = [
   { path: '/events', component: () => import('../views/EventsView.vue') },
   { path: '/alerts', component: () => import('../views/AlertsView.vue') },
   { path: '/probes', component: () => import('../views/ProbesView.vue') },
+  { path: '/users', component: () => import('../views/UsersView.vue') },
+  { path: '/logs', component: () => import('../views/LogsView.vue') },
+  { path: '/log-settings', component: () => import('../views/LogSettingsView.vue') },
+  { path: '/about', component: () => import('../views/AboutView.vue') },
   { path: '/install', component: () => import('../views/AgentInstall.vue') },
 ]
 

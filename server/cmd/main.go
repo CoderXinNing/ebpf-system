@@ -70,6 +70,15 @@ func main() {
 	})
 	srv.handler = handler.NewHandler(st, am, srv.sendCommand)
 
+	// 启动日志定时清理（每小时）
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			st.CleanExpiredLogs()
+		}
+	}()
+
 	// gRPC
 	lis, _ := net.Listen("tcp", ":50051")
 	grpcServer := grpc.NewServer()
