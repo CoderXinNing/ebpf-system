@@ -61,19 +61,27 @@ func LoadExecMonitor(objPath string, callback ExecCallback) error {
 		return fmt.Errorf("解除内存锁失败: %w", err)
 	}
 
-	// 尝试复用已有 pin（上次崩溃残留或热重启）
-	progPinPath := "/sys/fs/bpf/ebpf-sentinel/exec_monitor_prog"
-	if _, err := os.Stat(progPinPath); err == nil {
-		log.Printf("🔗 检测到已有exec探针pin，尝试接管...")
-		if err := reusePinnedExecMonitor(progPinPath, callback); err == nil {
-			log.Printf("✅ 已接管已有exec探针")
-			return nil
-		}
-		log.Printf("⚠️ 接管失败，重新加载: %v", err)
-		os.Remove(progPinPath)
+	// 使用通用 ProbeSpec 管理
+	probeSpec := &ProbeSpec{
+		Name:    "exec_monitor",
+		ObjPath: objPath,
+		PinBase: "/sys/fs/bpf/ebpf-sentinel",
+		Maps:    []string{"events", "exec_whitelist", "agent_heartbeat"},
 	}
 
-	spec, err := ebpf.LoadCollectionSpec(objPath)
+	mode := probeSpec.Prepare()
+	if mode == "reuse" {
+		log.Printf("🔗 检测到已有exec探针pin，尝试接管...")
+		if reuseErr := reusePinnedExecMonitor(probeSpec, callback); reuseErr == nil {
+			log.Printf("✅ 已接管已有exec探针")
+			return nil
+		} else {
+			log.Printf("⚠️ 接管失败，重新加载: %v", reuseErr)
+			probeSpec.CleanPins()
+		}
+	}
+
+	collSpec, err := ebpf.LoadCollectionSpec(objPath)
 	if err != nil { return fmt.Errorf("加载spec失败: %w", err) }
 
 	var objs struct {
@@ -83,32 +91,32 @@ func LoadExecMonitor(objPath string, callback ExecCallback) error {
 		AgentHeartbeat *ebpf.Map     `ebpf:"agent_heartbeat"`
 	}
 
-	if err := spec.LoadAndAssign(&objs, nil); err != nil {
+	if err := collSpec.LoadAndAssign(&objs, nil); err != nil {
 		return fmt.Errorf("加载失败: %w", err)
 	}
 
 	// Pin 程序到 bpffs（脱离 Agent 进程存活）
 	os.MkdirAll("/sys/fs/bpf/ebpf-sentinel", 0755)
-	if err := objs.TraceExecve.Pin(progPinPath); err != nil {
+	if err := objs.TraceExecve.Pin(probeSpec.PinPaths()["prog"]); err != nil {
 		log.Printf("⚠️ Pin exec程序失败: %v", err)
 	} else {
-		log.Printf("📌 exec程序已pin到 %s", progPinPath)
+		log.Printf("📌 exec程序已pin到 %s", probeSpec.PinPaths()["prog"])
 	}
 
 	// Pin Events map
-	mapPinPath := "/sys/fs/bpf/ebpf-sentinel/exec_events"
+	mapPinPath := probeSpec.PinPaths()["events"]
 	if err := objs.Events.Pin(mapPinPath); err != nil {
 		log.Printf("⚠️ Pin exec events失败: %v", err)
 	}
 
 	// Pin 白名单 map
-	whPinPath := "/sys/fs/bpf/ebpf-sentinel/exec_whitelist"
+	whPinPath := probeSpec.PinPaths()["exec_whitelist"]
 	if err := objs.ExecWhitelist.Pin(whPinPath); err != nil {
 		log.Printf("⚠️ Pin exec白名单失败: %v", err)
 	}
 
 	// Pin 心跳 map
-	hbPinPath := "/sys/fs/bpf/ebpf-sentinel/agent_heartbeat"
+	hbPinPath := probeSpec.PinPaths()["agent_heartbeat"]
 	if err := objs.AgentHeartbeat.Pin(hbPinPath); err != nil {
 		log.Printf("⚠️ Pin 心跳map失败: %v", err)
 	}
@@ -229,31 +237,29 @@ func CleanupSavedFDs() {
 
 
 // reusePinnedExecMonitor 复用已 pin 的 exec 探针
-func reusePinnedExecMonitor(progPinPath string, callback ExecCallback) error {
-	prog, err := ebpf.LoadPinnedProgram(progPinPath, nil)
+func reusePinnedExecMonitor(spec *ProbeSpec, callback ExecCallback) error {
+	coll, err := spec.LoadPinnedCollection()
 	if err != nil {
-		return fmt.Errorf("加载pin程序失败: %w", err)
+		return fmt.Errorf("加载pin collection失败: %w", err)
 	}
-	defer prog.Close()
+	defer coll.Close()
 
-	// 打开相关 map
-	eventsMap, err := ebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/exec_events", nil)
-	if err != nil {
-		return fmt.Errorf("加载events map失败: %w", err)
+	prog := coll.Programs["exec_monitor"]
+	if prog == nil {
+		return fmt.Errorf("pin collection缺少程序")
 	}
-	defer eventsMap.Close()
 
-	whMap, err := ebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/exec_whitelist", nil)
-	if err != nil {
-		return fmt.Errorf("加载白名单map失败: %w", err)
+	eventsMap := coll.Maps["events"]
+	if eventsMap == nil {
+		return fmt.Errorf("pin collection缺少events map")
 	}
-	defer whMap.Close()
 
-	hbMap, err := ebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/agent_heartbeat", nil)
-	if err != nil {
-		return fmt.Errorf("加载心跳map失败: %w", err)
+	whMap := coll.Maps["exec_whitelist"]
+	if whMap == nil {
+		return fmt.Errorf("pin collection缺少白名单map")
 	}
-	defer hbMap.Close()
+
+	_ = coll.Maps["agent_heartbeat"]  // 心跳 map 可能不在collection里
 
 	// 写白名单（确保还是最新的）
 	for _, name := range defaultExecWhitelist {
