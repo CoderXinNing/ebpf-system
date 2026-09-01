@@ -60,9 +60,21 @@ func (a *Agent) Init() error {
 		go a.startXDP()
 		fallthrough
 	case "ebpf":
-		go a.startExecMonitor()
-		go a.startBashMonitor()
-		go a.startTCPMonitor()
+		if a.isProbeEnabled("exec_monitor") {
+			go a.startExecMonitor()
+		} else {
+			log.Println("🚫 exec_monitor 配置未启用，跳过")
+		}
+		if a.isProbeEnabled("bash_monitor") {
+			go a.startBashMonitor()
+		} else {
+			log.Println("🚫 bash_monitor 配置未启用，跳过")
+		}
+		if a.isProbeEnabled("tcp_monitor") {
+			go a.startTCPMonitor()
+		} else {
+			log.Println("🚫 tcp_monitor 配置未启用，跳过")
+		}
 		fallthrough
 	case "basic":
 		log.Println("✅ Agent运行在基础模式（纯CMDB采集）")
@@ -218,10 +230,23 @@ func (a *Agent) Shutdown() {
 	if xdpHandle != nil {
 		xdpHandle.Close()
 	}
+	// 按配置清理探针 pin（remove=true 的才清理）
+	pinBase := "/sys/fs/bpf/ebpf-sentinel"
+	for _, p := range a.cfg.Autoload {
+		if !p.Remove {
+			log.Printf("ℹ️ %s remove=false，保留 pin", p.Name)
+			continue
+		}
+		log.Printf("🧹 清理 %s pin", p.Name)
+		os.RemoveAll(pinBase + "/" + p.Name + "_prog")
+		os.RemoveAll(pinBase + "/" + p.Name + "_events")
+		os.RemoveAll(pinBase + "/" + p.Name + "_exec_whitelist")
+		os.RemoveAll(pinBase + "/" + p.Name + "_agent_heartbeat")
+		os.RemoveAll(pinBase + "/" + p.Name + "_tcp_conn_stats")
+	}
 	if a.conn != nil {
 		a.conn.Close()
 	}
-	// FD 由内核在进程退出时自动清理
 }
 
 func cstring(b []byte) string {
@@ -258,4 +283,14 @@ func (a *Agent) getProbePath(name string) string {
 		"tcp_monitor":  "probes/templates/tcp_monitor/tcp_monitor.o",
 	}
 	return paths[name]
+}
+
+
+func (a *Agent) isProbeEnabled(name string) bool {
+	for _, p := range a.cfg.Autoload {
+		if p.Name == name {
+			return p.Enabled
+		}
+	}
+	return false
 }

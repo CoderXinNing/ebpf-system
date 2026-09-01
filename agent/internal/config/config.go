@@ -27,7 +27,8 @@ type ProbeConfig struct {
 	Name    string `toml:"name"`
 	ID      string `toml:"id"`
 	Enabled bool   `toml:"enabled"`
-	Path    string `toml:"path"`  // .o 文件路径，为空时用默认
+	Path    string `toml:"path"`   // .o 文件路径，为空时用默认
+	Remove  bool   `toml:"remove"` // Agent 退出时是否清理 pin
 }
 
 // DefaultConfig 返回默认配置
