@@ -114,7 +114,7 @@ func (a *Agent) startTCPMonitor() {
 			Timestamp: time.Now().Unix(),
 			EventType: "tcp_connect",
 			Pid:       int32(pid),
-			Comm:      comm,
+			Comm:      strings.TrimRight(comm, "\x00"),
 			Filename:  fmt.Sprintf("外联x%d次", count),
 		}
 	})

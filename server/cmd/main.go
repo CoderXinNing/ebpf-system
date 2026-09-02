@@ -82,21 +82,12 @@ func main() {
 			eventCounter.Range(func(k, v interface{}) bool {
 				key := k.(string)
 				count := v.(int)
-				// 解析 IP 和 metric
-				idx := strings.LastIndex(key, ":")
-				if idx > 0 {
-					ip := key[:idx]
-					rest := key[idx+1:]
-					// rest 格式: user:metric
-					idx2 := strings.LastIndex(rest, ":")
-					var user, metric string
-					if idx2 > 0 {
-						user = rest[:idx2]
-						metric = rest[idx2+1:]
-					} else {
-						user = "unknown"
-						metric = rest
-					}
+				// key 格式: ip:dimension:metric
+				parts := strings.Split(key, ":")
+				if len(parts) >= 3 {
+					ip := parts[0]
+					user := parts[1]
+					metric := parts[2]
 
 					featureKey := user + ":" + metric
 					isAnomaly, zScore := baselineEngine.Update(alert.Feature{IP: ip, Key: featureKey, Value: float64(count)})
@@ -322,19 +313,28 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 
 		// 软基线统计（按事件类型）
 		if ip != "" {
-			// 提取执行用户（details 格式 "user: cmd"）
-			user := "unknown"
-			if idx := strings.Index(evt.Details, ":"); idx > 0 && idx < 30 {
-				user = strings.TrimSpace(evt.Details[:idx])
+			// 按事件类型选择维度
+			dimension := "unknown"
+			if evt.EventType == "tcp_connect" {
+				// tcp 用进程名
+				dimension = strings.TrimRight(evt.Comm, "\x00")
+				if dimension == "" {
+					dimension = "unknown"
+				}
+			} else {
+				// exec/bash 用用户
+				if idx := strings.Index(evt.Details, ":"); idx > 0 && idx < 30 {
+					dimension = strings.TrimSpace(evt.Details[:idx])
+				}
 			}
 
 			switch evt.EventType {
 			case "execve":
-				incrementCounter(ip + ":" + user + ":exec_count")
+				incrementCounter(ip + ":" + dimension + ":exec_count")
 			case "tcp_connect":
-				incrementCounter(ip + ":" + user + ":tcp_count")
+				incrementCounter(ip + ":" + dimension + ":tcp_count")
 			case "bash_input":
-				incrementCounter(ip + ":" + user + ":bash_count")
+				incrementCounter(ip + ":" + dimension + ":bash_count")
 			}
 		}
 	}
