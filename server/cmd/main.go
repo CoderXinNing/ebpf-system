@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -77,8 +78,18 @@ func main() {
 		for range ticker.C {
 			baselineEngine.UpdateState()
 			baselineEngine.IsProbeOnline()
-			// 重置事件计数（每分钟一个窗口）
+			// 每分钟把窗口计数送基线，然后重置
 			eventCounter.Range(func(k, v interface{}) bool {
+				key := k.(string)
+				count := v.(int)
+				// 解析 IP 和 metric
+				idx := strings.LastIndex(key, ":")
+				if idx > 0 {
+					ip := key[:idx]
+					metric := key[idx+1:]
+					baselineEngine.Update(alert.Feature{IP: ip, Key: metric, Value: float64(count)})
+					log.Printf("📊 基线窗口: %s %s=%d", ip, metric, count)
+				}
 				eventCounter.Delete(k)
 				return true
 			})
@@ -279,15 +290,11 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 		if ip != "" {
 			switch evt.EventType {
 			case "execve":
-				count := incrementCounter(ip + ":exec_count")
-				log.Printf("📊 基线更新: %s exec_count=%d", ip, count)
-				baselineEngine.Update(alert.Feature{IP: ip, Key: "exec_count", Value: float64(count)})
+				incrementCounter(ip + ":exec_count")
 			case "tcp_connect":
-				count := incrementCounter(ip + ":tcp_count")
-				baselineEngine.Update(alert.Feature{IP: ip, Key: "tcp_count", Value: float64(count)})
+				incrementCounter(ip + ":tcp_count")
 			case "bash_input":
-				count := incrementCounter(ip + ":bash_count")
-				baselineEngine.Update(alert.Feature{IP: ip, Key: "bash_count", Value: float64(count)})
+				incrementCounter(ip + ":bash_count")
 			}
 		}
 	}

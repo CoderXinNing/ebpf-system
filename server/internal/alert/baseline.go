@@ -117,6 +117,7 @@ func NewBaselineEngine(configPath string) *BaselineEngine {
 		},
 		state:       StateLearning,
 		startTime:   time.Now(),
+		lastEvent:   time.Now(),
 		probeOnline: true,
 	}
 
@@ -257,6 +258,8 @@ func (b *BaselineEngine) Update(feature Feature) (bool, float64) {
 		threshold = b.config.Learning.ObserveThreshold
 	}
 
+	log.Printf("📈 Z-Score: %s z=%.2f ewma=%.2f std=%.2f value=%.2f",
+		feature.Key, zScore, baseline.EWMA, baseline.StdDev, feature.Value)
 	if math.Abs(zScore) > threshold {
 		log.Printf("🚨 基线异常: %s z=%.2f 阈值%.1f ewma=%.2f value=%.2f",
 			feature.Key, zScore, threshold, baseline.EWMA, feature.Value)
@@ -270,8 +273,8 @@ func (b *BaselineEngine) IsProbeOnline() bool {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	// 连续 1 分钟无事件则判定探针离线
-	if time.Since(b.lastEvent) > time.Minute {
+	// 连续 5 分钟无事件则判定探针离线
+	if time.Since(b.lastEvent) > 5*time.Minute {
 		if b.probeOnline {
 			b.probeOnline = false
 			log.Printf("🚨 探针可能失效: 已 %v 无事件", time.Since(b.lastEvent))
@@ -302,4 +305,12 @@ func (b *BaselineEngine) Persist() {
 	defer b.mu.RUnlock()
 	// TODO: 写入 agent/data/baseline.db
 	log.Printf("💾 基线快照: %d 个特征", len(b.baselines))
+}
+
+
+// ForceProtectMode 强制进入防护状态（测试用）
+func (b *BaselineEngine) ForceProtectMode() {
+	b.state = StateProtect
+	b.startTime = time.Now().Add(-time.Duration(b.config.Learning.DurationMinutes+1) * time.Minute)
+	log.Printf("🧪 强制防护模式（跳过学习期）")
 }

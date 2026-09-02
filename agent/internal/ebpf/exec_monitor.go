@@ -46,11 +46,16 @@ func GetFullCmdline(pid uint32) string {
 }
 
 var defaultExecWhitelist = []string{
+	"agent",  // Agent 自身采集命令
 	"systemd-resolved",
 	"NetworkManager",
 	"snapd",
 	"polkitd",
 	"bpftool",
+	// Agent 自身采集命令
+	"df", "ip", "ethtool", "systemctl", "modinfo",
+	"dpkg-query", "rpm", "apk", "pacman",
+	"dmidecode", "uname", "basename", "ss", "lsof",
 }
 
 // 保存原始 FD，不关闭
