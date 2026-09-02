@@ -86,9 +86,38 @@ func main() {
 				idx := strings.LastIndex(key, ":")
 				if idx > 0 {
 					ip := key[:idx]
-					metric := key[idx+1:]
-					baselineEngine.Update(alert.Feature{IP: ip, Key: metric, Value: float64(count)})
-					log.Printf("📊 基线窗口: %s %s=%d", ip, metric, count)
+					rest := key[idx+1:]
+					// rest 格式: user:metric
+					idx2 := strings.LastIndex(rest, ":")
+					var user, metric string
+					if idx2 > 0 {
+						user = rest[:idx2]
+						metric = rest[idx2+1:]
+					} else {
+						user = "unknown"
+						metric = rest
+					}
+
+					featureKey := user + ":" + metric
+					isAnomaly, zScore := baselineEngine.Update(alert.Feature{IP: ip, Key: featureKey, Value: float64(count)})
+					log.Printf("📊 基线窗口: %s user=%s %s=%d", ip, user, metric, count)
+					
+					// 软基线异常接入告警流
+					if isAnomaly {
+						desc := fmt.Sprintf("%s 基线异常: %s=%d z=%.2f", user, metric, count, zScore)
+						st.SaveAlert(store.AlertRecord{
+							RuleName:    "软基线异常检测",
+							Severity:    "HIGH",
+							Description: desc,
+							AgentID:     ip,
+							PID:         0,
+							Comm:        user,     // 执行用户
+							Filename:    metric,
+							Details:     desc,
+							Source:      "baseline",
+						})
+						log.Printf("🚨 软基线告警入库: %s", desc)
+					}
 				}
 				eventCounter.Delete(k)
 				return true
@@ -116,9 +145,14 @@ func main() {
 
 	alertEngine = alert.NewEngine("server/configs/rules.toml", func(a alert.Alert) {
 		log.Printf("🚨 告警: [%s] %s - PID=%d %s", a.Severity, a.RuleName, a.PID, a.Comm)
+		// 从 details 提取执行用户
+		alertUser := a.Comm
+		if idx := strings.Index(a.Details, ":"); idx > 0 && idx < 30 {
+			alertUser = strings.TrimSpace(a.Details[:idx])
+		}
 		st.SaveAlert(store.AlertRecord{
 			RuleName: a.RuleName, Severity: a.Severity, Description: a.Description,
-			AgentID: a.AgentID, PID: a.PID, Comm: a.Comm, Filename: a.Filename,
+			AgentID: a.AgentID, PID: a.PID, Comm: alertUser, Filename: a.Filename,
 			Details: a.Details,
 		})
 	})
@@ -288,13 +322,19 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 
 		// 软基线统计（按事件类型）
 		if ip != "" {
+			// 提取执行用户（details 格式 "user: cmd"）
+			user := "unknown"
+			if idx := strings.Index(evt.Details, ":"); idx > 0 && idx < 30 {
+				user = strings.TrimSpace(evt.Details[:idx])
+			}
+
 			switch evt.EventType {
 			case "execve":
-				incrementCounter(ip + ":exec_count")
+				incrementCounter(ip + ":" + user + ":exec_count")
 			case "tcp_connect":
-				incrementCounter(ip + ":tcp_count")
+				incrementCounter(ip + ":" + user + ":tcp_count")
 			case "bash_input":
-				incrementCounter(ip + ":bash_count")
+				incrementCounter(ip + ":" + user + ":bash_count")
 			}
 		}
 	}

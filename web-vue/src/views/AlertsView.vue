@@ -55,7 +55,8 @@ const severityMap = {
 // 解析 details："user: cmdline"
 function splitDetails(r) {
   const d = (r.details || '').replace(/\x00/g, '')
-  const idx = d.indexOf(':')
+  const prefix = d.slice(0, 30)
+  const idx = prefix.indexOf(':')
   if (idx > 0) {
     return { user: d.slice(0, idx), cmd: d.slice(idx + 1).trim() }
   }
@@ -66,6 +67,10 @@ const cols = [
   { title: '级别', key: 'severity', width: 80, render: (r) => {
     const s = severityMap[r.severity] || severityMap.LOW
     return h(NTag, { type: s.type, bordered: false, size: 'small' }, { default: () => r.severity })
+  }},
+  { title: '来源', key: 'source', width: 70, render: (r) => {
+    const map = { rule: '硬规则', baseline: '软基线', correlation: '关联' }
+    return map[r.source] || r.source || '硬规则'
   }},
   { title: '规则', key: 'rule_name', minWidth: 140 },
   { title: '主机', key: 'agent_id', minWidth: 100, render: (r) => {

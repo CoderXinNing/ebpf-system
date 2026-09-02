@@ -169,37 +169,48 @@ type AlertRecord struct {
 	Comm        string `json:"comm"`
 	Filename    string `json:"filename"`
 	Details     string `json:"details"`
+	Source      string `json:"source"`
 	CreatedAt   int64  `json:"created_at"`
 }
 
 func (s *Store) InitAlertTable() error {
+	// 旧表迁移：加 source 列
+	s.db.Exec("ALTER TABLE alerts ADD COLUMN source TEXT DEFAULT 'rule'")
 	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS alerts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		rule_name TEXT, severity TEXT, description TEXT,
 		agent_id TEXT, pid INTEGER, comm TEXT, filename TEXT,
-		details TEXT, created_at INTEGER
+		details TEXT, source TEXT DEFAULT 'rule', created_at INTEGER
 	)`)
 	return err
 }
 
 func (s *Store) SaveAlert(a AlertRecord) error {
+	if a.Source == "" {
+		a.Source = "rule"
+	}
 	_, err := s.db.Exec(
-		"INSERT INTO alerts (rule_name, severity, description, agent_id, pid, comm, filename, details, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-		a.RuleName, a.Severity, a.Description, a.AgentID, a.PID, a.Comm, a.Filename, a.Details, time.Now().Unix(),
+		"INSERT INTO alerts (rule_name, severity, description, agent_id, pid, comm, filename, details, source, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+		a.RuleName, a.Severity, a.Description, a.AgentID, a.PID, a.Comm, a.Filename, a.Details, a.Source, time.Now().Unix(),
 	)
 	return err
 }
 
 func (s *Store) GetAlerts(limit int) ([]AlertRecord, error) {
 	if limit <= 0 { limit = 100 }
-	rows, err := s.db.Query("SELECT id, rule_name, severity, description, agent_id, pid, comm, filename, details, created_at FROM alerts ORDER BY id DESC LIMIT ?", limit)
+	rows, err := s.db.Query("SELECT id, rule_name, severity, description, agent_id, pid, comm, filename, details, source, created_at FROM alerts ORDER BY id DESC LIMIT ?", limit)
 	if err != nil { return nil, err }
 	defer rows.Close()
 
 	var alerts []AlertRecord
 	for rows.Next() {
 		var a AlertRecord
-		rows.Scan(&a.ID, &a.RuleName, &a.Severity, &a.Description, &a.AgentID, &a.PID, &a.Comm, &a.Filename, &a.Details, &a.CreatedAt)
+		var source sql.NullString
+		rows.Scan(&a.ID, &a.RuleName, &a.Severity, &a.Description, &a.AgentID, &a.PID, &a.Comm, &a.Filename, &a.Details, &source, &a.CreatedAt)
+		a.Source = source.String
+		if a.Source == "" {
+			a.Source = "rule"
+		}
 		alerts = append(alerts, a)
 	}
 	return alerts, nil

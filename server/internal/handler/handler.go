@@ -132,6 +132,18 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			alerts, _ := h.Store.GetAlerts(100)
 			c.JSON(200, gin.H{"alerts": alerts})
 		})
+		api.GET("/alerts/stats", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
+			c.JSON(200, h.Store.GetAlertStats())
+		})
+		api.POST("/alerts/:id/feedback", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
+			id := c.Param("id")
+			var req struct {
+				Type string `json:"type"`
+			}
+			c.BindJSON(&req)
+			h.Store.SaveAlertFeedback(id, req.Type, h.getUsername(c))
+			c.JSON(200, gin.H{"success": true})
+		})
 		api.GET("/users", h.roleMiddleware("admin"), h.ListUsers)
 
 		// 审计日志
