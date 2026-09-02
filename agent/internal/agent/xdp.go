@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/ebpf"
@@ -94,9 +95,9 @@ func (a *Agent) startBashMonitor() error {
 			Timestamp: time.Now().Unix(),
 			EventType: "bash_input",
 			Pid:       int32(evt.PID),
-			Comm:      string(evt.Comm[:]),
+			Comm:      strings.ToValidUTF8(string(evt.Comm[:]), ""),
 			Filename:  "bash_input",
-			Details:   line,
+			Details:   userName + ": " + strings.ToValidUTF8(line, ""),
 		}
 	})
 	if err != nil {

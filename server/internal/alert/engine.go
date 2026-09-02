@@ -149,6 +149,13 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 		// 匹配成功，产生告警
 		comm = strings.TrimRight(comm, string(rune(0)))
 		filename = strings.TrimRight(filename, string(rune(0)))
+		// 从 cmdline 提取执行用户（格式 "user: cmd"）
+		alertUser := strings.TrimRight(comm, "\x00")
+		cleanCmdline := strings.TrimRight(cmdline, "\x00")
+		if idx := strings.Index(cleanCmdline, ":"); idx > 0 && idx < 30 {
+			alertUser = strings.TrimSpace(cleanCmdline[:idx])
+		}
+
 		alert := Alert{
 			ID:          time.Now().Format("20060102150405") + "-" + rule.Name,
 			RuleName:    rule.Name,
@@ -156,9 +163,9 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 			Description: rule.Description,
 			AgentID:     agentID,
 			PID:         pid,
-			Comm:        strings.TrimRight(comm, "\x00"),
+			Comm:        alertUser,
 			Filename:    strings.TrimRight(filename, "\x00"),
-			Details:     strings.TrimRight(cmdline, "\x00"),
+			Details:     cleanCmdline,
 			Time:        time.Now(),
 		}
 
