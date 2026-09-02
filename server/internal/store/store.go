@@ -443,3 +443,67 @@ func (s *Store) CleanExpiredLogs() {
 		log.Printf("🧹 清理过期审计日志: %d条 (保留%d天)", n, auditDays)
 	}
 }
+
+// SaveAlertFeedback 保存告警反馈
+func (s *Store) SaveAlertFeedback(alertID, feedbackType, username string) error {
+	// 更新 alerts 表加 feedback 字段（如果不存在则忽略）
+	s.db.Exec("ALTER TABLE alerts ADD COLUMN feedback TEXT DEFAULT ''")
+	s.db.Exec("ALTER TABLE alerts ADD COLUMN feedback_by TEXT DEFAULT ''")
+	_, err := s.db.Exec("UPDATE alerts SET feedback = ?, feedback_by = ? WHERE id = ?", feedbackType, username, alertID)
+	return err
+}
+
+// GetAlertStats 告警统计
+func (s *Store) GetAlertStats() map[string]interface{} {
+	stats := make(map[string]interface{})
+
+	// 总告警数
+	var total int
+	s.db.QueryRow("SELECT COUNT(*) FROM alerts").Scan(&total)
+	stats["total"] = total
+
+	// 今日告警
+	var today int
+	s.db.QueryRow("SELECT COUNT(*) FROM alerts WHERE created_at > ?", time.Now().Unix()-86400).Scan(&today)
+	stats["today"] = today
+
+	// 误报数
+	var falsePositive int
+	s.db.QueryRow("SELECT COUNT(*) FROM alerts WHERE feedback = 'false_positive'").Scan(&falsePositive)
+	stats["false_positive"] = falsePositive
+
+	// 已确认数
+	var confirmed int
+	s.db.QueryRow("SELECT COUNT(*) FROM alerts WHERE feedback = 'confirmed'").Scan(&confirmed)
+	stats["confirmed"] = confirmed
+
+	// 按规则分布
+	rows, err := s.db.Query("SELECT rule_name, COUNT(*) as cnt FROM alerts GROUP BY rule_name ORDER BY cnt DESC LIMIT 10")
+	if err == nil {
+		defer rows.Close()
+		var ruleStats []map[string]interface{}
+		for rows.Next() {
+			var name string
+			var cnt int
+			rows.Scan(&name, &cnt)
+			ruleStats = append(ruleStats, map[string]interface{}{"rule": name, "count": cnt})
+		}
+		stats["rule_distribution"] = ruleStats
+	}
+
+	// 按严重程度分布
+	rows2, err2 := s.db.Query("SELECT severity, COUNT(*) as cnt FROM alerts GROUP BY severity")
+	if err2 == nil {
+		defer rows2.Close()
+		var sevStats []map[string]interface{}
+		for rows2.Next() {
+			var sev string
+			var cnt int
+			rows2.Scan(&sev, &cnt)
+			sevStats = append(sevStats, map[string]interface{}{"severity": sev, "count": cnt})
+		}
+		stats["severity_distribution"] = sevStats
+	}
+
+	return stats
+}
