@@ -27,6 +27,7 @@ type Server struct {
 }
 
 var alertEngine *alert.Engine
+var correlationEngine *alert.CorrelationEngine
 type ServerConfig struct {
 	Server   struct {
 		HTTPPort  int    `toml:"http_port"`
@@ -60,6 +61,17 @@ func main() {
 	}
 
 	srv := &Server{}
+	correlationEngine = alert.NewCorrelationEngine(10) // 10秒窗口
+
+	// 启动关联引擎清理（每分钟）
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			correlationEngine.Cleanup()
+		}
+	}()
+
 	alertEngine = alert.NewEngine("server/configs/rules.toml", func(a alert.Alert) {
 		log.Printf("🚨 告警: [%s] %s - PID=%d %s", a.Severity, a.RuleName, a.PID, a.Comm)
 		st.SaveAlert(store.AlertRecord{
@@ -216,8 +228,24 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 }
 
 func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.HeartbeatResponse, error) {
+	// 获取该 Agent 的 IP
+	ip := ""
+	if agent, ok := s.handler.Agents[req.AgentId]; ok {
+		ip = agent.IPAddr
+	}
+
 	for _, evt := range req.Events {
+		// 硬规则引擎
 		alertEngine.CheckEvent(req.AgentId, evt.Pid, evt.Comm, evt.Details, evt.Filename, evt.EventType)
+
+		// 上下文关联（按 IP + PID）
+		if ip != "" {
+			chain := correlationEngine.AddEvent(ip, uint32(evt.Pid), 0, evt.EventType, evt.Comm, evt.Details)
+			log.Printf("🔍 关联: ip=%s pid=%d source=%s events=%d", ip, evt.Pid, evt.EventType, len(chain.Events))
+			correlationEngine.CheckCorrelation(chain)
+		} else {
+			log.Printf("⚠️ 关联: Agent %s 无IP映射，跳过", req.AgentId)
+		}
 	}
 	h := s.handler
 	h.EventMu.Lock()
