@@ -156,9 +156,10 @@ func LoadExecMonitor(objPath string, callback ExecCallback) error {
 			copy(evt.Comm[:], raw[12:28])
 			copy(evt.Filename[:], raw[28:156])
 
-			fullCmd := GetFullCmdline(evt.PID)
+			// 直接用 C 代码给的 filename，不从 /proc 读（避免脏数据）
+			fullCmd := strings.TrimRight(string(evt.Filename[:]), "\x00")
 			if fullCmd == "" {
-				fullCmd = strings.TrimRight(string(evt.Filename[:]), "\x00")
+				fullCmd = GetFullCmdline(evt.PID)
 			}
 			comm := strings.TrimRight(string(evt.Comm[:]), "\x00")
 			userName := ResolveUser(evt.UID)
@@ -289,9 +290,10 @@ func reusePinnedExecMonitor(spec *ProbeSpec, callback ExecCallback) error {
 			evt.UID = binary.LittleEndian.Uint32(raw[8:12])
 			copy(evt.Comm[:], raw[12:28])
 			copy(evt.Filename[:], raw[28:156])
-			fullCmd := GetFullCmdline(evt.PID)
+			// 直接用 C 代码给的 filename，不从 /proc 读（避免脏数据）
+			fullCmd := strings.TrimRight(string(evt.Filename[:]), "\x00")
 			if fullCmd == "" {
-				fullCmd = strings.TrimRight(string(evt.Filename[:]), "\x00")
+				fullCmd = GetFullCmdline(evt.PID)
 			}
 			comm := strings.TrimRight(string(evt.Comm[:]), "\x00")
 			userName := ResolveUser(evt.UID)

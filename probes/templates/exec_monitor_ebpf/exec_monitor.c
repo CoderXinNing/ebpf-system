@@ -79,6 +79,8 @@ int trace_execve(struct trace_event_raw_sys_enter *ctx)
     event->uid = bpf_get_current_uid_gid() & 0xFFFFFFFF;
     __builtin_memcpy(event->comm, comm, sizeof(event->comm));
 
+    // 先清零缓冲区
+    __builtin_memset(event->filename, 0, sizeof(event->filename));
     // 读 argv[0]（完整程序路径）
     __u64 argv_u64 = ctx->args[0];
     const char *filename_ptr = (const char *)argv_u64;

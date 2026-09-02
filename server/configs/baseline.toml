@@ -1,0 +1,15 @@
+[learning]
+mode = "silent"              # silent / report
+duration_minutes = 1     # 7天
+observe_minutes = 1         # 观察期48小时
+alpha = 0.3                  # EWMA 平滑系数
+threshold = 3.0              # 防护期 Z-Score 阈值
+observe_threshold = 4.0      # 观察期 Z-Score 阈值
+
+[report]
+send_curve = false           # 是否上报基线曲线
+send_command_stats = false   # 是否上报命令统计
+
+[protection]
+max_events_per_second = 10000  # 熔断阈值
+max_tracked_items = 10000      # OOM Guard 阈值

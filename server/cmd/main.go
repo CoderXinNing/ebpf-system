@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
@@ -28,6 +29,10 @@ type Server struct {
 
 var alertEngine *alert.Engine
 var correlationEngine *alert.CorrelationEngine
+var baselineEngine *alert.BaselineEngine
+var eventCounter = struct {
+	sync.Map // key: ip:metric  value: int
+}{}
 type ServerConfig struct {
 	Server   struct {
 		HTTPPort  int    `toml:"http_port"`
@@ -61,7 +66,33 @@ func main() {
 	}
 
 	srv := &Server{}
-	correlationEngine = alert.NewCorrelationEngine(10) // 10秒窗口
+	correlationEngine = alert.NewCorrelationEngine("server/configs/correlation.toml")
+
+	baselineEngine = alert.NewBaselineEngine("server/configs/baseline.toml")
+
+	// 基线状态更新（每分钟）
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			baselineEngine.UpdateState()
+			baselineEngine.IsProbeOnline()
+			// 重置事件计数（每分钟一个窗口）
+			eventCounter.Range(func(k, v interface{}) bool {
+				eventCounter.Delete(k)
+				return true
+			})
+		}
+	}()
+
+	// 基线持久化（每5分钟）
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			baselineEngine.Persist()
+		}
+	}()
 
 	// 启动关联引擎清理（每分钟）
 	go func() {
@@ -241,10 +272,23 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 		// 上下文关联（按 IP + PID）
 		if ip != "" {
 			chain := correlationEngine.AddEvent(ip, uint32(evt.Pid), 0, evt.EventType, evt.Comm, evt.Details)
-			log.Printf("🔍 关联: ip=%s pid=%d source=%s events=%d", ip, evt.Pid, evt.EventType, len(chain.Events))
 			correlationEngine.CheckCorrelation(chain)
-		} else {
-			log.Printf("⚠️ 关联: Agent %s 无IP映射，跳过", req.AgentId)
+		}
+
+		// 软基线统计（按事件类型）
+		if ip != "" {
+			switch evt.EventType {
+			case "execve":
+				count := incrementCounter(ip + ":exec_count")
+				log.Printf("📊 基线更新: %s exec_count=%d", ip, count)
+				baselineEngine.Update(alert.Feature{IP: ip, Key: "exec_count", Value: float64(count)})
+			case "tcp_connect":
+				count := incrementCounter(ip + ":tcp_count")
+				baselineEngine.Update(alert.Feature{IP: ip, Key: "tcp_count", Value: float64(count)})
+			case "bash_input":
+				count := incrementCounter(ip + ":bash_count")
+				baselineEngine.Update(alert.Feature{IP: ip, Key: "bash_count", Value: float64(count)})
+			}
 		}
 	}
 	h := s.handler
@@ -373,4 +417,12 @@ func (s *Server) GetProbeList(ctx context.Context, req *pb.ProbeListRequest) (*p
 
 	log.Printf("📋 %s 查询探针名单: %d个", req.AgentId, len(probes))
 	return &pb.ProbeListResponse{Success: true, Probes: probes}, nil
+}
+
+
+func incrementCounter(key string) int {
+	val, _ := eventCounter.LoadOrStore(key, 0)
+	count := val.(int) + 1
+	eventCounter.Store(key, count)
+	return count
 }
