@@ -236,21 +236,22 @@ func (b *BaselineEngine) Update(feature Feature) (bool, float64) {
 
 	alpha := b.config.Learning.Alpha
 	oldEWMA := baseline.EWMA
-	baseline.EWMA = alpha*feature.Value + (1-alpha)*oldEWMA
-	baseline.StdDev = math.Sqrt(alpha*math.Pow(feature.Value-baseline.EWMA, 2) + (1-alpha)*math.Pow(baseline.StdDev, 2))
-	baseline.Count++
-	baseline.Updated = time.Now()
+	oldStdDev := baseline.StdDev
 
-	// 学习期不告警
+	// 先算 Z-Score（用旧基线）
+	if oldStdDev < 0.001 {
+		oldStdDev = 0.001
+	}
+	zScore := (feature.Value - oldEWMA) / oldStdDev
+
+	// 学习期直接更新，不告警
 	if b.IsLearning() {
+		baseline.EWMA = alpha*feature.Value + (1-alpha)*oldEWMA
+		baseline.StdDev = math.Sqrt(alpha*math.Pow(feature.Value-baseline.EWMA, 2) + (1-alpha)*math.Pow(oldStdDev, 2))
+		baseline.Count++
+		baseline.Updated = time.Now()
 		return false, 0
 	}
-
-	// 计算 Z-Score
-	if baseline.StdDev < 0.001 {
-		baseline.StdDev = 0.001
-	}
-	zScore := (feature.Value - baseline.EWMA) / baseline.StdDev
 
 	// 根据状态选阈值
 	threshold := b.config.Learning.Threshold
@@ -259,12 +260,20 @@ func (b *BaselineEngine) Update(feature Feature) (bool, float64) {
 	}
 
 	log.Printf("📈 Z-Score: %s z=%.2f ewma=%.2f std=%.2f value=%.2f",
-		feature.Key, zScore, baseline.EWMA, baseline.StdDev, feature.Value)
+		feature.Key, zScore, oldEWMA, oldStdDev, feature.Value)
+
 	if math.Abs(zScore) > threshold {
 		log.Printf("🚨 基线异常: %s z=%.2f 阈值%.1f ewma=%.2f value=%.2f",
-			feature.Key, zScore, threshold, baseline.EWMA, feature.Value)
+			feature.Key, zScore, threshold, oldEWMA, feature.Value)
+		// 防污染：异常值不更新基线
 		return true, zScore
 	}
+
+	// 正常值才更新基线
+	baseline.EWMA = alpha*feature.Value + (1-alpha)*oldEWMA
+	baseline.StdDev = math.Sqrt(alpha*math.Pow(feature.Value-baseline.EWMA, 2) + (1-alpha)*math.Pow(oldStdDev, 2))
+	baseline.Count++
+	baseline.Updated = time.Now()
 	return false, zScore
 }
 
