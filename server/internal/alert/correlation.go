@@ -2,9 +2,23 @@ package alert
 
 import (
 	"log"
+	"os"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/BurntSushi/toml"
 )
+
+// CorrelationConfig 关联配置
+type CorrelationConfig struct {
+	Window struct {
+		Seconds      int `toml:"seconds"`
+		DedupSeconds int `toml:"dedup_seconds"`
+	} `toml:"window"`
+	Blacklist         []struct{ Comm string } `toml:"blacklist"`
+	SensitiveKeywords []struct{ Value string } `toml:"sensitive_keywords"`
+}
 
 // CorrelatedEvent 关联事件
 type CorrelatedEvent struct {
@@ -25,22 +39,56 @@ type EventRecord struct {
 
 // CorrelationEngine 上下文关联引擎
 type CorrelationEngine struct {
-	mu         sync.RWMutex
-	windows    map[string][]EventRecord // IP -> 事件链
-	window     time.Duration
-	maxSize    int
-	dedupMap   map[string]time.Time // 去重：IP+类型 -> 上次告警时间
+	mu          sync.RWMutex
+	windows     map[string][]EventRecord // IP -> 事件链
+	window      time.Duration
+	maxSize     int
+	dedupMap    map[string]time.Time // 去重：IP+类型 -> 上次告警时间
 	dedupWindow time.Duration
+	blacklist   map[string]bool
+	sensitive   []string
 }
 
-func NewCorrelationEngine(windowSeconds int) *CorrelationEngine {
-	return &CorrelationEngine{
-		windows:    make(map[string][]EventRecord),
-		window:     time.Duration(windowSeconds) * time.Second,
-		maxSize:    50,
-		dedupMap:   make(map[string]time.Time),
+func NewCorrelationEngine(configPath string) *CorrelationEngine {
+	engine := &CorrelationEngine{
+		windows:     make(map[string][]EventRecord),
+		window:      10 * time.Second,
+		maxSize:     50,
+		dedupMap:    make(map[string]time.Time),
 		dedupWindow: 30 * time.Second,
+		blacklist:   make(map[string]bool),
+		sensitive:   []string{},
 	}
+
+	engine.loadConfig(configPath)
+	return engine
+}
+
+func (c *CorrelationEngine) loadConfig(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Printf("⚠️ 关联配置读取失败，使用默认: %v", err)
+		return
+	}
+
+	var config CorrelationConfig
+	if _, err := toml.Decode(string(data), &config); err != nil {
+		log.Printf("⚠️ 关联配置解析失败: %v", err)
+		return
+	}
+
+	c.window = time.Duration(config.Window.Seconds) * time.Second
+	c.dedupWindow = time.Duration(config.Window.DedupSeconds) * time.Second
+
+	for _, b := range config.Blacklist {
+		c.blacklist[b.Comm] = true
+	}
+	for _, s := range config.SensitiveKeywords {
+		c.sensitive = append(c.sensitive, s.Value)
+	}
+
+	log.Printf("📋 关联引擎配置: 窗口%ds 去重%ds 黑名单%d 敏感词%d",
+		config.Window.Seconds, config.Window.DedupSeconds, len(c.blacklist), len(c.sensitive))
 }
 
 // AddEvent 添加事件到关联窗口
@@ -132,14 +180,19 @@ func (c *CorrelationEngine) CheckCorrelation(chain *CorrelatedEvent) bool {
 		return false
 	}
 
-	hasExec := false
 	hasTCP := false
 	hasBash := false
+	hasBlacklistedExec := false
 
 	for _, e := range chain.Events {
 		switch e.Source {
 		case "execve":
-			hasExec = true
+			// 从 Details 提取命令名，检查黑名单
+			cmdName := extractCommandName(e.Details)
+			if cmdName != "" && c.blacklist[cmdName] {
+				log.Printf("🔍 exec黑名单命中: cmd=%s", cmdName)
+				hasBlacklistedExec = true
+			}
 		case "tcp_connect":
 			hasTCP = true
 		case "bash_input":
@@ -147,25 +200,46 @@ func (c *CorrelationEngine) CheckCorrelation(chain *CorrelatedEvent) bool {
 		}
 	}
 
-	// 去重：同 IP + 同类型 30 秒内只报一次
+	// 只有可疑进程的 exec+tcp 才告警
 	dedupKey := chain.IP + ":exec_tcp"
-	if hasExec && hasTCP {
+	if hasBlacklistedExec && hasTCP {
 		if c.isDuplicate(dedupKey) {
 			return false
 		}
-		log.Printf("🔗 关联告警: %s PID=%d 执行命令+外联", chain.IP, chain.PID)
+		log.Printf("🔗 关联告警: %s PID=%d 可疑执行+外联", chain.IP, chain.PID)
 		return true
 	}
+
+	// exec+bash 需要 bash 输入包含敏感词
 	dedupKey = chain.IP + ":exec_bash"
-	if hasExec && hasBash {
-		if c.isDuplicate(dedupKey) {
-			return false
+	if hasBlacklistedExec && hasBash {
+		sensitive := false
+		for _, e := range chain.Events {
+			if e.Source == "bash_input" {
+				details := strings.ToLower(e.Details)
+				for _, kw := range c.sensitive {
+					if strings.Contains(details, kw) {
+						sensitive = true
+						break
+					}
+				}
+				if sensitive {
+					break
+				}
+			}
 		}
-		log.Printf("🔗 关联告警: %s PID=%d 执行命令+终端输入", chain.IP, chain.PID)
-		return true
+		if sensitive {
+			if c.isDuplicate(dedupKey) {
+				return false
+			}
+			log.Printf("🔗 关联告警: %s PID=%d 可疑执行+敏感终端输入", chain.IP, chain.PID)
+			return true
+		}
 	}
+
 	return false
 }
+
 
 
 func (c *CorrelationEngine) isDuplicate(key string) bool {
@@ -178,4 +252,27 @@ func (c *CorrelationEngine) isDuplicate(key string) bool {
 	}
 	c.dedupMap[key] = time.Now()
 	return false
+}
+
+
+// extractCommandName 从 details 提取命令名
+// "root: /usr/bin/curl -s http://..." -> "curl"
+// "root: curl -s ..." -> "curl"
+func extractCommandName(details string) string {
+	// 去掉用户名前缀
+	if idx := strings.Index(details, ":"); idx > 0 {
+		details = details[idx+1:]
+	}
+	details = strings.TrimSpace(details)
+
+	// 取路径最后一段
+	parts := strings.Fields(details)
+	if len(parts) == 0 {
+		return ""
+	}
+	cmd := parts[0]
+	if idx := strings.LastIndex(cmd, "/"); idx >= 0 {
+		cmd = cmd[idx+1:]
+	}
+	return cmd
 }

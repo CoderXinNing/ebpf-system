@@ -1,0 +1,43 @@
+# 上下文关联配置
+
+[window]
+seconds = 10          # 事件窗口（秒）
+dedup_seconds = 30    # 去重窗口（秒）
+
+# 黑名单：这些命令的 exec 才参与关联判定
+[[blacklist]]
+comm = "java"
+[[blacklist]]
+comm = "python"
+[[blacklist]]
+comm = "python3"
+[[blacklist]]
+comm = "perl"
+[[blacklist]]
+comm = "ruby"
+[[blacklist]]
+comm = "nc"
+[[blacklist]]
+comm = "ncat"
+[[blacklist]]
+comm = "socat"
+[[blacklist]]
+comm = "bash"
+[[blacklist]]
+comm = "sh"
+[[blacklist]]
+comm = "wget"
+[[blacklist]]
+comm = "curl"
+
+# 敏感 bash 关键字
+[[sensitive_keywords]]
+value = "whoami"
+[[sensitive_keywords]]
+value = "id"
+[[sensitive_keywords]]
+value = "cat /etc"
+[[sensitive_keywords]]
+value = "sudo"
+[[sensitive_keywords]]
+value = "passwd"
