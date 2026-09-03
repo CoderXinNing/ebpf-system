@@ -140,6 +140,34 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			}
 			c.JSON(200, gin.H{"alerts": alerts})
 		})
+		api.GET("/baseline/stats", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
+			h.Mu.RLock()
+			defer h.Mu.RUnlock()
+			learning := 0
+			observe := 0
+			protect := 0
+			offline := 0
+			for _, a := range h.Agents {
+				switch a.BaselineState {
+				case "learning":
+					learning++
+				case "observe":
+					observe++
+				case "protect":
+					protect++
+				default:
+					offline++
+				}
+			}
+			c.JSON(200, gin.H{
+				"learning": learning,
+				"observe":  observe,
+				"protect":  protect,
+				"offline":  offline,
+				"total":    len(h.Agents),
+			})
+		})
+
 		api.GET("/alerts/stats", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
 			c.JSON(200, h.Store.GetAlertStats())
 		})

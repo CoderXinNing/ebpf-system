@@ -25,6 +25,31 @@
       </div>
     </div>
 
+    <!-- 学习态势 -->
+    <div class="baseline-card">
+      <div class="card-header">
+        <span class="card-title">基线学习态势</span>
+      </div>
+      <div class="baseline-stats">
+        <div class="baseline-item">
+          <span class="dot learning"></span>
+          <span>学习中 {{ baselineStats.learning || 0 }}</span>
+        </div>
+        <div class="baseline-item">
+          <span class="dot observe"></span>
+          <span>观察期 {{ baselineStats.observe || 0 }}</span>
+        </div>
+        <div class="baseline-item">
+          <span class="dot protect"></span>
+          <span>防护中 {{ baselineStats.protect || 0 }}</span>
+        </div>
+        <div class="baseline-item">
+          <span class="dot offline"></span>
+          <span>离线 {{ baselineStats.offline || 0 }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- 主机列表 -->
     <div class="table-card">
       <div class="card-header" style="display: flex; align-items: center; gap: 1vw;">
@@ -58,6 +83,7 @@ const agents = ref([])
 const pagination = ref({ pageSize: 15 })
 const onlineCount = ref(0)
 const offlineCount = ref(0)
+const baselineStats = ref({})
 
 const cards = ref([
   { key: 'cpu', title: 'CPU 负载分布', topLabel: '负载 TOP5', topList: [], levels: [] },
@@ -89,6 +115,13 @@ onMounted(async () => {
   const now = Date.now() / 1000
   onlineCount.value = agents.value.filter(a => now - a.last_seen < 60).length
   offlineCount.value = agents.value.length - onlineCount.value
+
+  // 加载学习态势
+  try {
+    const token = localStorage.getItem('token')
+    const resp = await fetch('/api/baseline/stats', { headers: { 'Authorization': 'Bearer ' + token } })
+    baselineStats.value = await resp.json()
+  } catch (e) {}
 
   // 加载资产
   try {
@@ -171,6 +204,27 @@ function cpu_percent_level(v) {
 </script>
 
 <style scoped>
+.baseline-card {
+  background: #FFFFFF;
+  border-radius: 0.8vw;
+  padding: 1.5vh 1.2vw;
+  box-shadow: 0 0.3vh 1.5vh rgba(0,0,0,0.04);
+  margin-bottom: 1vh;
+}
+
+.baseline-stats {
+  display: flex;
+  gap: 2vw;
+}
+
+.baseline-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5vw;
+  font-size: 0.9vw;
+  color: #5F6368;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
