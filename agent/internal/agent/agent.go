@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/baseline"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
@@ -30,6 +31,8 @@ type Agent struct {
 	client       pb.SentinelClient
 	probeStatus  map[string]string // probe_name -> "loaded" / "failed: reason"
 	probePaths   map[string]string // probe_name -> path from Server
+	baseline     *baseline.BaselineEngine
+	baselineCount map[string]int  // 窗口计数
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -45,6 +48,8 @@ func New(cfg *config.AgentConfig) *Agent {
 		eventQueue: make(chan *pb.ProbeEvent, 1000),
 		probeStatus: make(map[string]string),
 		probePaths:  make(map[string]string),
+		baseline:    baseline.NewBaselineEngine("agent/configs/baseline.toml"),
+		baselineCount: make(map[string]int),
 	}
 }
 
@@ -128,6 +133,15 @@ func (a *Agent) Run() {
 		defer ticker.Stop()
 		for range ticker.C {
 			a.collectAndReportAssets()
+		}
+	}()
+
+	// 基线窗口定时器（每分钟汇总）
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			a.flushBaselineWindow()
 		}
 	}()
 
@@ -427,3 +441,30 @@ func (a *Agent) getProbeDetailsJSON() string {
 }
 
 
+
+
+func (a *Agent) flushBaselineWindow() {
+	if len(a.baselineCount) == 0 {
+		return
+	}
+	for key, count := range a.baselineCount {
+		// key 格式: user:metric
+		isAnomaly, zScore := a.baseline.Update(baseline.Feature{IP: a.ipAddr, Key: key, Value: float64(count)})
+		if isAnomaly {
+			log.Printf("🚨 本地基线异常: %s=%d z=%.2f", key, count, zScore)
+			// 解析 user 和 metric
+			parts := strings.Split(key, ":")
+			user := parts[0]
+			metric := parts[1]
+			a.eventQueue <- &pb.ProbeEvent{
+				ProbeName: "baseline_anomaly",
+				Timestamp: time.Now().Unix(),
+				EventType: "baseline_anomaly",
+				Comm:      user,
+				Filename:  metric,
+				Details:   fmt.Sprintf("%s 基线异常: %s=%d z=%.2f", user, metric, count, zScore),
+			}
+		}
+		delete(a.baselineCount, key)
+	}
+}

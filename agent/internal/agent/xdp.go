@@ -66,9 +66,15 @@ func (a *Agent) checkEBPFSupport() bool {
 
 func (a *Agent) startExecMonitor() {
 	err := ebpf.LoadExecMonitor(a.getProbePath("exec_monitor"), func(evt ebpf.ExecEvent, cmdline string) {
+		// 本地基线窗口计数
+		key := ebpf.ResolveUser(evt.UID) + ":exec_count"
+		a.baselineCount[key]++
+
 		if int32(evt.PID) == int32(os.Getpid()) {
 			return
 		}
+
+		// 正常事件不上报（硬规则匹配还需要）
 		userName := ebpf.ResolveUser(evt.UID)
 		a.eventQueue <- &pb.ProbeEvent{
 			ProbeName: "execve",
@@ -87,6 +93,8 @@ func (a *Agent) startExecMonitor() {
 
 func (a *Agent) startBashMonitor() error {
 	err := ebpf.LoadBashMonitor(a.getProbePath("bash_monitor"), "/bin/bash", func(evt ebpf.BashEvent, userName string, line string) {
+		// 本地基线窗口计数
+		a.baselineCount[userName+":bash_count"]++
 		if line == "" {
 			return
 		}
@@ -109,6 +117,8 @@ func (a *Agent) startBashMonitor() error {
 
 func (a *Agent) startTCPMonitor() {
 	err := ebpf.LoadTCPMonitor(a.getProbePath("tcp_monitor"), func(pid uint32, comm string, count uint64) {
+		// 本地基线窗口计数
+		a.baselineCount[strings.TrimRight(comm, "\x00")+":tcp_count"]++
 		a.eventQueue <- &pb.ProbeEvent{
 			ProbeName: "tcp_connect",
 			Timestamp: time.Now().Unix(),

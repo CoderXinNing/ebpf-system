@@ -44,7 +44,7 @@ description = "检测到常见渗透测试命令"
 [[rules.conditions]]
 field = "cmdline"
 op = "regex"
-value = "whoami|id$|uname -a|ifconfig|netstat -antp|cat /etc/passwd|cat /etc/shadow"
+value = "uname -a|ifconfig|netstat -antp|cat /etc/shadow|cat /root/.bash_history|cat /etc/sudoers"
 
 [[rules]]
 name = "Base64编码命令"
@@ -133,3 +133,113 @@ description = "访问敏感系统文件"
 field = "cmdline"
 op = "regex"
 value = "cat /etc/shadow|cat /root/.bash_history|cat /etc/sudoers|cat /etc/crontab"
+
+# ========== 信息收集 ==========
+
+[[rules]]
+name = "系统信息收集"
+severity = "MEDIUM"
+description = "收集系统信息"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "uname -a|cat /etc/os-release|cat /proc/version|hostname -f|ip addr|ifconfig -a"
+
+[[rules]]
+name = "网络信息收集"
+severity = "MEDIUM"
+description = "收集网络拓扑信息"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "netstat -antp|ss -antp|arp -a|route -n|traceroute"
+
+# ========== 横向移动 ==========
+
+[[rules]]
+name = "SSH横向移动"
+severity = "HIGH"
+description = "尝试SSH连接其他主机"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "ssh (root|admin|user)@[0-9]+\\."
+
+[[rules]]
+name = "内网探测"
+severity = "HIGH"
+description = "内网存活探测"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "nmap|masscan|fping|for ip in.*ping"
+
+# ========== 持久化 ==========
+
+[[rules]]
+name = "计划任务持久化"
+severity = "CRITICAL"
+description = "创建计划任务后门"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "crontab -e|echo.*>> /etc/crontab|schtasks /create"
+
+[[rules]]
+name = "SSH后门"
+severity = "CRITICAL"
+description = "写入SSH公钥"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "ssh-keygen|>>.*authorized_keys|mkdir.*\\.ssh"
+
+# ========== 数据窃取 ==========
+
+[[rules]]
+name = "敏感数据打包"
+severity = "HIGH"
+description = "打包敏感文件"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "tar.*/etc/passwd|tar.*/etc/shadow|tar.*/var/www|zip.*/etc|gzip.*/etc"
+
+[[rules]]
+name = "数据外传"
+severity = "CRITICAL"
+description = "向外部传输数据"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "curl.*-F.*@|scp.*root@|rsync.*[0-9]+\\."
+
+# ========== 权限维持 ==========
+
+[[rules]]
+name = "SUID提权"
+severity = "CRITICAL"
+description = "设置SUID权限"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "chmod u\\+s|chmod 4755|chmod 4777"
+
+[[rules]]
+name = "添加特权用户"
+severity = "CRITICAL"
+description = "添加特权账户"
+
+[[rules.conditions]]
+field = "cmdline"
+op = "regex"
+value = "useradd.*-o.*-u 0|adduser.*sudo|usermod.*-aG sudo"

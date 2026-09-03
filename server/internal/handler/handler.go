@@ -130,6 +130,9 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/assets/category", h.AssetsByCategory)
 		api.GET("/alerts", func(c *gin.Context) {
 			alerts, _ := h.Store.GetAlerts(100)
+			if alerts == nil {
+				alerts = []store.AlertRecord{}
+			}
 			c.JSON(200, gin.H{"alerts": alerts})
 		})
 		api.GET("/alerts/stats", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {

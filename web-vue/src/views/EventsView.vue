@@ -27,7 +27,9 @@ const pagination = ref({ pageSize: 15 })
 // 解析 details："user: cmdline"
 function splitDetails(r) {
   const d = (r.details || '').replace(/\x00/g, '')
-  const idx = d.indexOf(':')
+  // 只在开头找用户分隔符（用户名后第一个冒号）
+  const prefix = d.slice(0, 30)
+  const idx = prefix.indexOf(':')
   if (idx > 0) {
     return { user: d.slice(0, idx), cmd: d.slice(idx + 1).trim() }
   }

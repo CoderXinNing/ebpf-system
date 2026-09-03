@@ -30,7 +30,7 @@ type Server struct {
 
 var alertEngine *alert.Engine
 var correlationEngine *alert.CorrelationEngine
-var baselineEngine *alert.BaselineEngine
+// baselineEngine 已下沉到 Agent 本地
 var eventCounter = struct {
 	sync.Map // key: ip:metric  value: int
 }{}
@@ -69,61 +69,7 @@ func main() {
 	srv := &Server{}
 	correlationEngine = alert.NewCorrelationEngine("server/configs/correlation.toml")
 
-	baselineEngine = alert.NewBaselineEngine("server/configs/baseline.toml")
-
-	// 基线状态更新（每分钟）
-	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			baselineEngine.UpdateState()
-			baselineEngine.IsProbeOnline()
-			// 每分钟把窗口计数送基线，然后重置
-			eventCounter.Range(func(k, v interface{}) bool {
-				key := k.(string)
-				count := v.(int)
-				// key 格式: ip:dimension:metric
-				parts := strings.Split(key, ":")
-				if len(parts) >= 3 {
-					ip := parts[0]
-					user := parts[1]
-					metric := parts[2]
-
-					featureKey := user + ":" + metric
-					isAnomaly, zScore := baselineEngine.Update(alert.Feature{IP: ip, Key: featureKey, Value: float64(count)})
-					log.Printf("📊 基线窗口: %s user=%s %s=%d", ip, user, metric, count)
-					
-					// 软基线异常接入告警流
-					if isAnomaly {
-						desc := fmt.Sprintf("%s 基线异常: %s=%d z=%.2f", user, metric, count, zScore)
-						st.SaveAlert(store.AlertRecord{
-							RuleName:    "软基线异常检测",
-							Severity:    "HIGH",
-							Description: desc,
-							AgentID:     ip,
-							PID:         0,
-							Comm:        user,     // 执行用户
-							Filename:    metric,
-							Details:     desc,
-							Source:      "baseline",
-						})
-						log.Printf("🚨 软基线告警入库: %s", desc)
-					}
-				}
-				eventCounter.Delete(k)
-				return true
-			})
-		}
-	}()
-
-	// 基线持久化（每5分钟）
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			baselineEngine.Persist()
-		}
-	}()
+	// Server 端不再做软基线计算，由 Agent 本地完成
 
 	// 启动关联引擎清理（每分钟）
 	go func() {
@@ -302,6 +248,24 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 	}
 
 	for _, evt := range req.Events {
+		// 软基线异常事件直接写告警
+		if evt.EventType == "baseline_anomaly" {
+			desc := fmt.Sprintf("%s 基线异常: %s %s", evt.Comm, evt.Filename, evt.Details)
+			s.handler.Store.SaveAlert(store.AlertRecord{
+				RuleName:    "软基线异常检测",
+				Severity:    "HIGH",
+				Description: desc,
+				AgentID:     req.AgentId,
+				PID:         evt.Pid,
+				Comm:        evt.Comm,
+				Filename:    evt.Filename,
+				Details:     desc,
+				Source:      "baseline",
+			})
+			log.Printf("🚨 软基线告警入库: %s", desc)
+			continue
+		}
+
 		// 硬规则引擎
 		alertEngine.CheckEvent(req.AgentId, evt.Pid, evt.Comm, evt.Details, evt.Filename, evt.EventType)
 
@@ -311,32 +275,7 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 			correlationEngine.CheckCorrelation(chain)
 		}
 
-		// 软基线统计（按事件类型）
-		if ip != "" {
-			// 按事件类型选择维度
-			dimension := "unknown"
-			if evt.EventType == "tcp_connect" {
-				// tcp 用进程名
-				dimension = strings.TrimRight(evt.Comm, "\x00")
-				if dimension == "" {
-					dimension = "unknown"
-				}
-			} else {
-				// exec/bash 用用户
-				if idx := strings.Index(evt.Details, ":"); idx > 0 && idx < 30 {
-					dimension = strings.TrimSpace(evt.Details[:idx])
-				}
-			}
-
-			switch evt.EventType {
-			case "execve":
-				incrementCounter(ip + ":" + dimension + ":exec_count")
-			case "tcp_connect":
-				incrementCounter(ip + ":" + dimension + ":tcp_count")
-			case "bash_input":
-				incrementCounter(ip + ":" + dimension + ":bash_count")
-			}
-		}
+		// 软基线由 Agent 本地计算，Server 不做统计
 	}
 	h := s.handler
 	h.EventMu.Lock()
