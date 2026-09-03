@@ -42,7 +42,7 @@ func New(cfg *config.AgentConfig) *Agent {
 	if cfg.Agent.Name != "" {
 		hostname = cfg.Agent.Name
 	}
-	return &Agent{
+	agent := &Agent{
 		id:         generateAgentID(hostname),
 		hostname:   hostname,
 		ipAddr:     getIPAddress(),
@@ -53,6 +53,8 @@ func New(cfg *config.AgentConfig) *Agent {
 		baseline:    baseline.NewBaselineEngine("agent/configs/baseline.toml"),
 		baselineCount: make(map[string]int),
 	}
+	agent.baseline.Restore()
+	return agent
 }
 
 func (a *Agent) Init() error {
@@ -144,6 +146,15 @@ func (a *Agent) Run() {
 		defer ticker.Stop()
 		for range ticker.C {
 			a.flushBaselineWindow()
+		}
+	}()
+
+	// 基线持久化（每5分钟）
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			a.baseline.Persist()
 		}
 	}()
 

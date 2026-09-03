@@ -1,6 +1,7 @@
 package baseline
 
 import (
+	"encoding/json"
 	"log"
 	"math"
 	"os"
@@ -309,11 +310,41 @@ func (b *BaselineEngine) GetBaselines() map[string]*Baseline {
 }
 
 // Persist 基线持久化（Agent 本地落盘）
+// Persist 基线持久化到本地文件
 func (b *BaselineEngine) Persist() {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	// TODO: 写入 agent/data/baseline.db
-	log.Printf("💾 基线快照: %d 个特征", len(b.baselines))
+
+	data, err := json.Marshal(b.baselines)
+	if err != nil {
+		log.Printf("⚠️ 基线序列化失败: %v", err)
+		return
+	}
+
+	os.MkdirAll("agent/data", 0755)
+	if err := os.WriteFile("agent/data/baseline.json", data, 0644); err != nil {
+		log.Printf("⚠️ 基线持久化失败: %v", err)
+		return
+	}
+	log.Printf("💾 基线快照已保存: %d 个特征", len(b.baselines))
+}
+
+// Restore 从本地文件恢复基线
+func (b *BaselineEngine) Restore() {
+	data, err := os.ReadFile("agent/data/baseline.json")
+	if err != nil {
+		log.Printf("ℹ️ 无历史基线，开始学习期")
+		return
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if err := json.Unmarshal(data, &b.baselines); err != nil {
+		log.Printf("⚠️ 基线恢复失败: %v", err)
+		return
+	}
+	log.Printf("📥 基线已恢复: %d 个特征", len(b.baselines))
 }
 
 
