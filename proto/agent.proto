@@ -22,7 +22,9 @@ message HeartbeatRequest {
     string agent_token = 2;
     int64 timestamp = 3;
     int32 active_probes = 4;
-    string probe_details = 5;  // JSON: {"exec_monitor":"loaded","bash_monitor":"failed: ..."}
+    string probe_details = 5;
+    string baseline_state = 6;  // learning / observe / protect
+    int64 baseline_remaining = 7; // 剩余秒数
 }
 message HeartbeatResponse { bool success = 1; repeated ProbeCommand commands = 2; }
 message ProbeCommand {

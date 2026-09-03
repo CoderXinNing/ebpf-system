@@ -201,6 +201,8 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 	agent.LastSeen = req.Timestamp
 	agent.ActiveProbes = req.ActiveProbes
 	agent.ProbeDetails = req.ProbeDetails
+	agent.BaselineState = req.BaselineState
+	agent.BaselineRemaining = req.BaselineRemaining
 	agentID := req.AgentId
 	h.Mu.Unlock()
 	stream.Send(&pb.HeartbeatResponse{Success: true})
@@ -216,6 +218,8 @@ func (s *Server) Heartbeat(stream pb.Sentinel_HeartbeatServer) error {
 				a.LastSeen = req.Timestamp
 				a.ActiveProbes = req.ActiveProbes
 				a.ProbeDetails = req.ProbeDetails
+				a.BaselineState = req.BaselineState
+				a.BaselineRemaining = req.BaselineRemaining
 			}
 			h.Mu.Unlock()
 		}

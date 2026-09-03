@@ -34,11 +34,13 @@ func (a *Agent) runHeartbeatLoop() {
 					return
 				case <-ticker.C:
 					stream.Send(&pb.HeartbeatRequest{
-						AgentId:      a.id,
-						AgentToken:   a.token,
-						Timestamp:    time.Now().Unix(),
-						ActiveProbes: int32(len(a.probeStatus)),
-						ProbeDetails: a.getProbeDetailsJSON(),
+						AgentId:           a.id,
+						AgentToken:        a.token,
+						Timestamp:         time.Now().Unix(),
+						ActiveProbes:      int32(len(a.probeStatus)),
+						ProbeDetails:      a.getProbeDetailsJSON(),
+						BaselineState:     a.baseline.GetState().String(),
+						BaselineRemaining: int64(a.baseline.RemainingTime().Seconds()),
 					})
 					log.Printf("HB UPDATE"); updateHeartbeatMap()
 				}

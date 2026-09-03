@@ -400,14 +400,16 @@ func (x *KernelInfo) GetBtfEnabled() bool {
 }
 
 type HeartbeatRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
-	AgentToken    string                 `protobuf:"bytes,2,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
-	Timestamp     int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	ActiveProbes  int32                  `protobuf:"varint,4,opt,name=active_probes,json=activeProbes,proto3" json:"active_probes,omitempty"`
-	ProbeDetails  string                 `protobuf:"bytes,5,opt,name=probe_details,json=probeDetails,proto3" json:"probe_details,omitempty"` // JSON: {"exec_monitor":"loaded","bash_monitor":"failed: ..."}
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	AgentId           string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	AgentToken        string                 `protobuf:"bytes,2,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
+	Timestamp         int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	ActiveProbes      int32                  `protobuf:"varint,4,opt,name=active_probes,json=activeProbes,proto3" json:"active_probes,omitempty"`
+	ProbeDetails      string                 `protobuf:"bytes,5,opt,name=probe_details,json=probeDetails,proto3" json:"probe_details,omitempty"`
+	BaselineState     string                 `protobuf:"bytes,6,opt,name=baseline_state,json=baselineState,proto3" json:"baseline_state,omitempty"`              // learning / observe / protect
+	BaselineRemaining int64                  `protobuf:"varint,7,opt,name=baseline_remaining,json=baselineRemaining,proto3" json:"baseline_remaining,omitempty"` // 剩余秒数
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *HeartbeatRequest) Reset() {
@@ -473,6 +475,20 @@ func (x *HeartbeatRequest) GetProbeDetails() string {
 		return x.ProbeDetails
 	}
 	return ""
+}
+
+func (x *HeartbeatRequest) GetBaselineState() string {
+	if x != nil {
+		return x.BaselineState
+	}
+	return ""
+}
+
+func (x *HeartbeatRequest) GetBaselineRemaining() int64 {
+	if x != nil {
+		return x.BaselineRemaining
+	}
+	return 0
 }
 
 type HeartbeatResponse struct {
@@ -3130,14 +3146,16 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x12\n" +
 	"\x04arch\x18\x02 \x01(\tR\x04arch\x12\x1f\n" +
 	"\vbtf_enabled\x18\x03 \x01(\bR\n" +
-	"btfEnabled\"\xb6\x01\n" +
+	"btfEnabled\"\x8c\x02\n" +
 	"\x10HeartbeatRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
 	"agentToken\x12\x1c\n" +
 	"\ttimestamp\x18\x03 \x01(\x03R\ttimestamp\x12#\n" +
 	"\ractive_probes\x18\x04 \x01(\x05R\factiveProbes\x12#\n" +
-	"\rprobe_details\x18\x05 \x01(\tR\fprobeDetails\"a\n" +
+	"\rprobe_details\x18\x05 \x01(\tR\fprobeDetails\x12%\n" +
+	"\x0ebaseline_state\x18\x06 \x01(\tR\rbaselineState\x12-\n" +
+	"\x12baseline_remaining\x18\a \x01(\x03R\x11baselineRemaining\"a\n" +
 	"\x11HeartbeatResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x122\n" +
 	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\xbb\x02\n" +
