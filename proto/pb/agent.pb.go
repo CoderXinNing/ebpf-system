@@ -830,6 +830,7 @@ type ProbeInfo struct {
 	Enabled       bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	Remove        bool                   `protobuf:"varint,3,opt,name=remove,proto3" json:"remove,omitempty"`
 	Path          string                 `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
+	Sha256        string                 `protobuf:"bytes,5,opt,name=sha256,proto3" json:"sha256,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -888,6 +889,13 @@ func (x *ProbeInfo) GetRemove() bool {
 func (x *ProbeInfo) GetPath() string {
 	if x != nil {
 		return x.Path
+	}
+	return ""
+}
+
+func (x *ProbeInfo) GetSha256() string {
+	if x != nil {
+		return x.Sha256
 	}
 	return ""
 }
@@ -3172,12 +3180,13 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x10ProbeListRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
-	"agentToken\"e\n" +
+	"agentToken\"}\n" +
 	"\tProbeInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x16\n" +
 	"\x06remove\x18\x03 \x01(\bR\x06remove\x12\x12\n" +
-	"\x04path\x18\x04 \x01(\tR\x04path\"t\n" +
+	"\x04path\x18\x04 \x01(\tR\x04path\x12\x16\n" +
+	"\x06sha256\x18\x05 \x01(\tR\x06sha256\"t\n" +
 	"\x11ProbeListResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12+\n" +

@@ -61,6 +61,7 @@ func NewStore(dbPath string) (*Store, error) {
 			enabled INTEGER DEFAULT 1,
 			remove INTEGER DEFAULT 1,
 			path TEXT,
+			sha256 TEXT DEFAULT '',
 			updated_at INTEGER,
 			UNIQUE(agent_id, probe_name)
 		)`,
@@ -276,6 +277,7 @@ type ProbeConfigRecord struct {
 	Enabled   bool   `json:"enabled"`
 	Remove    bool   `json:"remove"`
 	Path      string `json:"path"`
+	Sha256    string `json:"sha256"`
 	UpdatedAt int64  `json:"updated_at"`
 }
 
@@ -287,11 +289,11 @@ func (s *Store) UpsertProbeConfig(r ProbeConfigRecord) error {
 	if r.Remove { remove = 1 }
 
 	_, err := s.db.Exec(
-		`INSERT INTO probe_configs (agent_id, probe_name, enabled, remove, path, updated_at)
-		 VALUES (?,?,?,?,?,?)
+		`INSERT INTO probe_configs (agent_id, probe_name, enabled, remove, path, sha256, updated_at)
+		 VALUES (?,?,?,?,?,?,?)
 		 ON CONFLICT(agent_id, probe_name) DO UPDATE SET
-		 enabled=excluded.enabled, remove=excluded.remove, path=excluded.path, updated_at=excluded.updated_at`,
-		r.AgentID, r.ProbeName, enabled, remove, r.Path, time.Now().Unix(),
+		 enabled=excluded.enabled, remove=excluded.remove, path=excluded.path, sha256=excluded.sha256, updated_at=excluded.updated_at`,
+		r.AgentID, r.ProbeName, enabled, remove, r.Path, r.Sha256, time.Now().Unix(),
 	)
 	return err
 }
@@ -299,7 +301,7 @@ func (s *Store) UpsertProbeConfig(r ProbeConfigRecord) error {
 // GetProbeConfigs 获取指定主机的探针配置
 func (s *Store) GetProbeConfigs(agentID string) ([]ProbeConfigRecord, error) {
 	rows, err := s.db.Query(
-		"SELECT id, agent_id, probe_name, enabled, remove, path, updated_at FROM probe_configs WHERE agent_id = ?",
+		"SELECT id, agent_id, probe_name, enabled, remove, path, sha256, updated_at FROM probe_configs WHERE agent_id = ?",
 		agentID,
 	)
 	if err != nil {
@@ -312,10 +314,12 @@ func (s *Store) GetProbeConfigs(agentID string) ([]ProbeConfigRecord, error) {
 		var c ProbeConfigRecord
 		var enabled, remove int
 		var path sql.NullString
-		rows.Scan(&c.ID, &c.AgentID, &c.ProbeName, &enabled, &remove, &path, &c.UpdatedAt)
+		var sha256 sql.NullString
+		rows.Scan(&c.ID, &c.AgentID, &c.ProbeName, &enabled, &remove, &path, &sha256, &c.UpdatedAt)
 		c.Enabled = enabled == 1
 		c.Remove = remove == 1
 		c.Path = path.String
+		c.Sha256 = sha256.String
 		configs = append(configs, c)
 	}
 	return configs, nil

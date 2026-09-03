@@ -44,6 +44,7 @@ message ProbeInfo {
     bool enabled = 2;
     bool remove = 3;
     string path = 4;
+    string sha256 = 5;
 }
 message ProbeListResponse {
     bool success = 1;

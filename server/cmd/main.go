@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
@@ -31,9 +30,6 @@ type Server struct {
 var alertEngine *alert.Engine
 var correlationEngine *alert.CorrelationEngine
 // baselineEngine 已下沉到 Agent 本地
-var eventCounter = struct {
-	sync.Map // key: ip:metric  value: int
-}{}
 type ServerConfig struct {
 	Server   struct {
 		HTTPPort  int    `toml:"http_port"`
@@ -398,6 +394,7 @@ func (s *Server) GetProbeList(ctx context.Context, req *pb.ProbeListRequest) (*p
 			Enabled: cfg.Enabled,
 			Remove:  cfg.Remove,
 			Path:    cfg.Path,
+			Sha256:  cfg.Sha256,
 		})
 	}
 
@@ -405,10 +402,3 @@ func (s *Server) GetProbeList(ctx context.Context, req *pb.ProbeListRequest) (*p
 	return &pb.ProbeListResponse{Success: true, Probes: probes}, nil
 }
 
-
-func incrementCounter(key string) int {
-	val, _ := eventCounter.LoadOrStore(key, 0)
-	count := val.(int) + 1
-	eventCounter.Store(key, count)
-	return count
-}

@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -559,12 +562,20 @@ func (h *Handler) DeployProbe(c *gin.Context) {
 		req.Path = paths[req.ProbeName]
 	}
 
+	// 计算 .o 文件的 SHA256
+	sha256Hash := ""
+	if data, err := os.ReadFile(req.Path); err == nil {
+		hash := sha256.Sum256(data)
+		sha256Hash = hex.EncodeToString(hash[:])
+	}
+
 	err := h.Store.UpsertProbeConfig(store.ProbeConfigRecord{
 		AgentID:   req.AgentID,
 		ProbeName: req.ProbeName,
 		Enabled:   req.Enabled,
 		Remove:    req.Remove,
 		Path:      req.Path,
+		Sha256:    sha256Hash,
 	})
 	if err != nil {
 		c.JSON(500, gin.H{"error": "保存失败"})

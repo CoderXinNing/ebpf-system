@@ -2,11 +2,13 @@ package agent
 
 import (
 	"context"
-	"strings"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -343,6 +345,23 @@ func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
 			a.probeStatus[p.Name] = "disabled"
 			continue
 		}
+
+		// SHA256 完整性校验
+		if p.Sha256 != "" {
+			localHash, err := calculateFileSHA256(p.Path)
+			if err != nil {
+				log.Printf("❌ %s 读取失败: %v", p.Name, err)
+				a.probeStatus[p.Name] = "failed: 文件读取失败"
+				continue
+			}
+			if localHash != p.Sha256 {
+				log.Printf("❌ %s SHA256不匹配！本地=%s 期望=%s", p.Name, localHash[:16], p.Sha256[:16])
+				a.probeStatus[p.Name] = "failed: SHA256不匹配"
+				continue
+			}
+			log.Printf("✅ %s SHA256校验通过", p.Name)
+		}
+
 		log.Printf("▶️ 加载探针: %s", p.Name)
 		a.probePaths[p.Name] = p.Path
 		switch p.Name {
@@ -467,4 +486,14 @@ func (a *Agent) flushBaselineWindow() {
 		}
 		delete(a.baselineCount, key)
 	}
+}
+
+
+func calculateFileSHA256(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:]), nil
 }
