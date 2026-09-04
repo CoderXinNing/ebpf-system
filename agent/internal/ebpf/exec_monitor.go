@@ -19,6 +19,7 @@ import (
 type ExecEvent struct {
 	Timestamp uint64
 	PID       uint32
+	PPID      uint32
 	UID       uint32
 	Comm      [16]byte
 	Filename  [256]byte
@@ -157,6 +158,7 @@ func LoadExecMonitor(objPath string, callback ExecCallback) error {
 			var evt ExecEvent
 			raw := record.RawSample
 			evt.PID = binary.LittleEndian.Uint32(raw[0:4])
+			evt.PPID = binary.LittleEndian.Uint32(raw[4:8])
 			evt.UID = binary.LittleEndian.Uint32(raw[8:12])
 			copy(evt.Comm[:], raw[12:28])
 			copy(evt.Filename[:], raw[28:156])
@@ -292,6 +294,7 @@ func reusePinnedExecMonitor(spec *ProbeSpec, callback ExecCallback) error {
 			var evt ExecEvent
 			raw := record.RawSample
 			evt.PID = binary.LittleEndian.Uint32(raw[0:4])
+			evt.PPID = binary.LittleEndian.Uint32(raw[4:8])
 			evt.UID = binary.LittleEndian.Uint32(raw[8:12])
 			copy(evt.Comm[:], raw[12:28])
 			copy(evt.Filename[:], raw[28:156])

@@ -917,12 +917,13 @@ func (x *ProbeInfo) GetSha256() string {
 }
 
 type ProbeListResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	Probes        []*ProbeInfo           `protobuf:"bytes,3,rep,name=probes,proto3" json:"probes,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Success               bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message               string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Probes                []*ProbeInfo           `protobuf:"bytes,3,rep,name=probes,proto3" json:"probes,omitempty"`
+	FalsePositiveFeatures []string               `protobuf:"bytes,4,rep,name=false_positive_features,json=falsePositiveFeatures,proto3" json:"false_positive_features,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ProbeListResponse) Reset() {
@@ -972,6 +973,13 @@ func (x *ProbeListResponse) GetMessage() string {
 func (x *ProbeListResponse) GetProbes() []*ProbeInfo {
 	if x != nil {
 		return x.Probes
+	}
+	return nil
+}
+
+func (x *ProbeListResponse) GetFalsePositiveFeatures() []string {
+	if x != nil {
+		return x.FalsePositiveFeatures
 	}
 	return nil
 }
@@ -3204,11 +3212,12 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x16\n" +
 	"\x06remove\x18\x03 \x01(\bR\x06remove\x12\x12\n" +
 	"\x04path\x18\x04 \x01(\tR\x04path\x12\x16\n" +
-	"\x06sha256\x18\x05 \x01(\tR\x06sha256\"t\n" +
+	"\x06sha256\x18\x05 \x01(\tR\x06sha256\"\xac\x01\n" +
 	"\x11ProbeListResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12+\n" +
-	"\x06probes\x18\x03 \x03(\v2\x13.sentinel.ProbeInfoR\x06probes\"\x9f\t\n" +
+	"\x06probes\x18\x03 \x03(\v2\x13.sentinel.ProbeInfoR\x06probes\x126\n" +
+	"\x17false_positive_features\x18\x04 \x03(\tR\x15falsePositiveFeatures\"\x9f\t\n" +
 	"\vAssetReport\x12+\n" +
 	"\x04perf\x18\x15 \x01(\v2\x17.sentinel.PerfDataAssetR\x04perf\x12-\n" +
 	"\x06system\x18\x05 \x01(\v2\x15.sentinel.SystemAssetR\x06system\x123\n" +

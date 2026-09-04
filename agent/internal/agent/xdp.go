@@ -66,7 +66,15 @@ func (a *Agent) checkEBPFSupport() bool {
 
 func (a *Agent) startExecMonitor() {
 	err := ebpf.LoadExecMonitor(a.getProbePath("exec_monitor"), func(evt ebpf.ExecEvent, cmdline string) {
-		// 本地基线窗口计数
+		// 进程链基线：父进程名 -> 子进程名
+		parentComm := getParentComm(evt.PPID)
+		childComm := strings.TrimRight(string(evt.Comm[:]), "\x00")
+		if parentComm != "" && childComm != "" {
+			chainKey := parentComm + "->" + childComm
+			a.baselineCount[chainKey+":proc_chain"]++
+		}
+
+		// 原有：用户维度 exec 计数
 		key := ebpf.ResolveUser(evt.UID) + ":exec_count"
 		a.baselineCount[key]++
 
@@ -131,4 +139,13 @@ func (a *Agent) startTCPMonitor() {
 	if err != nil {
 		log.Printf("⚠️ TCP监控加载失败: %v", err)
 	}
+}
+
+
+func getParentComm(ppid uint32) string {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", ppid))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }

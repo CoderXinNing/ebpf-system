@@ -403,6 +403,9 @@ func (s *Server) GetProbeList(ctx context.Context, req *pb.ProbeListRequest) (*p
 	}
 
 	log.Printf("📋 %s 查询探针名单: %d个", req.AgentId, len(probes))
-	return &pb.ProbeListResponse{Success: true, Probes: probes}, nil
+	// 获取误报特征黑名单
+	fpFeatures, _ := s.handler.Store.GetFeedbackFeatures()
+
+	return &pb.ProbeListResponse{Success: true, Probes: probes, FalsePositiveFeatures: fpFeatures}, nil
 }
 

@@ -35,6 +35,7 @@ type Agent struct {
 	probePaths   map[string]string // probe_name -> path from Server
 	baseline     *baseline.BaselineEngine
 	baselineCount map[string]int  // 窗口计数
+	falsePositiveFeatures map[string]bool  // 误报特征黑名单
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -52,6 +53,7 @@ func New(cfg *config.AgentConfig) *Agent {
 		probePaths:  make(map[string]string),
 		baseline:    baseline.NewBaselineEngine("agent/configs/baseline.toml"),
 		baselineCount: make(map[string]int),
+		falsePositiveFeatures: make(map[string]bool),
 	}
 	agent.baseline.Restore()
 	return agent
@@ -345,7 +347,10 @@ func (a *Agent) fetchProbeList() []*pb.ProbeInfo {
 		log.Printf("⚠️ 探针名单查询被拒绝: %s", resp.Message)
 		return nil
 	}
-	log.Printf("📋 收到探针名单: %d个", len(resp.Probes))
+	log.Printf("📋 收到探针名单: %d个 (误报特征%d个)", len(resp.Probes), len(resp.FalsePositiveFeatures))
+	for _, fp := range resp.FalsePositiveFeatures {
+		a.falsePositiveFeatures[fp] = true
+	}
 	return resp.Probes
 }
 
@@ -478,6 +483,11 @@ func (a *Agent) flushBaselineWindow() {
 		return
 	}
 	for key, count := range a.baselineCount {
+		// 跳过误报特征
+		if a.falsePositiveFeatures[key] {
+			delete(a.baselineCount, key)
+			continue
+		}
 		// key 格式: user:metric
 		isAnomaly, zScore := a.baseline.Update(baseline.Feature{IP: a.ipAddr, Key: key, Value: float64(count)})
 		if isAnomaly {

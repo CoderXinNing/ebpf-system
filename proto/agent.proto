@@ -52,6 +52,7 @@ message ProbeListResponse {
     bool success = 1;
     string message = 2;
     repeated ProbeInfo probes = 3;
+    repeated string false_positive_features = 4;
 }
 
 // 资产上报
