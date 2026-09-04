@@ -34,8 +34,9 @@ type Agent struct {
 	client       pb.SentinelClient
 
 	// 并发安全组件
-	probeStateActor *actor.Actor  // 状态收敛
-	eventQueue      *EventQueue    // 非阻塞事件队列
+	probeStateActor *actor.Actor      // 状态收敛
+	probeState      *ProbeState       // 缓存引用（只读，心跳非阻塞用）
+	eventQueue      *EventQueue       // 非阻塞事件队列
 	baseline        *baseline.BaselineEngine
 
 	// gRPC Metadata（token 鉴权）
@@ -49,11 +50,13 @@ func New(cfg *config.AgentConfig) *Agent {
 	}
 	baselineEngine := baseline.NewBaselineEngine("agent/configs/baseline.toml")
 
+	probeState := newProbeState(baselineEngine)
 	agent := &Agent{
 		id:         generateAgentID(hostname),
 		hostname:   hostname,
 		ipAddr:     getIPAddress(),
 		cfg:        cfg,
+		probeState: probeState,
 		eventQueue: NewEventQueue(100, 1000),
 		baseline:   baselineEngine,
 	}
@@ -61,7 +64,7 @@ func New(cfg *config.AgentConfig) *Agent {
 	// 创建 ProbeStateActor
 	agent.probeStateActor = actor.New(
 		probeStateHandler,
-		newProbeState(baselineEngine),
+		probeState,
 		actor.ActorConfig{InboxSize: 1000},
 	)
 	agent.probeStateActor.Start()
@@ -249,12 +252,23 @@ func (a *Agent) register() error {
 }
 
 func (a *Agent) eventReporter() {
+	consumeCh := a.eventQueue.Consume()
+	batch := make([]*pb.ProbeEvent, 0, 100)
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
-	batch := make([]*pb.ProbeEvent, 0, 100)
 
 	for {
 		select {
+		case evt := <-consumeCh:
+			if evt == nil {
+				// channel 已关闭，退出
+				return
+			}
+			batch = append(batch, evt)
+			if len(batch) >= 100 {
+				a.flushEvents(batch)
+				batch = batch[:0]
+			}
 		case <-ticker.C:
 			if len(batch) > 0 {
 				a.flushEvents(batch)
@@ -353,15 +367,7 @@ func (a *Agent) getAuthContext(fallback context.Context) context.Context {
 }
 
 func (a *Agent) getProbePath(name string) string {
-	// 通过 Actor 查询
-	result, err := a.probeStateActor.Ask(msgGetProbePath{name: name}, 100*time.Millisecond)
-	if err == nil {
-		if path, ok := result.(string); ok && path != "" {
-			return path
-		}
-	}
-
-	// 回退到配置文件
+	// 路径是相对静态的，直接从配置读，不走 Actor
 	for _, p := range a.cfg.Autoload {
 		if p.Name == name && p.Path != "" {
 			return p.Path
@@ -515,13 +521,11 @@ func (a *Agent) startTCPMonitorWithStatus(name string) {
 }
 
 func (a *Agent) getActiveProbeCount() int32 {
-	state := a.probeStateActor.GetState().(*ProbeState)
-	return state.GetActiveProbeCount()
+	return a.probeState.GetActiveProbeCount()
 }
 
 func (a *Agent) getProbeDetailsJSON() string {
-	state := a.probeStateActor.GetState().(*ProbeState)
-	return state.GetProbeStatusJSON()
+	return a.probeState.GetProbeStatusJSON()
 }
 
 func (a *Agent) flushBaselineWindow() {

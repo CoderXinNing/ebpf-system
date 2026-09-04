@@ -3,6 +3,7 @@ package agent
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/actor"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
@@ -89,6 +90,27 @@ func (q *EventQueue) Push(evt *pb.ProbeEvent, priority EventPriority) actor.Send
 	default:
 		return actor.Full
 	}
+}
+
+// Consume 返回一个只读 channel，消费者从此 channel 接收事件。
+// 高优先级事件优先投递。
+func (q *EventQueue) Consume() <-chan *pb.ProbeEvent {
+	ch := make(chan *pb.ProbeEvent, 100)
+	go func() {
+		defer close(ch)
+		for {
+			evt := q.Pop()
+			if evt == nil {
+				return
+			}
+			select {
+			case ch <- evt:
+			case <-time.After(1 * time.Second):
+				// 消费者慢时丢事件，避免阻塞
+			}
+		}
+	}()
+	return ch
 }
 
 // Pop 阻塞读取一个事件。优先读高优先级队列。
