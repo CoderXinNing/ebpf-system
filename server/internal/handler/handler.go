@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -79,6 +80,16 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/health", h.Health)
 		api.GET("/agents", h.ListAgents)
 		api.GET("/events", h.ListEvents)
+		api.DELETE("/agents/:id", h.roleMiddleware("admin"), func(c *gin.Context) {
+			agentID := c.Param("id")
+			h.Store.DeleteAgentAll(agentID)
+			h.Mu.Lock()
+			delete(h.Agents, agentID)
+			h.Mu.Unlock()
+			h.Store.SaveAuditLog(h.getUsername(c), "删除主机", agentID, c.ClientIP())
+			c.JSON(200, gin.H{"success": true})
+		})
+
 		api.POST("/move", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
 			var req struct {
 				AgentIDs []string `json:"agent_ids"`
@@ -216,6 +227,55 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		})
 
 		// 日志设置
+		api.POST("/system/page-visit", h.authMiddleware, func(c *gin.Context) {
+			var req struct {
+				Page string `json:"page"`
+			}
+			c.BindJSON(&req)
+			pageName := map[string]string{
+				"/": "仪表盘", "/hosts": "主机管理", "/events": "事件流",
+				"/alerts": "告警中心", "/probes": "探针管理", "/install": "Agent部署",
+				"/users": "用户管理", "/logs": "系统日志", "/log-settings": "日志管理",
+				"/time-settings": "时间设置", "/personalize": "个性化", "/about": "关于系统",
+			}[req.Page]
+			if pageName == "" {
+				pageName = req.Page
+			}
+			h.Store.SaveAuditLog(h.getUsername(c), "访问页面", pageName, c.ClientIP())
+			c.JSON(200, gin.H{"success": true})
+		})
+
+		api.POST("/system/time", h.roleMiddleware("admin"), func(c *gin.Context) {
+			var req struct {
+				Datetime string `json:"datetime"` // 2026-09-04 16:45:00
+			}
+			c.BindJSON(&req)
+			if req.Datetime != "" {
+				cmd := exec.Command("date", "-s", req.Datetime)
+				if err := cmd.Run(); err != nil {
+					c.JSON(500, gin.H{"error": "设置失败: " + err.Error()})
+					return
+				}
+				h.Store.SaveAuditLog(h.getUsername(c), "修改系统时间", req.Datetime, c.ClientIP())
+			}
+			c.JSON(200, gin.H{"success": true})
+		})
+		api.POST("/system/ntp", h.roleMiddleware("admin"), func(c *gin.Context) {
+			var req struct {
+				Server string `json:"server"`
+			}
+			c.BindJSON(&req)
+			if req.Server != "" {
+				cmd := exec.Command("ntpdate", req.Server)
+				if err := cmd.Run(); err != nil {
+					c.JSON(500, gin.H{"error": "NTP同步失败: " + err.Error()})
+					return
+				}
+				h.Store.SaveAuditLog(h.getUsername(c), "NTP同步", req.Server, c.ClientIP())
+			}
+			c.JSON(200, gin.H{"success": true})
+		})
+
 		api.GET("/security-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
 			c.JSON(200, gin.H{
 				"max_login_attempts": h.GetSecuritySetting("max_login_attempts", 5),
@@ -603,6 +663,9 @@ func (h *Handler) authMiddleware(c *gin.Context) {
 	}
 	c.Set("user", user)
 	c.Next()
+	// 记录 API 访问日志
+	action := c.Request.Method + " " + c.Request.URL.Path
+	h.Store.SaveAuditLog(user.Username, "API访问", action, c.ClientIP())
 }
 
 func (h *Handler) roleMiddleware(roles ...string) gin.HandlerFunc {

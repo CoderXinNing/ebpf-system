@@ -140,7 +140,10 @@ const cols = [
     const online = Date.now() / 1000 - r.last_seen < 60
     return h('span', { style: { color: online ? '#18A058' : '#D03050' } }, online ? '在线' : '离线')
   }},
-  { title: '操作', key: 'id', width: 70, render: (r) => h('a', { href: '#/host/' + r.id }, '详情') },
+  { title: '操作', key: 'id', width: 110, render: (r) => h('div', { style: 'display: flex; gap: 8px' }, [
+    h('a', { href: '#/host/' + r.id }, '详情'),
+    h('a', { style: 'color: #D03050; cursor: pointer', onClick: () => delHost(r.id) }, '删除'),
+  ]) },
 ]
 
 function onCheck(keys) {
@@ -180,6 +183,16 @@ async function moveHosts() {
   })
   showMove.value = false
   selectedAgents.value = []
+  load()
+}
+
+async function delHost(id) {
+  if (!confirm('确认删除该主机？将清除其所有数据')) return
+  const token = localStorage.getItem('token')
+  await fetch('/api/agents/' + id, {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
   load()
 }
 

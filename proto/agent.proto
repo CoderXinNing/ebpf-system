@@ -37,6 +37,12 @@ message ProbeEvent { string probe_id = 1; string probe_name = 2; int64 timestamp
 message EventReport { string agent_id = 1; string agent_token = 2; repeated ProbeEvent events = 3; }
 
 // 探针名单查询
+message ShutdownRequest {
+    string agent_id = 1;
+    string agent_token = 2;
+}
+message ShutdownResponse { bool success = 1; }
+
 message ProbeListRequest {
     string agent_id = 1;
     string agent_token = 2;
@@ -164,6 +170,7 @@ service Sentinel {
     rpc ReportEvents(EventReport) returns (HeartbeatResponse);
     rpc ReportAssets(AssetReport) returns (HeartbeatResponse);
     rpc GetProbeList(ProbeListRequest) returns (ProbeListResponse);
+    rpc ReportShutdown(ShutdownRequest) returns (ShutdownResponse);
 }
 message NetworkGatewayAsset {
     string gateway = 1; repeated string dns = 2;

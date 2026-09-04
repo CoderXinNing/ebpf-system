@@ -258,6 +258,15 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 
 func (a *Agent) Shutdown() {
 	log.Println("🧹 清理资源...")
+	// 通知 Server 正常下线
+	if a.client != nil && a.token != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		a.client.ReportShutdown(ctx, &pb.ShutdownRequest{
+			AgentId:    a.id,
+			AgentToken: a.token,
+		})
+	}
 	if xdpHandle != nil {
 		xdpHandle.Close()
 	}

@@ -25,6 +25,17 @@ func NewStore(dbPath string) (*Store, error) {
 
 	// 建表
 	tables := []string{
+		// Agent 注册信息
+		`CREATE TABLE IF NOT EXISTS agents (
+			agent_id TEXT PRIMARY KEY,
+			hostname TEXT,
+			ip_addr TEXT,
+			version TEXT,
+			group_name TEXT,
+			token TEXT,
+			first_seen INTEGER,
+			last_seen INTEGER
+		)`,
 		// 用户表（从auth迁移过来）
 		`CREATE TABLE IF NOT EXISTS users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -547,4 +558,46 @@ func (s *Store) GetFeedbackFeatures() ([]string, error) {
 		features = append(features, key[3:]) // 去掉 fp_ 前缀
 	}
 	return features, nil
+}
+
+
+// SaveAgent 保存/更新 Agent 注册信息
+func (s *Store) SaveAgent(agentID, hostname, ipAddr, version, groupName, token string, firstSeen, lastSeen int64) error {
+	_, err := s.db.Exec(
+		"INSERT INTO agents (agent_id, hostname, ip_addr, version, group_name, token, first_seen, last_seen) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(agent_id) DO UPDATE SET hostname=excluded.hostname, ip_addr=excluded.ip_addr, version=excluded.version, group_name=excluded.group_name, token=excluded.token, last_seen=excluded.last_seen",
+		agentID, hostname, ipAddr, version, groupName, token, firstSeen, lastSeen,
+	)
+	return err
+}
+
+// GetRegisteredAgents 获取所有注册过的 Agent
+func (s *Store) GetRegisteredAgents() ([]map[string]interface{}, error) {
+	rows, err := s.db.Query("SELECT agent_id, hostname, ip_addr, version, group_name, token, first_seen, last_seen FROM agents")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var agents []map[string]interface{}
+	for rows.Next() {
+		var agentID, hostname, ipAddr, version, groupName, token string
+		var firstSeen, lastSeen int64
+		rows.Scan(&agentID, &hostname, &ipAddr, &version, &groupName, &token, &firstSeen, &lastSeen)
+		agents = append(agents, map[string]interface{}{
+			"agent_id": agentID, "hostname": hostname, "ip_addr": ipAddr,
+			"version": version, "group": groupName, "token": token,
+			"first_seen": firstSeen, "last_seen": lastSeen,
+		})
+	}
+	return agents, nil
+}
+
+// DeleteAgentAll 删除主机的所有数据
+func (s *Store) DeleteAgentAll(agentID string) error {
+	s.db.Exec("DELETE FROM agents WHERE agent_id = ?", agentID)
+	s.db.Exec("DELETE FROM events WHERE agent_id = ?", agentID)
+	s.db.Exec("DELETE FROM alerts WHERE agent_id = ?", agentID)
+	s.db.Exec("DELETE FROM probe_configs WHERE agent_id = ?", agentID)
+	s.db.Exec("DELETE FROM asset_snapshots WHERE agent_id = ?", agentID)
+	return nil
 }

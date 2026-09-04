@@ -19,6 +19,8 @@ const routes = [
   { path: '/users', component: () => import('../views/UsersView.vue') },
   { path: '/logs', component: () => import('../views/LogsView.vue') },
   { path: '/log-settings', component: () => import('../views/LogSettingsView.vue') },
+  { path: '/time-settings', component: () => import('../views/TimeSettingsView.vue') },
+  { path: '/personalize', component: () => import('../views/PersonalizeView.vue') },
   { path: '/about', component: () => import('../views/AboutView.vue') },
   { path: '/install', component: () => import('../views/AgentInstall.vue') },
 ]

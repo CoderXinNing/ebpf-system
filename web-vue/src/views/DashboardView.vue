@@ -128,7 +128,7 @@ onMounted(async () => {
     const assets = await api.getAssets()
     if (assets.agents) {
       const summaries = assets.agents
-      summaries.forEach(s => {
+      summaries.filter(s => s.online).forEach(s => {
         const cpuCard = cards.value.find(c => c.key === 'cpu')
         const memCard = cards.value.find(c => c.key === 'mem')
         const diskCard = cards.value.find(c => c.key === 'disk')

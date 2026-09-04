@@ -788,6 +788,102 @@ func (x *EventReport) GetEvents() []*ProbeEvent {
 }
 
 // 探针名单查询
+type ShutdownRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	AgentToken    string                 `protobuf:"bytes,2,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShutdownRequest) Reset() {
+	*x = ShutdownRequest{}
+	mi := &file_proto_agent_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShutdownRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShutdownRequest) ProtoMessage() {}
+
+func (x *ShutdownRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShutdownRequest.ProtoReflect.Descriptor instead.
+func (*ShutdownRequest) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ShutdownRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *ShutdownRequest) GetAgentToken() string {
+	if x != nil {
+		return x.AgentToken
+	}
+	return ""
+}
+
+type ShutdownResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShutdownResponse) Reset() {
+	*x = ShutdownResponse{}
+	mi := &file_proto_agent_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShutdownResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShutdownResponse) ProtoMessage() {}
+
+func (x *ShutdownResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShutdownResponse.ProtoReflect.Descriptor instead.
+func (*ShutdownResponse) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ShutdownResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 type ProbeListRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
@@ -798,7 +894,7 @@ type ProbeListRequest struct {
 
 func (x *ProbeListRequest) Reset() {
 	*x = ProbeListRequest{}
-	mi := &file_proto_agent_proto_msgTypes[9]
+	mi := &file_proto_agent_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -810,7 +906,7 @@ func (x *ProbeListRequest) String() string {
 func (*ProbeListRequest) ProtoMessage() {}
 
 func (x *ProbeListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[9]
+	mi := &file_proto_agent_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -823,7 +919,7 @@ func (x *ProbeListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeListRequest.ProtoReflect.Descriptor instead.
 func (*ProbeListRequest) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{9}
+	return file_proto_agent_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ProbeListRequest) GetAgentId() string {
@@ -853,7 +949,7 @@ type ProbeInfo struct {
 
 func (x *ProbeInfo) Reset() {
 	*x = ProbeInfo{}
-	mi := &file_proto_agent_proto_msgTypes[10]
+	mi := &file_proto_agent_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -865,7 +961,7 @@ func (x *ProbeInfo) String() string {
 func (*ProbeInfo) ProtoMessage() {}
 
 func (x *ProbeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[10]
+	mi := &file_proto_agent_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -878,7 +974,7 @@ func (x *ProbeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeInfo.ProtoReflect.Descriptor instead.
 func (*ProbeInfo) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{10}
+	return file_proto_agent_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ProbeInfo) GetName() string {
@@ -928,7 +1024,7 @@ type ProbeListResponse struct {
 
 func (x *ProbeListResponse) Reset() {
 	*x = ProbeListResponse{}
-	mi := &file_proto_agent_proto_msgTypes[11]
+	mi := &file_proto_agent_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -940,7 +1036,7 @@ func (x *ProbeListResponse) String() string {
 func (*ProbeListResponse) ProtoMessage() {}
 
 func (x *ProbeListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[11]
+	mi := &file_proto_agent_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -953,7 +1049,7 @@ func (x *ProbeListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeListResponse.ProtoReflect.Descriptor instead.
 func (*ProbeListResponse) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{11}
+	return file_proto_agent_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ProbeListResponse) GetSuccess() bool {
@@ -1014,7 +1110,7 @@ type AssetReport struct {
 
 func (x *AssetReport) Reset() {
 	*x = AssetReport{}
-	mi := &file_proto_agent_proto_msgTypes[12]
+	mi := &file_proto_agent_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1026,7 +1122,7 @@ func (x *AssetReport) String() string {
 func (*AssetReport) ProtoMessage() {}
 
 func (x *AssetReport) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[12]
+	mi := &file_proto_agent_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1039,7 +1135,7 @@ func (x *AssetReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssetReport.ProtoReflect.Descriptor instead.
 func (*AssetReport) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{12}
+	return file_proto_agent_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AssetReport) GetPerf() *PerfDataAsset {
@@ -1206,7 +1302,7 @@ type SystemAsset struct {
 
 func (x *SystemAsset) Reset() {
 	*x = SystemAsset{}
-	mi := &file_proto_agent_proto_msgTypes[13]
+	mi := &file_proto_agent_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1218,7 +1314,7 @@ func (x *SystemAsset) String() string {
 func (*SystemAsset) ProtoMessage() {}
 
 func (x *SystemAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[13]
+	mi := &file_proto_agent_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1231,7 +1327,7 @@ func (x *SystemAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemAsset.ProtoReflect.Descriptor instead.
 func (*SystemAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{13}
+	return file_proto_agent_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SystemAsset) GetOs() *OSAsset {
@@ -1308,7 +1404,7 @@ type OSAsset struct {
 
 func (x *OSAsset) Reset() {
 	*x = OSAsset{}
-	mi := &file_proto_agent_proto_msgTypes[14]
+	mi := &file_proto_agent_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1320,7 +1416,7 @@ func (x *OSAsset) String() string {
 func (*OSAsset) ProtoMessage() {}
 
 func (x *OSAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[14]
+	mi := &file_proto_agent_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1333,7 +1429,7 @@ func (x *OSAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OSAsset.ProtoReflect.Descriptor instead.
 func (*OSAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{14}
+	return file_proto_agent_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *OSAsset) GetName() string {
@@ -1367,7 +1463,7 @@ type CPUAsset struct {
 
 func (x *CPUAsset) Reset() {
 	*x = CPUAsset{}
-	mi := &file_proto_agent_proto_msgTypes[15]
+	mi := &file_proto_agent_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1379,7 +1475,7 @@ func (x *CPUAsset) String() string {
 func (*CPUAsset) ProtoMessage() {}
 
 func (x *CPUAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[15]
+	mi := &file_proto_agent_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1392,7 +1488,7 @@ func (x *CPUAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CPUAsset.ProtoReflect.Descriptor instead.
 func (*CPUAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{15}
+	return file_proto_agent_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *CPUAsset) GetModel() string {
@@ -1419,7 +1515,7 @@ type MemoryAsset struct {
 
 func (x *MemoryAsset) Reset() {
 	*x = MemoryAsset{}
-	mi := &file_proto_agent_proto_msgTypes[16]
+	mi := &file_proto_agent_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1431,7 +1527,7 @@ func (x *MemoryAsset) String() string {
 func (*MemoryAsset) ProtoMessage() {}
 
 func (x *MemoryAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[16]
+	mi := &file_proto_agent_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1444,7 +1540,7 @@ func (x *MemoryAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemoryAsset.ProtoReflect.Descriptor instead.
 func (*MemoryAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{16}
+	return file_proto_agent_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *MemoryAsset) GetTotalMb() int32 {
@@ -1472,7 +1568,7 @@ type DiskAsset struct {
 
 func (x *DiskAsset) Reset() {
 	*x = DiskAsset{}
-	mi := &file_proto_agent_proto_msgTypes[17]
+	mi := &file_proto_agent_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1484,7 +1580,7 @@ func (x *DiskAsset) String() string {
 func (*DiskAsset) ProtoMessage() {}
 
 func (x *DiskAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[17]
+	mi := &file_proto_agent_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1497,7 +1593,7 @@ func (x *DiskAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiskAsset.ProtoReflect.Descriptor instead.
 func (*DiskAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{17}
+	return file_proto_agent_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *DiskAsset) GetMountPoint() string {
@@ -1532,7 +1628,7 @@ type NetworkAsset struct {
 
 func (x *NetworkAsset) Reset() {
 	*x = NetworkAsset{}
-	mi := &file_proto_agent_proto_msgTypes[18]
+	mi := &file_proto_agent_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1544,7 +1640,7 @@ func (x *NetworkAsset) String() string {
 func (*NetworkAsset) ProtoMessage() {}
 
 func (x *NetworkAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[18]
+	mi := &file_proto_agent_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1557,7 +1653,7 @@ func (x *NetworkAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkAsset.ProtoReflect.Descriptor instead.
 func (*NetworkAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{18}
+	return file_proto_agent_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *NetworkAsset) GetName() string {
@@ -1595,7 +1691,7 @@ type WebComponentAsset struct {
 
 func (x *WebComponentAsset) Reset() {
 	*x = WebComponentAsset{}
-	mi := &file_proto_agent_proto_msgTypes[19]
+	mi := &file_proto_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1607,7 +1703,7 @@ func (x *WebComponentAsset) String() string {
 func (*WebComponentAsset) ProtoMessage() {}
 
 func (x *WebComponentAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[19]
+	mi := &file_proto_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1620,7 +1716,7 @@ func (x *WebComponentAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebComponentAsset.ProtoReflect.Descriptor instead.
 func (*WebComponentAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{19}
+	return file_proto_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *WebComponentAsset) GetName() string {
@@ -1680,7 +1776,7 @@ type IdentifiedService struct {
 
 func (x *IdentifiedService) Reset() {
 	*x = IdentifiedService{}
-	mi := &file_proto_agent_proto_msgTypes[20]
+	mi := &file_proto_agent_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1692,7 +1788,7 @@ func (x *IdentifiedService) String() string {
 func (*IdentifiedService) ProtoMessage() {}
 
 func (x *IdentifiedService) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[20]
+	mi := &file_proto_agent_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1705,7 +1801,7 @@ func (x *IdentifiedService) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IdentifiedService.ProtoReflect.Descriptor instead.
 func (*IdentifiedService) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{20}
+	return file_proto_agent_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *IdentifiedService) GetName() string {
@@ -1769,7 +1865,7 @@ type PackageAsset struct {
 
 func (x *PackageAsset) Reset() {
 	*x = PackageAsset{}
-	mi := &file_proto_agent_proto_msgTypes[21]
+	mi := &file_proto_agent_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1781,7 +1877,7 @@ func (x *PackageAsset) String() string {
 func (*PackageAsset) ProtoMessage() {}
 
 func (x *PackageAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[21]
+	mi := &file_proto_agent_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1794,7 +1890,7 @@ func (x *PackageAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageAsset.ProtoReflect.Descriptor instead.
 func (*PackageAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{21}
+	return file_proto_agent_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *PackageAsset) GetName() string {
@@ -1837,7 +1933,7 @@ type CronAsset struct {
 
 func (x *CronAsset) Reset() {
 	*x = CronAsset{}
-	mi := &file_proto_agent_proto_msgTypes[22]
+	mi := &file_proto_agent_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1849,7 +1945,7 @@ func (x *CronAsset) String() string {
 func (*CronAsset) ProtoMessage() {}
 
 func (x *CronAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[22]
+	mi := &file_proto_agent_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1862,7 +1958,7 @@ func (x *CronAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CronAsset.ProtoReflect.Descriptor instead.
 func (*CronAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{22}
+	return file_proto_agent_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CronAsset) GetUser() string {
@@ -1906,7 +2002,7 @@ type HardwareAsset struct {
 
 func (x *HardwareAsset) Reset() {
 	*x = HardwareAsset{}
-	mi := &file_proto_agent_proto_msgTypes[23]
+	mi := &file_proto_agent_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1918,7 +2014,7 @@ func (x *HardwareAsset) String() string {
 func (*HardwareAsset) ProtoMessage() {}
 
 func (x *HardwareAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[23]
+	mi := &file_proto_agent_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1931,7 +2027,7 @@ func (x *HardwareAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HardwareAsset.ProtoReflect.Descriptor instead.
 func (*HardwareAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{23}
+	return file_proto_agent_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *HardwareAsset) GetManufacturer() string {
@@ -1984,7 +2080,7 @@ type KernelModuleAsset struct {
 
 func (x *KernelModuleAsset) Reset() {
 	*x = KernelModuleAsset{}
-	mi := &file_proto_agent_proto_msgTypes[24]
+	mi := &file_proto_agent_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1996,7 +2092,7 @@ func (x *KernelModuleAsset) String() string {
 func (*KernelModuleAsset) ProtoMessage() {}
 
 func (x *KernelModuleAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[24]
+	mi := &file_proto_agent_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2009,7 +2105,7 @@ func (x *KernelModuleAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KernelModuleAsset.ProtoReflect.Descriptor instead.
 func (*KernelModuleAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{24}
+	return file_proto_agent_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *KernelModuleAsset) GetName() string {
@@ -2073,7 +2169,7 @@ type EnvVariableAsset struct {
 
 func (x *EnvVariableAsset) Reset() {
 	*x = EnvVariableAsset{}
-	mi := &file_proto_agent_proto_msgTypes[25]
+	mi := &file_proto_agent_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2085,7 +2181,7 @@ func (x *EnvVariableAsset) String() string {
 func (*EnvVariableAsset) ProtoMessage() {}
 
 func (x *EnvVariableAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[25]
+	mi := &file_proto_agent_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2098,7 +2194,7 @@ func (x *EnvVariableAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnvVariableAsset.ProtoReflect.Descriptor instead.
 func (*EnvVariableAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{25}
+	return file_proto_agent_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *EnvVariableAsset) GetName() string {
@@ -2141,7 +2237,7 @@ type DiskUsageAsset struct {
 
 func (x *DiskUsageAsset) Reset() {
 	*x = DiskUsageAsset{}
-	mi := &file_proto_agent_proto_msgTypes[26]
+	mi := &file_proto_agent_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2153,7 +2249,7 @@ func (x *DiskUsageAsset) String() string {
 func (*DiskUsageAsset) ProtoMessage() {}
 
 func (x *DiskUsageAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[26]
+	mi := &file_proto_agent_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2166,7 +2262,7 @@ func (x *DiskUsageAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiskUsageAsset.ProtoReflect.Descriptor instead.
 func (*DiskUsageAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{26}
+	return file_proto_agent_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *DiskUsageAsset) GetMountPoint() string {
@@ -2211,7 +2307,7 @@ type NetworkDetailAsset struct {
 
 func (x *NetworkDetailAsset) Reset() {
 	*x = NetworkDetailAsset{}
-	mi := &file_proto_agent_proto_msgTypes[27]
+	mi := &file_proto_agent_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2223,7 +2319,7 @@ func (x *NetworkDetailAsset) String() string {
 func (*NetworkDetailAsset) ProtoMessage() {}
 
 func (x *NetworkDetailAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[27]
+	mi := &file_proto_agent_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2236,7 +2332,7 @@ func (x *NetworkDetailAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkDetailAsset.ProtoReflect.Descriptor instead.
 func (*NetworkDetailAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{27}
+	return file_proto_agent_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *NetworkDetailAsset) GetName() string {
@@ -2292,7 +2388,7 @@ type ServiceStatusAsset struct {
 
 func (x *ServiceStatusAsset) Reset() {
 	*x = ServiceStatusAsset{}
-	mi := &file_proto_agent_proto_msgTypes[28]
+	mi := &file_proto_agent_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2304,7 +2400,7 @@ func (x *ServiceStatusAsset) String() string {
 func (*ServiceStatusAsset) ProtoMessage() {}
 
 func (x *ServiceStatusAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[28]
+	mi := &file_proto_agent_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2317,7 +2413,7 @@ func (x *ServiceStatusAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceStatusAsset.ProtoReflect.Descriptor instead.
 func (*ServiceStatusAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{28}
+	return file_proto_agent_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ServiceStatusAsset) GetName() string {
@@ -2354,7 +2450,7 @@ type JarPackageAsset struct {
 
 func (x *JarPackageAsset) Reset() {
 	*x = JarPackageAsset{}
-	mi := &file_proto_agent_proto_msgTypes[29]
+	mi := &file_proto_agent_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2366,7 +2462,7 @@ func (x *JarPackageAsset) String() string {
 func (*JarPackageAsset) ProtoMessage() {}
 
 func (x *JarPackageAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[29]
+	mi := &file_proto_agent_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2379,7 +2475,7 @@ func (x *JarPackageAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JarPackageAsset.ProtoReflect.Descriptor instead.
 func (*JarPackageAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{29}
+	return file_proto_agent_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *JarPackageAsset) GetName() string {
@@ -2429,7 +2525,7 @@ type PythonPackageAsset struct {
 
 func (x *PythonPackageAsset) Reset() {
 	*x = PythonPackageAsset{}
-	mi := &file_proto_agent_proto_msgTypes[30]
+	mi := &file_proto_agent_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2441,7 +2537,7 @@ func (x *PythonPackageAsset) String() string {
 func (*PythonPackageAsset) ProtoMessage() {}
 
 func (x *PythonPackageAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[30]
+	mi := &file_proto_agent_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2454,7 +2550,7 @@ func (x *PythonPackageAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PythonPackageAsset.ProtoReflect.Descriptor instead.
 func (*PythonPackageAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{30}
+	return file_proto_agent_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *PythonPackageAsset) GetName() string {
@@ -2497,7 +2593,7 @@ type NpmPackageAsset struct {
 
 func (x *NpmPackageAsset) Reset() {
 	*x = NpmPackageAsset{}
-	mi := &file_proto_agent_proto_msgTypes[31]
+	mi := &file_proto_agent_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2509,7 +2605,7 @@ func (x *NpmPackageAsset) String() string {
 func (*NpmPackageAsset) ProtoMessage() {}
 
 func (x *NpmPackageAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[31]
+	mi := &file_proto_agent_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2522,7 +2618,7 @@ func (x *NpmPackageAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NpmPackageAsset.ProtoReflect.Descriptor instead.
 func (*NpmPackageAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{31}
+	return file_proto_agent_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *NpmPackageAsset) GetName() string {
@@ -2567,7 +2663,7 @@ type AgentSelfAsset struct {
 
 func (x *AgentSelfAsset) Reset() {
 	*x = AgentSelfAsset{}
-	mi := &file_proto_agent_proto_msgTypes[32]
+	mi := &file_proto_agent_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2579,7 +2675,7 @@ func (x *AgentSelfAsset) String() string {
 func (*AgentSelfAsset) ProtoMessage() {}
 
 func (x *AgentSelfAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[32]
+	mi := &file_proto_agent_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2592,7 +2688,7 @@ func (x *AgentSelfAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentSelfAsset.ProtoReflect.Descriptor instead.
 func (*AgentSelfAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{32}
+	return file_proto_agent_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *AgentSelfAsset) GetInstallPath() string {
@@ -2647,7 +2743,7 @@ type ServiceAsset struct {
 
 func (x *ServiceAsset) Reset() {
 	*x = ServiceAsset{}
-	mi := &file_proto_agent_proto_msgTypes[33]
+	mi := &file_proto_agent_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2659,7 +2755,7 @@ func (x *ServiceAsset) String() string {
 func (*ServiceAsset) ProtoMessage() {}
 
 func (x *ServiceAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[33]
+	mi := &file_proto_agent_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2672,7 +2768,7 @@ func (x *ServiceAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceAsset.ProtoReflect.Descriptor instead.
 func (*ServiceAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{33}
+	return file_proto_agent_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ServiceAsset) GetName() string {
@@ -2708,7 +2804,7 @@ type UserAsset struct {
 
 func (x *UserAsset) Reset() {
 	*x = UserAsset{}
-	mi := &file_proto_agent_proto_msgTypes[34]
+	mi := &file_proto_agent_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2720,7 +2816,7 @@ func (x *UserAsset) String() string {
 func (*UserAsset) ProtoMessage() {}
 
 func (x *UserAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[34]
+	mi := &file_proto_agent_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2733,7 +2829,7 @@ func (x *UserAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserAsset.ProtoReflect.Descriptor instead.
 func (*UserAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{34}
+	return file_proto_agent_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *UserAsset) GetUsername() string {
@@ -2830,7 +2926,7 @@ type ProcessAsset struct {
 
 func (x *ProcessAsset) Reset() {
 	*x = ProcessAsset{}
-	mi := &file_proto_agent_proto_msgTypes[35]
+	mi := &file_proto_agent_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2842,7 +2938,7 @@ func (x *ProcessAsset) String() string {
 func (*ProcessAsset) ProtoMessage() {}
 
 func (x *ProcessAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[35]
+	mi := &file_proto_agent_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2855,7 +2951,7 @@ func (x *ProcessAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessAsset.ProtoReflect.Descriptor instead.
 func (*ProcessAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{35}
+	return file_proto_agent_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ProcessAsset) GetPid() int32 {
@@ -2931,7 +3027,7 @@ type NetworkGatewayAsset struct {
 
 func (x *NetworkGatewayAsset) Reset() {
 	*x = NetworkGatewayAsset{}
-	mi := &file_proto_agent_proto_msgTypes[36]
+	mi := &file_proto_agent_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2943,7 +3039,7 @@ func (x *NetworkGatewayAsset) String() string {
 func (*NetworkGatewayAsset) ProtoMessage() {}
 
 func (x *NetworkGatewayAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[36]
+	mi := &file_proto_agent_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2956,7 +3052,7 @@ func (x *NetworkGatewayAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkGatewayAsset.ProtoReflect.Descriptor instead.
 func (*NetworkGatewayAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{36}
+	return file_proto_agent_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *NetworkGatewayAsset) GetGateway() string {
@@ -2986,7 +3082,7 @@ type PerfDataAsset struct {
 
 func (x *PerfDataAsset) Reset() {
 	*x = PerfDataAsset{}
-	mi := &file_proto_agent_proto_msgTypes[37]
+	mi := &file_proto_agent_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2998,7 +3094,7 @@ func (x *PerfDataAsset) String() string {
 func (*PerfDataAsset) ProtoMessage() {}
 
 func (x *PerfDataAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[37]
+	mi := &file_proto_agent_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3011,7 +3107,7 @@ func (x *PerfDataAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerfDataAsset.ProtoReflect.Descriptor instead.
 func (*PerfDataAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{37}
+	return file_proto_agent_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *PerfDataAsset) GetCpuPercent() float64 {
@@ -3061,7 +3157,7 @@ type DiskPerfAsset struct {
 
 func (x *DiskPerfAsset) Reset() {
 	*x = DiskPerfAsset{}
-	mi := &file_proto_agent_proto_msgTypes[38]
+	mi := &file_proto_agent_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3073,7 +3169,7 @@ func (x *DiskPerfAsset) String() string {
 func (*DiskPerfAsset) ProtoMessage() {}
 
 func (x *DiskPerfAsset) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[38]
+	mi := &file_proto_agent_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3086,7 +3182,7 @@ func (x *DiskPerfAsset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiskPerfAsset.ProtoReflect.Descriptor instead.
 func (*DiskPerfAsset) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{38}
+	return file_proto_agent_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *DiskPerfAsset) GetMountPoint() string {
@@ -3202,7 +3298,13 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
 	"agentToken\x12,\n" +
-	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"N\n" +
+	"\x06events\x18\x03 \x03(\v2\x14.sentinel.ProbeEventR\x06events\"M\n" +
+	"\x0fShutdownRequest\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
+	"\vagent_token\x18\x02 \x01(\tR\n" +
+	"agentToken\",\n" +
+	"\x10ShutdownResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"N\n" +
 	"\x10ProbeListRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1f\n" +
 	"\vagent_token\x18\x02 \x01(\tR\n" +
@@ -3416,13 +3518,14 @@ const file_proto_agent_proto_rawDesc = "" +
 	"mountPoint\x12\x17\n" +
 	"\aused_mb\x18\x02 \x01(\x05R\x06usedMb\x12\x19\n" +
 	"\btotal_mb\x18\x03 \x01(\x05R\atotalMb\x12\x18\n" +
-	"\apercent\x18\x04 \x01(\tR\apercent2\xe8\x02\n" +
+	"\apercent\x18\x04 \x01(\tR\apercent2\xb1\x03\n" +
 	"\bSentinel\x12A\n" +
 	"\bRegister\x12\x19.sentinel.RegisterRequest\x1a\x1a.sentinel.RegisterResponse\x12H\n" +
 	"\tHeartbeat\x12\x1a.sentinel.HeartbeatRequest\x1a\x1b.sentinel.HeartbeatResponse(\x010\x01\x12B\n" +
 	"\fReportEvents\x12\x15.sentinel.EventReport\x1a\x1b.sentinel.HeartbeatResponse\x12B\n" +
 	"\fReportAssets\x12\x15.sentinel.AssetReport\x1a\x1b.sentinel.HeartbeatResponse\x12G\n" +
-	"\fGetProbeList\x12\x1a.sentinel.ProbeListRequest\x1a\x1b.sentinel.ProbeListResponseB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
+	"\fGetProbeList\x12\x1a.sentinel.ProbeListRequest\x1a\x1b.sentinel.ProbeListResponse\x12G\n" +
+	"\x0eReportShutdown\x12\x19.sentinel.ShutdownRequest\x1a\x1a.sentinel.ShutdownResponseB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once
@@ -3437,7 +3540,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
 var file_proto_agent_proto_goTypes = []any{
 	(ProbeCommand_CommandType)(0), // 0: sentinel.ProbeCommand.CommandType
 	(*RegisterRequest)(nil),       // 1: sentinel.RegisterRequest
@@ -3449,36 +3552,38 @@ var file_proto_agent_proto_goTypes = []any{
 	(*ProbeCommand)(nil),          // 7: sentinel.ProbeCommand
 	(*ProbeEvent)(nil),            // 8: sentinel.ProbeEvent
 	(*EventReport)(nil),           // 9: sentinel.EventReport
-	(*ProbeListRequest)(nil),      // 10: sentinel.ProbeListRequest
-	(*ProbeInfo)(nil),             // 11: sentinel.ProbeInfo
-	(*ProbeListResponse)(nil),     // 12: sentinel.ProbeListResponse
-	(*AssetReport)(nil),           // 13: sentinel.AssetReport
-	(*SystemAsset)(nil),           // 14: sentinel.SystemAsset
-	(*OSAsset)(nil),               // 15: sentinel.OSAsset
-	(*CPUAsset)(nil),              // 16: sentinel.CPUAsset
-	(*MemoryAsset)(nil),           // 17: sentinel.MemoryAsset
-	(*DiskAsset)(nil),             // 18: sentinel.DiskAsset
-	(*NetworkAsset)(nil),          // 19: sentinel.NetworkAsset
-	(*WebComponentAsset)(nil),     // 20: sentinel.WebComponentAsset
-	(*IdentifiedService)(nil),     // 21: sentinel.IdentifiedService
-	(*PackageAsset)(nil),          // 22: sentinel.PackageAsset
-	(*CronAsset)(nil),             // 23: sentinel.CronAsset
-	(*HardwareAsset)(nil),         // 24: sentinel.HardwareAsset
-	(*KernelModuleAsset)(nil),     // 25: sentinel.KernelModuleAsset
-	(*EnvVariableAsset)(nil),      // 26: sentinel.EnvVariableAsset
-	(*DiskUsageAsset)(nil),        // 27: sentinel.DiskUsageAsset
-	(*NetworkDetailAsset)(nil),    // 28: sentinel.NetworkDetailAsset
-	(*ServiceStatusAsset)(nil),    // 29: sentinel.ServiceStatusAsset
-	(*JarPackageAsset)(nil),       // 30: sentinel.JarPackageAsset
-	(*PythonPackageAsset)(nil),    // 31: sentinel.PythonPackageAsset
-	(*NpmPackageAsset)(nil),       // 32: sentinel.NpmPackageAsset
-	(*AgentSelfAsset)(nil),        // 33: sentinel.AgentSelfAsset
-	(*ServiceAsset)(nil),          // 34: sentinel.ServiceAsset
-	(*UserAsset)(nil),             // 35: sentinel.UserAsset
-	(*ProcessAsset)(nil),          // 36: sentinel.ProcessAsset
-	(*NetworkGatewayAsset)(nil),   // 37: sentinel.NetworkGatewayAsset
-	(*PerfDataAsset)(nil),         // 38: sentinel.PerfDataAsset
-	(*DiskPerfAsset)(nil),         // 39: sentinel.DiskPerfAsset
+	(*ShutdownRequest)(nil),       // 10: sentinel.ShutdownRequest
+	(*ShutdownResponse)(nil),      // 11: sentinel.ShutdownResponse
+	(*ProbeListRequest)(nil),      // 12: sentinel.ProbeListRequest
+	(*ProbeInfo)(nil),             // 13: sentinel.ProbeInfo
+	(*ProbeListResponse)(nil),     // 14: sentinel.ProbeListResponse
+	(*AssetReport)(nil),           // 15: sentinel.AssetReport
+	(*SystemAsset)(nil),           // 16: sentinel.SystemAsset
+	(*OSAsset)(nil),               // 17: sentinel.OSAsset
+	(*CPUAsset)(nil),              // 18: sentinel.CPUAsset
+	(*MemoryAsset)(nil),           // 19: sentinel.MemoryAsset
+	(*DiskAsset)(nil),             // 20: sentinel.DiskAsset
+	(*NetworkAsset)(nil),          // 21: sentinel.NetworkAsset
+	(*WebComponentAsset)(nil),     // 22: sentinel.WebComponentAsset
+	(*IdentifiedService)(nil),     // 23: sentinel.IdentifiedService
+	(*PackageAsset)(nil),          // 24: sentinel.PackageAsset
+	(*CronAsset)(nil),             // 25: sentinel.CronAsset
+	(*HardwareAsset)(nil),         // 26: sentinel.HardwareAsset
+	(*KernelModuleAsset)(nil),     // 27: sentinel.KernelModuleAsset
+	(*EnvVariableAsset)(nil),      // 28: sentinel.EnvVariableAsset
+	(*DiskUsageAsset)(nil),        // 29: sentinel.DiskUsageAsset
+	(*NetworkDetailAsset)(nil),    // 30: sentinel.NetworkDetailAsset
+	(*ServiceStatusAsset)(nil),    // 31: sentinel.ServiceStatusAsset
+	(*JarPackageAsset)(nil),       // 32: sentinel.JarPackageAsset
+	(*PythonPackageAsset)(nil),    // 33: sentinel.PythonPackageAsset
+	(*NpmPackageAsset)(nil),       // 34: sentinel.NpmPackageAsset
+	(*AgentSelfAsset)(nil),        // 35: sentinel.AgentSelfAsset
+	(*ServiceAsset)(nil),          // 36: sentinel.ServiceAsset
+	(*UserAsset)(nil),             // 37: sentinel.UserAsset
+	(*ProcessAsset)(nil),          // 38: sentinel.ProcessAsset
+	(*NetworkGatewayAsset)(nil),   // 39: sentinel.NetworkGatewayAsset
+	(*PerfDataAsset)(nil),         // 40: sentinel.PerfDataAsset
+	(*DiskPerfAsset)(nil),         // 41: sentinel.DiskPerfAsset
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	3,  // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
@@ -3486,45 +3591,47 @@ var file_proto_agent_proto_depIdxs = []int32{
 	7,  // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
 	0,  // 3: sentinel.ProbeCommand.type:type_name -> sentinel.ProbeCommand.CommandType
 	8,  // 4: sentinel.EventReport.events:type_name -> sentinel.ProbeEvent
-	11, // 5: sentinel.ProbeListResponse.probes:type_name -> sentinel.ProbeInfo
-	38, // 6: sentinel.AssetReport.perf:type_name -> sentinel.PerfDataAsset
-	14, // 7: sentinel.AssetReport.system:type_name -> sentinel.SystemAsset
-	24, // 8: sentinel.AssetReport.hardware:type_name -> sentinel.HardwareAsset
-	25, // 9: sentinel.AssetReport.kernel_modules:type_name -> sentinel.KernelModuleAsset
-	26, // 10: sentinel.AssetReport.env_variables:type_name -> sentinel.EnvVariableAsset
-	27, // 11: sentinel.AssetReport.disk_usages:type_name -> sentinel.DiskUsageAsset
-	28, // 12: sentinel.AssetReport.network_details:type_name -> sentinel.NetworkDetailAsset
-	37, // 13: sentinel.AssetReport.gateway_dns:type_name -> sentinel.NetworkGatewayAsset
-	29, // 14: sentinel.AssetReport.service_status:type_name -> sentinel.ServiceStatusAsset
-	30, // 15: sentinel.AssetReport.jar_packages:type_name -> sentinel.JarPackageAsset
-	31, // 16: sentinel.AssetReport.python_packages:type_name -> sentinel.PythonPackageAsset
-	32, // 17: sentinel.AssetReport.npm_packages:type_name -> sentinel.NpmPackageAsset
-	33, // 18: sentinel.AssetReport.agent_self:type_name -> sentinel.AgentSelfAsset
-	23, // 19: sentinel.AssetReport.crons:type_name -> sentinel.CronAsset
-	22, // 20: sentinel.AssetReport.packages:type_name -> sentinel.PackageAsset
-	21, // 21: sentinel.AssetReport.services:type_name -> sentinel.IdentifiedService
-	20, // 22: sentinel.AssetReport.web_components:type_name -> sentinel.WebComponentAsset
-	35, // 23: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
-	36, // 24: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
-	15, // 25: sentinel.SystemAsset.os:type_name -> sentinel.OSAsset
-	16, // 26: sentinel.SystemAsset.cpu:type_name -> sentinel.CPUAsset
-	17, // 27: sentinel.SystemAsset.memory:type_name -> sentinel.MemoryAsset
-	18, // 28: sentinel.SystemAsset.disks:type_name -> sentinel.DiskAsset
-	19, // 29: sentinel.SystemAsset.networks:type_name -> sentinel.NetworkAsset
-	34, // 30: sentinel.SystemAsset.services:type_name -> sentinel.ServiceAsset
-	39, // 31: sentinel.PerfDataAsset.disk_usage:type_name -> sentinel.DiskPerfAsset
+	13, // 5: sentinel.ProbeListResponse.probes:type_name -> sentinel.ProbeInfo
+	40, // 6: sentinel.AssetReport.perf:type_name -> sentinel.PerfDataAsset
+	16, // 7: sentinel.AssetReport.system:type_name -> sentinel.SystemAsset
+	26, // 8: sentinel.AssetReport.hardware:type_name -> sentinel.HardwareAsset
+	27, // 9: sentinel.AssetReport.kernel_modules:type_name -> sentinel.KernelModuleAsset
+	28, // 10: sentinel.AssetReport.env_variables:type_name -> sentinel.EnvVariableAsset
+	29, // 11: sentinel.AssetReport.disk_usages:type_name -> sentinel.DiskUsageAsset
+	30, // 12: sentinel.AssetReport.network_details:type_name -> sentinel.NetworkDetailAsset
+	39, // 13: sentinel.AssetReport.gateway_dns:type_name -> sentinel.NetworkGatewayAsset
+	31, // 14: sentinel.AssetReport.service_status:type_name -> sentinel.ServiceStatusAsset
+	32, // 15: sentinel.AssetReport.jar_packages:type_name -> sentinel.JarPackageAsset
+	33, // 16: sentinel.AssetReport.python_packages:type_name -> sentinel.PythonPackageAsset
+	34, // 17: sentinel.AssetReport.npm_packages:type_name -> sentinel.NpmPackageAsset
+	35, // 18: sentinel.AssetReport.agent_self:type_name -> sentinel.AgentSelfAsset
+	25, // 19: sentinel.AssetReport.crons:type_name -> sentinel.CronAsset
+	24, // 20: sentinel.AssetReport.packages:type_name -> sentinel.PackageAsset
+	23, // 21: sentinel.AssetReport.services:type_name -> sentinel.IdentifiedService
+	22, // 22: sentinel.AssetReport.web_components:type_name -> sentinel.WebComponentAsset
+	37, // 23: sentinel.AssetReport.users:type_name -> sentinel.UserAsset
+	38, // 24: sentinel.AssetReport.processes:type_name -> sentinel.ProcessAsset
+	17, // 25: sentinel.SystemAsset.os:type_name -> sentinel.OSAsset
+	18, // 26: sentinel.SystemAsset.cpu:type_name -> sentinel.CPUAsset
+	19, // 27: sentinel.SystemAsset.memory:type_name -> sentinel.MemoryAsset
+	20, // 28: sentinel.SystemAsset.disks:type_name -> sentinel.DiskAsset
+	21, // 29: sentinel.SystemAsset.networks:type_name -> sentinel.NetworkAsset
+	36, // 30: sentinel.SystemAsset.services:type_name -> sentinel.ServiceAsset
+	41, // 31: sentinel.PerfDataAsset.disk_usage:type_name -> sentinel.DiskPerfAsset
 	1,  // 32: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
 	5,  // 33: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
 	9,  // 34: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
-	13, // 35: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
-	10, // 36: sentinel.Sentinel.GetProbeList:input_type -> sentinel.ProbeListRequest
-	2,  // 37: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
-	6,  // 38: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
-	6,  // 39: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
-	6,  // 40: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
-	12, // 41: sentinel.Sentinel.GetProbeList:output_type -> sentinel.ProbeListResponse
-	37, // [37:42] is the sub-list for method output_type
-	32, // [32:37] is the sub-list for method input_type
+	15, // 35: sentinel.Sentinel.ReportAssets:input_type -> sentinel.AssetReport
+	12, // 36: sentinel.Sentinel.GetProbeList:input_type -> sentinel.ProbeListRequest
+	10, // 37: sentinel.Sentinel.ReportShutdown:input_type -> sentinel.ShutdownRequest
+	2,  // 38: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
+	6,  // 39: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
+	6,  // 40: sentinel.Sentinel.ReportEvents:output_type -> sentinel.HeartbeatResponse
+	6,  // 41: sentinel.Sentinel.ReportAssets:output_type -> sentinel.HeartbeatResponse
+	14, // 42: sentinel.Sentinel.GetProbeList:output_type -> sentinel.ProbeListResponse
+	11, // 43: sentinel.Sentinel.ReportShutdown:output_type -> sentinel.ShutdownResponse
+	38, // [38:44] is the sub-list for method output_type
+	32, // [32:38] is the sub-list for method input_type
 	32, // [32:32] is the sub-list for extension type_name
 	32, // [32:32] is the sub-list for extension extendee
 	0,  // [0:32] is the sub-list for field type_name
@@ -3541,7 +3648,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   39,
+			NumMessages:   41,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

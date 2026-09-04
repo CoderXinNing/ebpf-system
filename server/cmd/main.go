@@ -91,6 +91,25 @@ func main() {
 	})
 	srv.handler = handler.NewHandler(st, am, srv.sendCommand)
 
+	// 从 SQLite 恢复已注册的 Agent
+	restoredAgents, _ := st.GetRegisteredAgents()
+	for _, ra := range restoredAgents {
+		srv.handler.Agents[ra["agent_id"].(string)] = &handler.AgentInfo{
+			ID:        ra["agent_id"].(string),
+			Hostname:  ra["hostname"].(string),
+			IPAddr:    ra["ip_addr"].(string),
+			Version:   ra["version"].(string),
+			Group:     ra["group"].(string),
+			Token:     ra["token"].(string),
+			FirstSeen: ra["first_seen"].(int64),
+			LastSeen:  ra["last_seen"].(int64),
+			Commands:  make([]*pb.ProbeCommand, 0),
+		}
+	}
+	if len(restoredAgents) > 0 {
+		log.Printf("📥 从数据库恢复 %d 个 Agent 注册信息", len(restoredAgents))
+	}
+
 	// 启动日志定时清理（每小时）
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
@@ -171,6 +190,9 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 		Framework: req.Framework, KernelInfo: req.KernelInfo,
 		Commands: make([]*pb.ProbeCommand, 0),
 	}
+	// 持久化到 SQLite
+	s.handler.Store.SaveAgent(req.AgentId, req.Hostname, req.IpAddress,
+		req.AgentVersion, getGroup(req.AgentGroup), tk, now, now)
 	log.Printf("✅ Agent注册: %s (%s)", req.Hostname, req.IpAddress)
 	return &pb.RegisterResponse{Success: true, Message: "注册成功", AgentToken: tk}, nil
 }
@@ -409,3 +431,18 @@ func (s *Server) GetProbeList(ctx context.Context, req *pb.ProbeListRequest) (*p
 	return &pb.ProbeListResponse{Success: true, Probes: probes, FalsePositiveFeatures: fpFeatures}, nil
 }
 
+
+
+func (s *Server) ReportShutdown(ctx context.Context, req *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
+	h := s.handler
+	h.Mu.Lock()
+	if agent, ok := h.Agents[req.AgentId]; ok {
+		if agent.Token == req.AgentToken {
+			agent.LastSeen = 0 // 标记为主动离线
+			h.Store.SaveAgent(agent.ID, agent.Hostname, agent.IPAddr, agent.Version, agent.Group, agent.Token, agent.FirstSeen, 0)
+			log.Printf("👋 Agent正常下线: %s", agent.Hostname)
+		}
+	}
+	h.Mu.Unlock()
+	return &pb.ShutdownResponse{Success: true}, nil
+}

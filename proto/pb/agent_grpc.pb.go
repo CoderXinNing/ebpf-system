@@ -19,11 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Sentinel_Register_FullMethodName     = "/sentinel.Sentinel/Register"
-	Sentinel_Heartbeat_FullMethodName    = "/sentinel.Sentinel/Heartbeat"
-	Sentinel_ReportEvents_FullMethodName = "/sentinel.Sentinel/ReportEvents"
-	Sentinel_ReportAssets_FullMethodName = "/sentinel.Sentinel/ReportAssets"
-	Sentinel_GetProbeList_FullMethodName = "/sentinel.Sentinel/GetProbeList"
+	Sentinel_Register_FullMethodName       = "/sentinel.Sentinel/Register"
+	Sentinel_Heartbeat_FullMethodName      = "/sentinel.Sentinel/Heartbeat"
+	Sentinel_ReportEvents_FullMethodName   = "/sentinel.Sentinel/ReportEvents"
+	Sentinel_ReportAssets_FullMethodName   = "/sentinel.Sentinel/ReportAssets"
+	Sentinel_GetProbeList_FullMethodName   = "/sentinel.Sentinel/GetProbeList"
+	Sentinel_ReportShutdown_FullMethodName = "/sentinel.Sentinel/ReportShutdown"
 )
 
 // SentinelClient is the client API for Sentinel service.
@@ -35,6 +36,7 @@ type SentinelClient interface {
 	ReportEvents(ctx context.Context, in *EventReport, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	ReportAssets(ctx context.Context, in *AssetReport, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	GetProbeList(ctx context.Context, in *ProbeListRequest, opts ...grpc.CallOption) (*ProbeListResponse, error)
+	ReportShutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
 }
 
 type sentinelClient struct {
@@ -98,6 +100,16 @@ func (c *sentinelClient) GetProbeList(ctx context.Context, in *ProbeListRequest,
 	return out, nil
 }
 
+func (c *sentinelClient) ReportShutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ShutdownResponse)
+	err := c.cc.Invoke(ctx, Sentinel_ReportShutdown_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SentinelServer is the server API for Sentinel service.
 // All implementations must embed UnimplementedSentinelServer
 // for forward compatibility.
@@ -107,6 +119,7 @@ type SentinelServer interface {
 	ReportEvents(context.Context, *EventReport) (*HeartbeatResponse, error)
 	ReportAssets(context.Context, *AssetReport) (*HeartbeatResponse, error)
 	GetProbeList(context.Context, *ProbeListRequest) (*ProbeListResponse, error)
+	ReportShutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
 	mustEmbedUnimplementedSentinelServer()
 }
 
@@ -131,6 +144,9 @@ func (UnimplementedSentinelServer) ReportAssets(context.Context, *AssetReport) (
 }
 func (UnimplementedSentinelServer) GetProbeList(context.Context, *ProbeListRequest) (*ProbeListResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetProbeList not implemented")
+}
+func (UnimplementedSentinelServer) ReportShutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportShutdown not implemented")
 }
 func (UnimplementedSentinelServer) mustEmbedUnimplementedSentinelServer() {}
 func (UnimplementedSentinelServer) testEmbeddedByValue()                  {}
@@ -232,6 +248,24 @@ func _Sentinel_GetProbeList_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Sentinel_ReportShutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShutdownRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SentinelServer).ReportShutdown(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Sentinel_ReportShutdown_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SentinelServer).ReportShutdown(ctx, req.(*ShutdownRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Sentinel_ServiceDesc is the grpc.ServiceDesc for Sentinel service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -254,6 +288,10 @@ var Sentinel_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetProbeList",
 			Handler:    _Sentinel_GetProbeList_Handler,
+		},
+		{
+			MethodName: "ReportShutdown",
+			Handler:    _Sentinel_ReportShutdown_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -111,8 +111,10 @@ const menu = [
     icon: '⚙️',
     children: [
       { label: '用户管理', key: '/users', icon: '👤' },
-      { label: '日志审计', key: '/logs', icon: '📋' },
+      { label: '系统日志', key: '/logs', icon: '📋' },
       { label: '日志管理', key: '/log-settings', icon: '⚙️' },
+      { label: '时间设置', key: '/time-settings', icon: '🕐' },
+      { label: '个性化', key: '/personalize', icon: '🎨' },
       { label: '关于系统', key: '/about', icon: 'ℹ️' },
     ],
   },
@@ -148,6 +150,18 @@ function toggleGroup(key) {
 }
 
 // 监听路由变化，自动展开当前分组
+// 记录页面访问日志
+watch(() => route.path, () => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    fetch('/api/system/page-visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ page: route.path })
+    }).catch(() => {})
+  }
+})
+
 watch(() => route.path, () => {
   menu.forEach(item => {
     if (item.children && isGroupActive(item)) {
@@ -159,6 +173,18 @@ watch(() => route.path, () => {
 }, { immediate: true })
 
 // 详情页等子路由也要保持父分组展开
+// 记录页面访问日志
+watch(() => route.path, () => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    fetch('/api/system/page-visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ page: route.path })
+    }).catch(() => {})
+  }
+})
+
 watch(() => route.path, () => {
   menu.forEach(item => {
     if (item.children) {
