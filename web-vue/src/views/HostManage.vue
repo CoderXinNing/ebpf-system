@@ -196,6 +196,23 @@ async function delHost(id) {
   load()
 }
 
+let ws
+
+function connectWS() {
+  const token = localStorage.getItem('token')
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  ws = new WebSocket(`${proto}://${location.host}/ws?token=${token}`)
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data)
+      if (msg.type === 'agent_offline') {
+        load()
+      }
+    } catch (err) {}
+  }
+  ws.onclose = () => setTimeout(connectWS, 3000)
+}
+
 async function load() {
   const token = localStorage.getItem('token')
   const [data, groupResp] = await Promise.all([
@@ -207,6 +224,7 @@ async function load() {
 }
 
 load()
+connectWS()
 setInterval(load, 15000)
 </script>
 

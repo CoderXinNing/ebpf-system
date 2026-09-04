@@ -16,6 +16,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/handler"
 	"github.com/CoderXinNing/ebpf-system/server/internal/alert"
 	"github.com/CoderXinNing/ebpf-system/server/internal/udp"
+	"github.com/CoderXinNing/ebpf-system/server/internal/ws"
 	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/BurntSushi/toml"
@@ -110,6 +111,26 @@ func main() {
 		log.Printf("📥 从数据库恢复 %d 个 Agent 注册信息", len(restoredAgents))
 	}
 
+	// Agent 离线检测（每 15 秒）
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now().Unix()
+			srv.handler.Mu.RLock()
+			for id, agent := range srv.handler.Agents {
+				if agent.LastSeen > 0 && now-agent.LastSeen > 15 {
+					ws.Broadcast("agent_offline", map[string]string{
+						"agent_id": id,
+						"hostname": agent.Hostname,
+					})
+					log.Printf("🔴 Agent离线: %s (%.0fs无心跳)", agent.Hostname, float64(now-agent.LastSeen))
+				}
+			}
+			srv.handler.Mu.RUnlock()
+		}
+	}()
+
 	// 启动日志定时清理（每小时）
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
@@ -147,6 +168,9 @@ func main() {
 		c.Next()
 	})
 	srv.handler.SetupRoutes(r)
+	r.GET("/ws", func(c *gin.Context) {
+		ws.HandleWS(c.Writer, c.Request)
+	})
 
 	log.Println("🌐 HTTP API :8080")
 	log.Println("   账户: admin/admin123  operator/operator123")
@@ -305,7 +329,7 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 	for _, evt := range req.Events {
 		b := make([]byte, 8)
 		rand.Read(b)
-		h.Events = append(h.Events, handler.ProbeEvent{
+		evtRecord := handler.ProbeEvent{
 			ID:        hex.EncodeToString(b),
 			AgentID:   req.AgentId,
 			ProbeName: evt.ProbeName,
@@ -315,8 +339,10 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 			Comm:      evt.Comm,
 			Filename:  evt.Filename,
 			Details:   evt.Details,
-		})
-			s.handler.Store.SaveEvent(store.EventRecord{
+		}
+		h.Events = append(h.Events, evtRecord)
+		ws.Broadcast("event", evtRecord)
+		s.handler.Store.SaveEvent(store.EventRecord{
 				AgentID:   req.AgentId,
 				ProbeName: evt.ProbeName,
 				Timestamp: evt.Timestamp,
@@ -329,6 +355,7 @@ func (s *Server) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Hea
 		if len(h.Events) > 10000 {
 			h.Events = h.Events[len(h.Events)-1000:]
 		}
+		ws.Broadcast("event", evtRecord)
 	}
 	return &pb.HeartbeatResponse{Success: true}, nil
 }

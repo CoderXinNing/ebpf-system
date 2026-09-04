@@ -74,7 +74,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, h, nextTick } from 'vue'
+import { ref, onMounted, h, nextTick, onUnmounted } from 'vue'
 import { api } from '../api'
 import Layout from '../layouts/MainLayout.vue'
 import * as echarts from 'echarts'
@@ -91,8 +91,6 @@ const cards = ref([
   { key: 'disk', title: '磁盘使用分布', topLabel: '磁盘 TOP5', topList: [], levels: [] },
 ])
 
-const levelColors = ['#18A058', '#F0A020', '#D03050']
-
 const cols = [
   { title: '主机名', key: 'hostname', minWidth: 120 },
   { title: 'IP', key: 'ip_addr', minWidth: 110 },
@@ -108,55 +106,71 @@ const cols = [
   { title: '操作', key: 'id', width: 70, render: (r) => h('a', { href: '#/host/' + r.id }, '详情') },
 ]
 
-onMounted(async () => {
-  // 加载主机列表
+let ws
+let dirty = false
+
+function connectWS() {
+  const token = localStorage.getItem('token')
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  ws = new WebSocket(`${proto}://${location.host}/ws?token=${token}`)
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data)
+      if (msg.type === 'event' || msg.type === 'alert' || msg.type === 'agent_offline') {
+        dirty = true  // 只标记，不直接刷新
+      }
+    } catch (err) {}
+  }
+  ws.onclose = () => setTimeout(connectWS, 3000)
+}
+
+// 每 10 秒检查一次是否需要刷新
+setInterval(() => {
+  if (dirty) {
+    dirty = false
+    loadDashboard()
+  }
+}, 10000)
+
+async function loadDashboard() {
   const agentData = await api.getAgents()
   agents.value = agentData.agents || []
   const now = Date.now() / 1000
   onlineCount.value = agents.value.filter(a => now - a.last_seen < 60).length
   offlineCount.value = agents.value.length - onlineCount.value
 
-  // 加载学习态势
   try {
     const token = localStorage.getItem('token')
     const resp = await fetch('/api/baseline/stats', { headers: { 'Authorization': 'Bearer ' + token } })
     baselineStats.value = await resp.json()
   } catch (e) {}
 
-  // 加载资产
+  // 清空 TOP5
+  cards.value.forEach(c => {
+    c.topList = []
+    c.levels = []
+  })
+
   try {
     const assets = await api.getAssets()
     if (assets.agents) {
-      const summaries = assets.agents
-      summaries.filter(s => s.online).forEach(s => {
+      assets.agents.filter(s => s.online).forEach(s => {
         const cpuCard = cards.value.find(c => c.key === 'cpu')
         const memCard = cards.value.find(c => c.key === 'mem')
         const diskCard = cards.value.find(c => c.key === 'disk')
-
-        if (s.cpu_percent) {
-          cpuCard.topList.push({ name: s.hostname || s.agent_id, value: s.cpu_percent.toFixed(1) + '%' })
-        }
-        if (s.mem_percent) {
-          memCard.topList.push({ name: s.hostname || s.agent_id, value: s.mem_percent.toFixed(1) + '%' })
-        }
-        if (s.disk_percent) {
-          diskCard.topList.push({ name: s.hostname || s.agent_id, value: s.disk_percent.toFixed(1) + '%' })
-        }
-
-        // 同时更新主机列表
+        if (s.cpu_percent) cpuCard.topList.push({ name: s.hostname || s.agent_id, value: s.cpu_percent.toFixed(1) + '%' })
+        if (s.mem_percent) memCard.topList.push({ name: s.hostname || s.agent_id, value: s.mem_percent.toFixed(1) + '%' })
+        if (s.disk_percent) diskCard.topList.push({ name: s.hostname || s.agent_id, value: s.disk_percent.toFixed(1) + '%' })
         const agent = agents.value.find(a => a.id === s.agent_id)
         if (agent) {
           agent.cpu = s.cpu_percent
           agent.mem = s.mem_percent
           agent.disk = s.disk_percent
-          agent.os = s.os || s.OS || '-'
+          agent.os = s.os || '-'
         }
       })
-
-      // 截取 TOP5 并汇总等级
       cards.value.forEach(c => {
         c.topList = c.topList.slice(0, 5)
-        // 从 topList 的值提取百分比汇总等级
         const levelCounts = { '低负载': 0, '中负载': 0, '高负载': 0 }
         c.topList.forEach(item => {
           const v = parseFloat(item.value)
@@ -171,11 +185,8 @@ onMounted(async () => {
         ]
       })
     }
-  } catch (e) {
-    console.error('加载资产失败:', e)
-  }
+  } catch (e) {}
 
-  // 渲染环形图
   await nextTick()
   cards.value.forEach(card => {
     const el = document.getElementById('ring-' + card.key)
@@ -194,13 +205,16 @@ onMounted(async () => {
       }],
     })
   })
+}
+
+onMounted(() => {
+  connectWS()
+  loadDashboard()
 })
 
-function cpu_percent_level(v) {
-  if (v < 30) return 0
-  if (v < 60) return 1
-  return 2
-}
+onUnmounted(() => {
+  if (ws) ws.close()
+})
 </script>
 
 <style scoped>
@@ -321,3 +335,8 @@ function cpu_percent_level(v) {
   font-weight: 500;
 }
 </style>
+
+
+onUnmounted(() => {
+  if (ws) ws.close()
+})
