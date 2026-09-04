@@ -9,61 +9,42 @@ import (
 )
 
 func (a *Agent) runHeartbeatLoop() {
-	for {
+	ticker := time.NewTicker(a.cfg.Agent.HeartbeatInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
 		// 确保已注册
 		if a.token == "" {
-			time.Sleep(a.cfg.Agent.RetryDelay)
 			continue
 		}
 
-		stream, err := a.client.Heartbeat(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		resp, err := a.client.Heartbeat(a.getAuthContext(ctx), &pb.HeartbeatRequest{
+			AgentId:           a.id,
+			Timestamp:         time.Now().Unix(),
+			ActiveProbes:      a.getActiveProbeCount(),
+			ProbeDetails:      a.getProbeDetailsJSON(),
+			BaselineState:     a.baseline.GetState().String(),
+			BaselineRemaining: int64(a.baseline.RemainingTime().Seconds()),
+		})
+		cancel()
+
 		if err != nil {
-			log.Printf("⚠️ 心跳流建立失败: %v", err)
-			time.Sleep(a.cfg.Agent.RetryDelay)
+			log.Printf("⚠️ 心跳失败: %v", err)
+			// 心跳失败可能是连接断开，尝试重连
+			if err := a.connectAndRegister(); err != nil {
+				log.Printf("⚠️ 重连失败: %v", err)
+			}
 			continue
 		}
-		log.Println("💓 心跳流已建立")
 
-		done := make(chan struct{})
-		go func() {
-			ticker := time.NewTicker(a.cfg.Agent.HeartbeatInterval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-done:
-					return
-				case <-ticker.C:
-					stream.Send(&pb.HeartbeatRequest{
-						AgentId:           a.id,
-						AgentToken:        a.token,
-						Timestamp:         time.Now().Unix(),
-						ActiveProbes:      int32(len(a.probeStatus)),
-						ProbeDetails:      a.getProbeDetailsJSON(),
-						BaselineState:     a.baseline.GetState().String(),
-						BaselineRemaining: int64(a.baseline.RemainingTime().Seconds()),
-					})
-					log.Printf("HB UPDATE"); updateHeartbeatMap()
-				}
-			}
-		}()
+		updateHeartbeatMap()
 
-		for {
-			resp, err := stream.Recv()
-			if err != nil {
-				log.Printf("⚠️ 心跳流断开: %v, 将重新注册...", err)
-				close(done)
-				// 重新注册
-				a.connectAndRegister()
-				break
-			}
-			if resp.Success && len(resp.Commands) > 0 {
-				for _, cmd := range resp.Commands {
-					a.handleCommand(cmd)
-				}
+		if resp.Success && len(resp.Commands) > 0 {
+			for _, cmd := range resp.Commands {
+				a.handleCommand(cmd)
 			}
 		}
-
-		time.Sleep(a.cfg.Agent.RetryDelay)
 	}
 }
 

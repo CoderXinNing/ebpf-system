@@ -13,12 +13,13 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
 )
+
 type TCPCallback func(pid uint32, comm string, count uint64)
 
-var tcpCB TCPCallback
-
 func LoadTCPMonitor(objPath string, callback TCPCallback) error {
-	tcpCB = callback
+	if callback == nil {
+		return fmt.Errorf("callback 不能为 nil")
+	}
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("解除内存锁失败: %w", err)
@@ -51,10 +52,16 @@ func LoadTCPMonitor(objPath string, callback TCPCallback) error {
 	tp, err := link.Tracepoint("syscalls", "sys_enter_connect", objs.TraceConnect, nil)
 	if err != nil {
 		objs.TraceConnect.Close()
+		objs.TcpConnStats.Close()
 		return fmt.Errorf("attach失败: %w", err)
 	}
 
-	os.MkdirAll("/sys/fs/bpf/ebpf-sentinel", 0755)
+	if err := os.MkdirAll("/sys/fs/bpf/ebpf-sentinel", 0755); err != nil {
+		tp.Close()
+		objs.TraceConnect.Close()
+		objs.TcpConnStats.Close()
+		return fmt.Errorf("创建 pin 目录失败: %w", err)
+	}
 	if err := objs.TraceConnect.Pin(probeSpec.PinPaths()["prog"]); err != nil {
 		log.Printf("⚠️ Pin tcp失败(已存在则复用): %v", err)
 	}
@@ -67,6 +74,7 @@ func LoadTCPMonitor(objPath string, callback TCPCallback) error {
 	go func() {
 		defer tp.Close()
 		defer objs.TraceConnect.Close()
+		defer objs.TcpConnStats.Close()
 
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -79,15 +87,21 @@ func LoadTCPMonitor(objPath string, callback TCPCallback) error {
 				if len(rawVal) >= 16 {
 					var pid uint32
 					var count uint64
-					binary.Read(bytes.NewReader(rawVal[0:4]), binary.LittleEndian, &pid)
-					binary.Read(bytes.NewReader(rawVal[8:16]), binary.LittleEndian, &count)
+					if err := binary.Read(bytes.NewReader(rawVal[0:4]), binary.LittleEndian, &pid); err != nil {
+						log.Printf("⚠️ TCP PID 解析失败: %v", err)
+						continue
+					}
+					if err := binary.Read(bytes.NewReader(rawVal[8:16]), binary.LittleEndian, &count); err != nil {
+						log.Printf("⚠️ TCP count 解析失败: %v", err)
+						continue
+					}
 					if count > 0 {
 						comm := strings.TrimRight(string(key[:]), "\x00")
 						log.Printf("TCP聚合: %s x%d次 (PID=%d)", comm, count, pid)
-						if tcpCB != nil {
-							tcpCB(pid, comm, count)
+						callback(pid, comm, count)
+						if err := objs.TcpConnStats.Delete(&key); err != nil {
+							log.Printf("⚠️ TCP map 删除失败: %v", err)
 						}
-						objs.TcpConnStats.Delete(&key)
 					}
 				}
 			}

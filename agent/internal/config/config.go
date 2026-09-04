@@ -87,4 +87,6 @@ type XDPConfig struct {
 	Iface      string `toml:"iface"`
 	ServerIP   string `toml:"server_ip"`
 	ServerPort int    `toml:"server_port"`
+	// Mode 挂载模式："driver"（驱动模式，需显式开启）或 "generic"（通用模式，默认）
+	Mode       string `toml:"mode"`
 }

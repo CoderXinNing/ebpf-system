@@ -17,6 +17,11 @@ type Store struct {
 }
 
 // NewStore 初始化数据库
+// NewStoreFromDB 从已有 *sql.DB 创建 Store（供 repository 层使用）
+func NewStoreFromDB(db *sql.DB) *Store {
+	return &Store{db: db}
+}
+
 func NewStore(dbPath string) (*Store, error) {
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {

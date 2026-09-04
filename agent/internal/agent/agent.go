@@ -13,12 +13,17 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/actor"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/baseline"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
+	"crypto/tls"
+	"crypto/x509"
+
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 )
 
 const AgentVersion = "1.0.0"
@@ -28,14 +33,16 @@ type Agent struct {
 	level        string
 	cfg          *config.AgentConfig
 	capabilities *probe.AgentCapabilities
-	eventQueue   chan *pb.ProbeEvent
 	conn         *grpc.ClientConn
 	client       pb.SentinelClient
-	probeStatus  map[string]string // probe_name -> "loaded" / "failed: reason"
-	probePaths   map[string]string // probe_name -> path from Server
-	baseline     *baseline.BaselineEngine
-	baselineCount map[string]int  // 窗口计数
-	falsePositiveFeatures map[string]bool  // 误报特征黑名单
+
+	// 并发安全组件
+	probeStateActor *actor.Actor  // 状态收敛
+	eventQueue      *EventQueue    // 非阻塞事件队列
+	baseline        *baseline.BaselineEngine
+
+	// gRPC Metadata（token 鉴权）
+	authContext context.Context
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -43,18 +50,25 @@ func New(cfg *config.AgentConfig) *Agent {
 	if cfg.Agent.Name != "" {
 		hostname = cfg.Agent.Name
 	}
+	baselineEngine := baseline.NewBaselineEngine("agent/configs/baseline.toml")
+
 	agent := &Agent{
 		id:         generateAgentID(hostname),
 		hostname:   hostname,
 		ipAddr:     getIPAddress(),
 		cfg:        cfg,
-		eventQueue: make(chan *pb.ProbeEvent, 1000),
-		probeStatus: make(map[string]string),
-		probePaths:  make(map[string]string),
-		baseline:    baseline.NewBaselineEngine("agent/configs/baseline.toml"),
-		baselineCount: make(map[string]int),
-		falsePositiveFeatures: make(map[string]bool),
+		eventQueue: NewEventQueue(100, 1000),
+		baseline:   baselineEngine,
 	}
+
+	// 创建 ProbeStateActor
+	agent.probeStateActor = actor.New(
+		probeStateHandler,
+		newProbeState(baselineEngine),
+		actor.ActorConfig{InboxSize: 1000},
+	)
+	agent.probeStateActor.Start()
+
 	agent.baseline.Restore()
 	return agent
 }
@@ -108,7 +122,6 @@ func (a *Agent) Run() {
 		sig := <-sigCh
 		log.Printf("🛑 收到信号 %v，正常退出...", sig)
 		a.Shutdown()
-		os.Exit(0)
 	}()
 
 	if err := a.connectAndRegister(); err != nil {
@@ -133,7 +146,7 @@ func (a *Agent) Run() {
 	go func() {
 		interval := a.cfg.Agent.CollectInterval
 		if a.client == nil {
-			interval = 1 * time.Hour  // 离线时降频
+			interval = 1 * time.Hour // 离线时降频
 		}
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -164,31 +177,55 @@ func (a *Agent) Run() {
 }
 
 func (a *Agent) connectAndRegister() error {
-	for {
-		dialCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		conn, err := grpc.DialContext(dialCtx, a.cfg.Agent.Server,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
-		)
-		cancel()
-		if err != nil {
-			log.Printf("❌ 连接失败: %v", err)
-			return err
-		}
+	dialCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-		if a.conn != nil {
-			a.conn.Close()
-		}
-		a.conn = conn
-		a.client = pb.NewSentinelClient(conn)
-		log.Printf("🔗 已连接: %s", a.cfg.Agent.Server)
-
-		if err := a.register(); err != nil {
-			log.Printf("❌ %v", err)
-			return err
-		}
-		return nil
+	// mTLS 配置：加载 CA + 客户端证书
+	caCert, err := os.ReadFile("certs/ca.crt")
+	if err != nil {
+		log.Printf("⚠️ 读取 CA 证书失败: %v", err)
+		return err
 	}
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caCert) {
+		log.Printf("⚠️ 解析 CA 证书失败")
+		return fmt.Errorf("解析 CA 证书失败")
+	}
+
+	clientCert, err := tls.LoadX509KeyPair("certs/agent.crt", "certs/agent.key")
+	if err != nil {
+		log.Printf("⚠️ 加载客户端证书失败: %v", err)
+		return err
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs:      caPool,
+		Certificates: []tls.Certificate{clientCert},
+		ServerName:   "localhost",
+		MinVersion:   tls.VersionTLS12,
+	}
+	tlsCreds := credentials.NewTLS(tlsConfig)
+	conn, err := grpc.DialContext(dialCtx, a.cfg.Agent.Server,
+		grpc.WithTransportCredentials(tlsCreds),
+		grpc.WithBlock(),
+	)
+	if err != nil {
+		log.Printf("❌ 连接失败: %v", err)
+		return err
+	}
+
+	if a.conn != nil {
+		a.conn.Close()
+	}
+	a.conn = conn
+	a.client = pb.NewSentinelClient(conn)
+	log.Printf("🔗 已连接: %s", a.cfg.Agent.Server)
+
+	if err := a.register(); err != nil {
+		log.Printf("❌ %v", err)
+		return err
+	}
+	return nil
 }
 
 func (a *Agent) register() error {
@@ -215,6 +252,9 @@ func (a *Agent) register() error {
 		return fmt.Errorf("注册被拒绝")
 	}
 	a.token = resp.AgentToken
+	// 创建带 token 的 Metadata context
+	a.authContext = metadata.NewOutgoingContext(context.Background(),
+		metadata.Pairs("authorization", "Bearer "+a.token))
 	log.Printf("✅ 注册成功! ID: %s", a.id)
 	return nil
 }
@@ -226,16 +266,16 @@ func (a *Agent) eventReporter() {
 
 	for {
 		select {
-		case evt := <-a.eventQueue:
-			batch = append(batch, evt)
-			if len(batch) >= 1 {
-				a.flushEvents(batch)
-				batch = batch[:0]
-			}
 		case <-ticker.C:
 			if len(batch) > 0 {
 				a.flushEvents(batch)
 				batch = batch[:0]
+			}
+			// 定期输出队列统计
+			stats := a.eventQueue.Stats()
+			if stats.DroppedHigh > 0 || stats.DroppedLow > 0 {
+				log.Printf("📊 事件队列: 高优先丢弃=%d 低优先丢弃=%d 高优先总数=%d 低优先总数=%d",
+					stats.DroppedHigh, stats.DroppedLow, stats.TotalHigh, stats.TotalLow)
 			}
 		}
 	}
@@ -248,7 +288,7 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	resp, err := a.client.ReportEvents(ctx, &pb.EventReport{AgentId: a.id, AgentToken: a.token, Events: events})
+	resp, err := a.client.ReportEvents(a.getAuthContext(ctx), &pb.EventReport{AgentId: a.id, Events: events})
 	if err != nil {
 		log.Printf("⚠️ 事件上报失败: %v", err)
 	} else if !resp.Success {
@@ -258,13 +298,19 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 
 func (a *Agent) Shutdown() {
 	log.Println("🧹 清理资源...")
+
+	// 停止事件队列
+	a.eventQueue.Stop()
+
+	// 停止 ProbeStateActor
+	a.probeStateActor.Stop()
+
 	// 通知 Server 正常下线
 	if a.client != nil && a.token != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		a.client.ReportShutdown(ctx, &pb.ShutdownRequest{
-			AgentId:    a.id,
-			AgentToken: a.token,
+		a.client.ReportShutdown(a.getAuthContext(ctx), &pb.ShutdownRequest{
+			AgentId: a.id,
 		})
 	}
 	if xdpHandle != nil {
@@ -309,12 +355,24 @@ func updateHeartbeatMap() {
 	hbMap.Put(&key, &val)
 }
 
+// getAuthContext 返回带 token 的 context，如果 authContext 未设置则使用传入的 ctx
+func (a *Agent) getAuthContext(fallback context.Context) context.Context {
+	if a.authContext != nil {
+		return a.authContext
+	}
+	return fallback
+}
 
 func (a *Agent) getProbePath(name string) string {
-	// 优先从 Server 名单拿
-	if path, ok := a.probePaths[name]; ok && path != "" {
-		return path
+	// 通过 Actor 查询
+	result, err := a.probeStateActor.Ask(msgGetProbePath{name: name}, 100*time.Millisecond)
+	if err == nil {
+		if path, ok := result.(string); ok && path != "" {
+			return path
+		}
 	}
+
+	// 回退到配置文件
 	for _, p := range a.cfg.Autoload {
 		if p.Name == name && p.Path != "" {
 			return p.Path
@@ -329,7 +387,6 @@ func (a *Agent) getProbePath(name string) string {
 	return paths[name]
 }
 
-
 func (a *Agent) isProbeEnabled(name string) bool {
 	for _, p := range a.cfg.Autoload {
 		if p.Name == name {
@@ -339,14 +396,12 @@ func (a *Agent) isProbeEnabled(name string) bool {
 	return false
 }
 
-
 func (a *Agent) fetchProbeList() []*pb.ProbeInfo {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	resp, err := a.client.GetProbeList(ctx, &pb.ProbeListRequest{
-		AgentId:    a.id,
-		AgentToken: a.token,
+	resp, err := a.client.GetProbeList(a.getAuthContext(ctx), &pb.ProbeListRequest{
+		AgentId: a.id,
 	})
 	if err != nil {
 		log.Printf("⚠️ 查询探针名单失败: %v", err)
@@ -358,7 +413,7 @@ func (a *Agent) fetchProbeList() []*pb.ProbeInfo {
 	}
 	log.Printf("📋 收到探针名单: %d个 (误报特征%d个)", len(resp.Probes), len(resp.FalsePositiveFeatures))
 	for _, fp := range resp.FalsePositiveFeatures {
-		a.falsePositiveFeatures[fp] = true
+		a.probeStateActor.Send(msgAddFalsePositive{feature: fp})
 	}
 	return resp.Probes
 }
@@ -367,7 +422,7 @@ func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
 	for _, p := range probes {
 		if !p.Enabled {
 			log.Printf("🚫 %s 名单中未启用，跳过", p.Name)
-			a.probeStatus[p.Name] = "disabled"
+			a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "disabled"})
 			continue
 		}
 
@@ -376,43 +431,42 @@ func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
 			localHash, err := calculateFileSHA256(p.Path)
 			if err != nil {
 				log.Printf("❌ %s 读取失败: %v", p.Name, err)
-				a.probeStatus[p.Name] = "failed: 文件读取失败"
+				a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "failed: 文件读取失败"})
 				continue
 			}
 			if localHash != p.Sha256 {
 				log.Printf("❌ %s SHA256不匹配！本地=%s 期望=%s", p.Name, localHash[:16], p.Sha256[:16])
-				a.probeStatus[p.Name] = "failed: SHA256不匹配"
+				a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "failed: SHA256不匹配"})
 				continue
 			}
 			log.Printf("✅ %s SHA256校验通过", p.Name)
 		}
 
 		log.Printf("▶️ 加载探针: %s", p.Name)
-		a.probePaths[p.Name] = p.Path
+		a.probeStateActor.Send(msgSetProbePath{name: p.Name, path: p.Path})
 		switch p.Name {
 		case "exec_monitor":
-			a.probeStatus[p.Name] = "loading"
+			a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "loading"})
 			go a.startExecMonitorWithStatus(p.Name)
 		case "bash_monitor":
-			a.probeStatus[p.Name] = "loading"
+			a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "loading"})
 			go a.startBashMonitorWithStatus(p.Name)
 		case "tcp_monitor":
-			a.probeStatus[p.Name] = "loading"
+			a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "loading"})
 			go a.startTCPMonitorWithStatus(p.Name)
 		case "xdp_reporter":
 			if a.level == "full" {
-				a.probeStatus[p.Name] = "loading"
+				a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "loading"})
 				go a.startXDP()
 			} else {
-				a.probeStatus[p.Name] = "skipped: xdp not available"
+				a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "skipped: xdp not available"})
 			}
 		default:
-			a.probeStatus[p.Name] = "unknown probe"
+			a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "unknown probe"})
 			log.Printf("⚠️ 未知探针: %s", p.Name)
 		}
 	}
 }
-
 
 func (a *Agent) retryConnectLoop() {
 	backoff := []time.Duration{3, 6, 12, 30, 60}
@@ -440,84 +494,78 @@ func (a *Agent) retryConnectLoop() {
 	}
 }
 
-
 func (a *Agent) startExecMonitorWithStatus(name string) {
 	defer func() {
 		if r := recover(); r != nil {
-			a.probeStatus[name] = fmt.Sprintf("failed: %v", r)
+			a.probeStateActor.Send(msgSetProbeStatus{name: name, status: fmt.Sprintf("failed: %v", r)})
 			log.Printf("❌ %s 加载失败: %v", name, r)
 		}
 	}()
 	a.startExecMonitor()
-	a.probeStatus[name] = "loaded"
+	a.probeStateActor.Send(msgSetProbeStatus{name: name, status: "loaded"})
 }
 
 func (a *Agent) startBashMonitorWithStatus(name string) {
 	if err := a.startBashMonitor(); err != nil {
-		a.probeStatus[name] = fmt.Sprintf("failed: %v", err)
+		a.probeStateActor.Send(msgSetProbeStatus{name: name, status: fmt.Sprintf("failed: %v", err)})
 		log.Printf("❌ %s 加载失败: %v", name, err)
 		return
 	}
-	a.probeStatus[name] = "loaded"
+	a.probeStateActor.Send(msgSetProbeStatus{name: name, status: "loaded"})
 }
 
 func (a *Agent) startTCPMonitorWithStatus(name string) {
 	defer func() {
 		if r := recover(); r != nil {
-			a.probeStatus[name] = fmt.Sprintf("failed: %v", r)
+			a.probeStateActor.Send(msgSetProbeStatus{name: name, status: fmt.Sprintf("failed: %v", r)})
 			log.Printf("❌ %s 加载失败: %v", name, r)
 		}
 	}()
 	a.startTCPMonitor()
-	a.probeStatus[name] = "loaded"
+	a.probeStateActor.Send(msgSetProbeStatus{name: name, status: "loaded"})
 }
 
+func (a *Agent) getActiveProbeCount() int32 {
+	result, err := a.probeStateActor.Ask(msgGetProbeStatusJSON{}, 100*time.Millisecond)
+	if err != nil {
+		return 0
+	}
+	json := result.(string)
+	if json == "{}" {
+		return 0
+	}
+	// 简单统计：逗号数量 + 1
+	return int32(strings.Count(json, ",") + 1)
+}
 
 func (a *Agent) getProbeDetailsJSON() string {
-	if len(a.probeStatus) == 0 {
+	result, err := a.probeStateActor.Ask(msgGetProbeStatusJSON{}, 100*time.Millisecond)
+	if err != nil {
 		return "{}"
 	}
-	parts := make([]string, 0, len(a.probeStatus))
-	for name, status := range a.probeStatus {
-		parts = append(parts, fmt.Sprintf(`"%s":"%s"`, name, status))
+	if json, ok := result.(string); ok {
+		return json
 	}
-	return "{" + strings.Join(parts, ",") + "}"
+	return "{}"
 }
-
-
-
 
 func (a *Agent) flushBaselineWindow() {
-	if len(a.baselineCount) == 0 {
+	events, err := a.probeStateActor.Ask(msgFlushBaselineWindow{ipAddr: a.ipAddr}, 500*time.Millisecond)
+	if err != nil {
+		log.Printf("⚠️ 基线窗口刷新超时: %v", err)
 		return
 	}
-	for key, count := range a.baselineCount {
-		// 跳过误报特征
-		if a.falsePositiveFeatures[key] {
-			delete(a.baselineCount, key)
-			continue
+	if events == nil {
+		return
+	}
+	eventList := events.([]*pb.ProbeEvent)
+	for _, evt := range eventList {
+		result := a.eventQueue.Push(evt, PriorityHigh)
+		if result == actor.Full {
+			log.Printf("⚠️ 基线异常事件被丢弃（队列满）")
 		}
-		// key 格式: user:metric
-		isAnomaly, zScore := a.baseline.Update(baseline.Feature{IP: a.ipAddr, Key: key, Value: float64(count)})
-		if isAnomaly {
-			log.Printf("🚨 本地基线异常: %s=%d z=%.2f", key, count, zScore)
-			// 解析 user 和 metric
-			parts := strings.Split(key, ":")
-			user := parts[0]
-			metric := parts[1]
-			a.eventQueue <- &pb.ProbeEvent{
-				ProbeName: "baseline_anomaly",
-				Timestamp: time.Now().Unix(),
-				EventType: "baseline_anomaly",
-				Comm:      user,
-				Filename:  metric,
-				Details:   fmt.Sprintf("%s 基线异常: %s=%d z=%.2f", user, metric, count, zScore),
-			}
-		}
-		delete(a.baselineCount, key)
 	}
 }
-
 
 func calculateFileSHA256(path string) (string, error) {
 	data, err := os.ReadFile(path)

@@ -1,17 +1,10 @@
 package handler
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"strconv"
-	"strings"
 	"sync"
 	"log"
-	"time"
 
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
@@ -71,6 +64,18 @@ func NewHandler(st *store.Store, am *auth.AuthManager, sendCmd func(string, *pb.
 	}
 }
 
+// NewHandlerWithNilStore 创建无 Store 的 Handler（PSQL 模式过渡期使用）
+func NewHandlerWithNilStore(am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {
+	return &Handler{
+		Store:   nil,
+		Auth:    am,
+		Agents:  make(map[string]*AgentInfo),
+		movedGroups: make(map[string]string),
+		Events:  make([]ProbeEvent, 0, 10000),
+		sendCmd: sendCmd,
+	}
+}
+
 func (h *Handler) SetupRoutes(r *gin.Engine) {
 	r.POST("/api/login", h.Login)
 
@@ -80,7 +85,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/health", h.Health)
 		api.GET("/agents", h.ListAgents)
 		api.GET("/events", h.ListEvents)
-		api.DELETE("/agents/:id", h.roleMiddleware("admin"), func(c *gin.Context) {
+		api.DELETE("/agents/:id", h.rbacMiddleware("agents", "delete"), func(c *gin.Context) {
 			agentID := c.Param("id")
 			h.Store.DeleteAgentAll(agentID)
 			h.Mu.Lock()
@@ -90,7 +95,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"success": true})
 		})
 
-		api.POST("/move", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
+		api.POST("/move", h.rbacMiddleware("agents", "write"), func(c *gin.Context) {
 			var req struct {
 				AgentIDs []string `json:"agent_ids"`
 				Group    string   `json:"group"`
@@ -108,12 +113,12 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			h.Store.SaveAuditLog(h.getUsername(c), "移动主机", fmt.Sprintf("%v -> %s", req.AgentIDs, req.Group), c.ClientIP())
 			c.JSON(200, gin.H{"success": true})
 		})
-		api.POST("/command", h.roleMiddleware("admin", "operator"), h.Command)
+		api.POST("/command", h.rbacMiddleware("agents", "write"), h.Command)
 
 		// 探针管理
-		api.GET("/probes/config", h.roleMiddleware("admin", "operator"), h.ListProbeConfigs)
-		api.POST("/probes/deploy", h.roleMiddleware("admin"), h.DeployProbe)
-		api.POST("/probes/destroy", h.roleMiddleware("admin"), h.DestroyProbe)
+		api.GET("/probes/config", h.rbacMiddleware("probes", "read"), h.ListProbeConfigs)
+		api.POST("/probes/deploy", h.rbacMiddleware("probes", "write"), h.DeployProbe)
+		api.POST("/probes/destroy", h.rbacMiddleware("probes", "write"), h.DestroyProbe)
 		api.GET("/assets", h.AssetsOverview)
 		api.GET("/assets/:agent_id", h.AssetDetail)
 		api.GET("/groups", func(c *gin.Context) {
@@ -179,10 +184,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			})
 		})
 
-		api.GET("/alerts/stats", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
+		api.GET("/alerts/stats", h.rbacMiddleware("alerts", "read"), func(c *gin.Context) {
 			c.JSON(200, h.Store.GetAlertStats())
 		})
-		api.POST("/alerts/:id/feedback", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
+		api.POST("/alerts/:id/feedback", h.rbacMiddleware("alerts", "write"), func(c *gin.Context) {
 			id := c.Param("id")
 			var req struct {
 				Type string `json:"type"`
@@ -202,7 +207,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			}
 			c.JSON(200, gin.H{"success": true})
 		})
-		api.GET("/users", h.roleMiddleware("admin"), h.ListUsers)
+		api.GET("/users", h.rbacMiddleware("users", "read"), h.ListUsers)
 
 		// 审计日志
 		api.POST("/logout", h.authMiddleware, func(c *gin.Context) {
@@ -210,7 +215,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"success": true})
 		})
 
-		api.GET("/logs/export", h.roleMiddleware("admin"), func(c *gin.Context) {
+		api.GET("/logs/export", h.rbacMiddleware("audit", "export"), func(c *gin.Context) {
 			logs, _ := h.Store.GetAuditLogs(10000)
 			c.Header("Content-Type", "text/csv")
 			c.Header("Content-Disposition", "attachment; filename=audit_logs.csv")
@@ -221,7 +226,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			}
 		})
 
-		api.GET("/logs", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
+		api.GET("/logs", h.rbacMiddleware("audit", "read"), func(c *gin.Context) {
 			logs, _ := h.Store.GetAuditLogs(200)
 			c.JSON(200, gin.H{"logs": logs})
 		})
@@ -321,485 +326,6 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 	}
 }
 
-func (h *Handler) Login(c *gin.Context) {
-	var req struct{ Username, Password string }
-	c.BindJSON(&req)
-	// 检查是否锁定
-	maxAttempts := h.GetSecuritySetting("max_login_attempts", 5)
-	lockMinutes := h.GetSecuritySetting("lock_minutes", 15)
-	attemptKey := "login_attempt:" + req.Username
-
-	attempts := h.GetIntSetting(attemptKey, 0)
-	lockUntil := h.GetIntSetting("lock_until:"+req.Username, 0)
-	if lockUntil > int(time.Now().Unix()) {
-		remain := (lockUntil - int(time.Now().Unix())) / 60
-		h.Store.SaveAuditLog(req.Username, "登录失败", fmt.Sprintf("账户锁定中,剩余%d分钟", remain), c.ClientIP())
-		c.JSON(401, gin.H{"error": fmt.Sprintf("账户已锁定，请 %d 分钟后重试", remain)})
-		return
-	}
-
-	user, err := h.Auth.VerifyPassword(req.Username, req.Password)
-	if err != nil {
-		attempts++
-		h.SetIntSetting(attemptKey, attempts)
-		if attempts >= maxAttempts {
-			lockUntil := int(time.Now().Unix()) + lockMinutes*60
-			h.SetIntSetting("lock_until:"+req.Username, lockUntil)
-			h.SetIntSetting(attemptKey, 0)
-			h.Store.SaveAuditLog(req.Username, "登录锁定", fmt.Sprintf("连续失败%d次,锁定%d分钟", attempts, lockMinutes), c.ClientIP())
-			c.JSON(401, gin.H{"error": fmt.Sprintf("连续失败 %d 次，账户锁定 %d 分钟", maxAttempts, lockMinutes)})
-			return
-		}
-		h.Store.SaveAuditLog(req.Username, "登录失败", fmt.Sprintf("密码错误(%d/%d)", attempts, maxAttempts), c.ClientIP())
-		c.JSON(401, gin.H{"error": fmt.Sprintf("用户名或密码错误（剩余尝试 %d 次）", maxAttempts-attempts)})
-		return
-	}
-
-	// 登录成功，清除计数
-	h.SetIntSetting(attemptKey, 0)
-	token, _ := h.Auth.GenerateToken(user)
-	h.Store.SaveAuditLog(user.Username, "登录成功", "Web登录", c.ClientIP())
-	c.JSON(200, gin.H{"token": token, "user": user})
-}
-
-func (h *Handler) Health(c *gin.Context) {
-	h.Mu.RLock()
-	defer h.Mu.RUnlock()
-	now := time.Now().Unix()
-	online := 0
-	for _, a := range h.Agents {
-		if now-a.LastSeen < 60 {
-			online++
-		}
-	}
-	c.JSON(200, gin.H{"status": "ok", "online": online, "total": len(h.Agents)})
-}
-
-func (h *Handler) ListAgents(c *gin.Context) {
-	h.Mu.RLock()
-	defer h.Mu.RUnlock()
-	agents := make([]AgentInfo, 0, len(h.Agents))
-	for _, a := range h.Agents {
-		agents = append(agents, *a)
-	}
-	c.JSON(200, gin.H{"total": len(agents), "agents": agents})
-}
-
-func (h *Handler) ListEvents(c *gin.Context) {
-	agentID := c.Query("agent_id")
-	limit := 100
-	if l := c.Query("limit"); l != "" {
-		n, err := strconv.Atoi(l)
-		if err == nil && n > 0 && n <= 1000 {
-			limit = n
-		}
-	}
-	dbEvents, dbErr := h.Store.GetEvents(limit, agentID)
-	if dbErr == nil && len(dbEvents) > 0 {
-		c.JSON(200, gin.H{"total": len(dbEvents), "events": dbEvents, "source": "sqlite"})
-		return
-	}
-	h.EventMu.RLock()
-	defer h.EventMu.RUnlock()
-	evts := h.Events
-	if len(evts) > limit {
-		evts = evts[len(evts)-limit:]
-	}
-	c.JSON(200, gin.H{"total": len(h.Events), "events": evts, "source": "memory"})
-}
-func (h *Handler) Command(c *gin.Context) {
-	var req struct {
-		AgentID     string `json:"agent_id"`
-		ProbeName   string `json:"probe_name"`
-		Action      string `json:"action"`
-		ProbeData   string `json:"probe_data"`
-		ProbeConfig string `json:"probe_config"`
-	}
-	c.BindJSON(&req)
-
-	var cmdType pb.ProbeCommand_CommandType
-	switch req.Action {
-	case "load":
-		cmdType = pb.ProbeCommand_LOAD
-	case "unload":
-		cmdType = pb.ProbeCommand_UNLOAD
-	case "install":
-		cmdType = pb.ProbeCommand_INSTALL
-	case "collect":
-		cmdType = pb.ProbeCommand_COLLECT
-	case "reload":
-		cmdType = pb.ProbeCommand_RELOAD
-	default:
-		c.JSON(400, gin.H{"error": "action无效"})
-		return
-	}
-
-	cmd := &pb.ProbeCommand{
-		Type:        cmdType,
-		ProbeName:   req.ProbeName,
-		ProbeData:   []byte(req.ProbeData),
-		ProbeConfig: req.ProbeConfig,
-	}
-	if err := h.sendCmd(req.AgentID, cmd); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-	log.Printf("📋 指令: %s -> %s (%s)", req.AgentID, req.ProbeName, req.Action)
-	c.JSON(200, gin.H{"success": true, "message": "指令已排队"})
-}
-
-func (h *Handler) AssetsOverview(c *gin.Context) {
-	data, err := h.Store.GetAllLatestAssets()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "查询失败"})
-		return
-	}
-	type AssetSummary struct {
-		AgentID      string `json:"agent_id"`
-		Hostname     string `json:"hostname"`
-		OS           string `json:"os"`
-		ProcessCount int    `json:"process_count"`
-		UserCount    int    `json:"user_count"`
-		Online       bool    `json:"online"`
-		CPUPercent   float64 `json:"cpu_percent"`
-		MemPercent   float64 `json:"mem_percent"`
-		DiskPercent  float64 `json:"disk_percent"`
-	}
-	summaries := make([]AssetSummary, 0, len(data))
-	now := time.Now().Unix()
-	for agentID, counts := range data {
-		h.Mu.RLock()
-		agent := h.Agents[agentID]
-		h.Mu.RUnlock()
-		hostname := ""
-		online := false
-		if agent != nil {
-			hostname = agent.Hostname
-			if now-agent.LastSeen < 60 {
-				online = true
-			}
-		}
-		var cpuP, memP, diskP float64
-			if _, _, sysJSON, err := h.Store.GetLatestAsset(agentID); err == nil {
-				var sysData map[string]interface{}
-				json.Unmarshal(sysJSON, &sysData)
-				if perf, ok := sysData["perf"].(map[string]interface{}); ok {
-					if v, ok := perf["cpu_percent"].(float64); ok { cpuP = v }
-					if v, ok := perf["mem_percent"].(float64); ok { memP = v }
-					if du, ok := perf["disk_usage"].([]interface{}); ok && len(du) > 0 {
-						if dm, ok := du[0].(map[string]interface{}); ok {
-							if p, ok := dm["percent"].(string); ok {
-								p = strings.TrimSuffix(p, "%")
-								if f, err := strconv.ParseFloat(p, 64); err == nil { diskP = f }
-							}
-						}
-					}
-				}
-			}
-			summaries = append(summaries, AssetSummary{
-				OS:           h.getOS(agentID),
-			AgentID:      agentID,
-			Hostname:     hostname,
-			ProcessCount: counts["process_count"],
-			UserCount:    counts["user_count"],
-			Online:       online,
-				CPUPercent:   cpuP,
-				MemPercent:   memP,
-				DiskPercent:  diskP,
-		})
-	}
-	c.JSON(200, gin.H{"agents": summaries})
-}
-
-func (h *Handler) AssetDetail(c *gin.Context) {
-	agentID := c.Param("agent_id")
-	procJSON, userJSON, sysJSON, err := h.Store.GetLatestAsset(agentID)
-	if err != nil {
-		c.JSON(404, gin.H{"error": "无资产数据"})
-		return
-	}
-	var procs, users, sys interface{}
-	json.Unmarshal(procJSON, &procs)
-	json.Unmarshal(userJSON, &users)
-	json.Unmarshal(sysJSON, &sys)
-	c.JSON(200, gin.H{"processes": procs, "users": users, "system": sys})
-}
-
-func (h *Handler) AssetsByCategory(c *gin.Context) {
-	category := c.Query("type") // 数据库/Web服务器/中间件/运行时/Web组件/所有
-	agentID := c.Query("agent_id")
-
-	// 遍历所有Agent的资产，按类型筛选
-	type AssetItem struct {
-		AgentID     string `json:"agent_id"`
-		Hostname    string `json:"hostname"`
-		ServiceName string `json:"service_name"`
-		Type        string   `json:"type"`
-		Version     string `json:"version"`
-	Group       string            `json:"group"`
-		PID         int32  `json:"pid"`
-		ListenPort  []string `json:"listen_port"`
-		ExePath     string `json:"exe_path"`
-		ConfigPath  string `json:"config_path"`
-	}
-
-	var items []AssetItem
-	h.Mu.RLock()
-	defer h.Mu.RUnlock()
-
-	for aid, agent := range h.Agents {
-		if agentID != "" && aid != agentID {
-			continue
-		}
-
-		// 从store获取该Agent最新资产的services
-		_, _, sysJSON, err := h.Store.GetLatestAsset(aid)
-		if err != nil {
-			continue
-		}
-
-		var sysData map[string]interface{}
-		json.Unmarshal(sysJSON, &sysData)
-
-		// 解析识别的服务
-		if svcs, ok := sysData["services"].([]interface{}); ok {
-			for _, svc := range svcs {
-				s := svc.(map[string]interface{})
-				svcType := getString(s, "type")
-				if category != "" && category != "所有" && svcType != category {
-					continue
-				}
-				ports := []string{}
-				if p, ok := s["listen_port"].([]interface{}); ok {
-					for _, pp := range p {
-						ports = append(ports, pp.(string))
-					}
-				}
-				items = append(items, AssetItem{
-					Type:        svcType,
-					AgentID:     aid,
-					Hostname:    agent.Hostname,
-					ServiceName: s["name"].(string),
-					Version:     getString(s, "version"),
-					PID:         int32(getFloat(s, "pid")),
-					ListenPort:  ports,
-					ExePath:     getString(s, "exe_path"),
-					ConfigPath:  getString(s, "config_path"),
-				})
-			}
-		}
-
-		// 解析Web组件
-		if wcs, ok := sysData["web_components"].([]interface{}); ok {
-			for _, wc := range wcs {
-				w := wc.(map[string]interface{})
-				wcType := getString(w, "type")
-				if category != "" && category != "所有" && wcType != category {
-					continue
-				}
-				items = append(items, AssetItem{
-					Type:        wcType,
-					AgentID:     aid,
-					Hostname:    agent.Hostname,
-					ServiceName: w["name"].(string),
-					Version:     getString(w, "version"),
-					PID:         int32(getFloat(w, "pid")),
-					ExePath:     getString(w, "base_path"),
-					ConfigPath:  getString(w, "config_path"),
-				})
-			}
-		}
-	}
-
-	c.JSON(200, gin.H{"total": len(items), "items": items})
-}
-
-func (h *Handler) getOS(agentID string) string {
-	_, _, sysJSON, err := h.Store.GetLatestAsset(agentID)
-	if err != nil { return "-" }
-	var sysData map[string]interface{}
-	json.Unmarshal(sysJSON, &sysData)
-	if s, ok := sysData["system"].(map[string]interface{}); ok {
-		if os, ok := s["os"].(map[string]interface{}); ok {
-			if name, ok := os["name"].(string); ok { return name }
-		}
-	}
-	return "-"
-}
-
-func getString(m map[string]interface{}, key string) string {
-	if v, ok := m[key]; ok && v != nil {
-		return v.(string)
-	}
-	return ""
-}
-
-func getFloat(m map[string]interface{}, key string) float64 {
-	if v, ok := m[key]; ok && v != nil {
-		if f, ok := v.(float64); ok {
-			return f
-		}
-	}
-	return 0
-}
-
-func (h *Handler) ListUsers(c *gin.Context) {
-	users, _ := h.Auth.ListUsers()
-	c.JSON(200, gin.H{"users": users})
-}
-
-func (h *Handler) authMiddleware(c *gin.Context) {
-	header := c.GetHeader("Authorization")
-	if header == "" || len(header) < 8 {
-		c.JSON(401, gin.H{"error": "未登录"})
-		c.Abort()
-		return
-	}
-	user, err := h.Auth.ValidateToken(header[7:])
-	if err != nil {
-		c.JSON(401, gin.H{"error": "token无效"})
-		c.Abort()
-		return
-	}
-	c.Set("user", user)
-	c.Next()
-	// 记录 API 访问日志
-	action := c.Request.Method + " " + c.Request.URL.Path
-	h.Store.SaveAuditLog(user.Username, "API访问", action, c.ClientIP())
-}
-
-func (h *Handler) roleMiddleware(roles ...string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		u := c.MustGet("user").(*auth.User)
-		for _, r := range roles {
-			if u.Role == r {
-				c.Next()
-				return
-			}
-		}
-		c.JSON(403, gin.H{"error": "权限不足"})
-		c.Abort()
-	}
-}
-
 // ListProbeConfigs 查询探针配置
-func (h *Handler) ListProbeConfigs(c *gin.Context) {
-	agentID := c.Query("agent_id")
-	if agentID == "" {
-		c.JSON(400, gin.H{"error": "缺少agent_id"})
-		return
-	}
-	configs, err := h.Store.GetProbeConfigs(agentID)
-	if err != nil {
-		c.JSON(500, gin.H{"error": "查询失败"})
-		return
-	}
-	c.JSON(200, gin.H{"configs": configs})
-}
-
 // DeployProbe 下发/更新探针配置
-func (h *Handler) DeployProbe(c *gin.Context) {
-	var req struct {
-		AgentID   string `json:"agent_id"`
-		ProbeName string `json:"probe_name"`
-		Enabled   bool   `json:"enabled"`
-		Remove    bool   `json:"remove"`
-		Path      string `json:"path"`
-	}
-	if err := c.BindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "参数错误"})
-		return
-	}
-	if req.AgentID == "" || req.ProbeName == "" {
-		c.JSON(400, gin.H{"error": "agent_id和probe_name必填"})
-		return
-	}
-	if req.Path == "" {
-		// 默认路径
-		paths := map[string]string{
-			"exec_monitor": "probes/templates/exec_monitor_ebpf/exec_monitor.o",
-			"bash_monitor": "probes/templates/bash_monitor/bash_monitor.o",
-			"tcp_monitor":  "probes/templates/tcp_monitor/tcp_monitor.o",
-		}
-		req.Path = paths[req.ProbeName]
-	}
-
-	// 计算 .o 文件的 SHA256
-	sha256Hash := ""
-	if data, err := os.ReadFile(req.Path); err == nil {
-		hash := sha256.Sum256(data)
-		sha256Hash = hex.EncodeToString(hash[:])
-	}
-
-	err := h.Store.UpsertProbeConfig(store.ProbeConfigRecord{
-		AgentID:   req.AgentID,
-		ProbeName: req.ProbeName,
-		Enabled:   req.Enabled,
-		Remove:    req.Remove,
-		Path:      req.Path,
-		Sha256:    sha256Hash,
-	})
-	if err != nil {
-		c.JSON(500, gin.H{"error": "保存失败"})
-		return
-	}
-	log.Printf("📋 探针下发: %s -> %s (enabled=%v)", req.AgentID, req.ProbeName, req.Enabled)
-	h.Store.SaveAuditLog(h.getUsername(c), "下发探针", fmt.Sprintf("%s -> %s enabled=%v", req.AgentID, req.ProbeName, req.Enabled), c.ClientIP())
-	c.JSON(200, gin.H{"success": true, "message": "已下发"})
-}
-
 // DestroyProbe 销毁探针配置
-func (h *Handler) DestroyProbe(c *gin.Context) {
-	var req struct {
-		AgentID   string `json:"agent_id"`
-		ProbeName string `json:"probe_name"`
-	}
-	if err := c.BindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "参数错误"})
-		return
-	}
-	if err := h.Store.DeleteProbeConfig(req.AgentID, req.ProbeName); err != nil {
-		c.JSON(500, gin.H{"error": "删除失败"})
-		return
-	}
-	log.Printf("🗑️ 探针销毁: %s -> %s", req.AgentID, req.ProbeName)
-	h.Store.SaveAuditLog(h.getUsername(c), "销毁探针", fmt.Sprintf("%s -> %s", req.AgentID, req.ProbeName), c.ClientIP())
-	c.JSON(200, gin.H{"success": true, "message": "已销毁"})
-}
-
-
-func (h *Handler) getUsername(c *gin.Context) string {
-	if u, ok := c.Get("user"); ok {
-		if user, ok := u.(*auth.User); ok {
-			return user.Username
-		}
-	}
-	return "unknown"
-}
-
-
-func (h *Handler) GetSecuritySetting(key string, defaultVal int) int {
-	val, err := h.Store.GetLogSetting(key)
-	if err != nil || val == "" {
-		return defaultVal
-	}
-	if n, err := strconv.Atoi(val); err == nil {
-		return n
-	}
-	return defaultVal
-}
-
-func (h *Handler) GetIntSetting(key string, defaultVal int) int {
-	val, err := h.Store.GetLogSetting(key)
-	if err != nil || val == "" {
-		return defaultVal
-	}
-	if n, err := strconv.Atoi(val); err == nil {
-		return n
-	}
-	return defaultVal
-}
-
-func (h *Handler) SetIntSetting(key string, val int) {
-	h.Store.SetLogSetting(key, strconv.Itoa(val))
-}

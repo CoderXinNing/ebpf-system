@@ -8,12 +8,12 @@ import (
 	"os/user"
 	"strconv"
 	"strings"
-	"unsafe"
+	"sync"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-	"golang.org/x/sys/unix"
 )
 
 type ExecEvent struct {
@@ -27,12 +27,15 @@ type ExecEvent struct {
 
 type ExecCallback func(ExecEvent, string)
 
-var uidCache = make(map[uint32]string)
+// uidCache 使用 sync.Map 保证并发安全（读多写少场景）
+var uidCache sync.Map
 
 func ResolveUser(uid uint32) string {
-	if name, ok := uidCache[uid]; ok { return name }
+	if name, ok := uidCache.Load(uid); ok {
+		return name.(string)
+	}
 	if u, err := user.LookupId(strconv.Itoa(int(uid))); err == nil {
-		uidCache[uid] = u.Username
+		uidCache.Store(uid, u.Username)
 		return u.Username
 	}
 	return strconv.Itoa(int(uid))
@@ -59,9 +62,6 @@ var defaultExecWhitelist = []string{
 	"dmidecode", "uname", "basename", "ss", "lsof",
 }
 
-// 保存原始 FD，不关闭
-var savedPerfFDs []int
-
 func LoadExecMonitor(objPath string, callback ExecCallback) error {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("解除内存锁失败: %w", err)
@@ -72,20 +72,11 @@ func LoadExecMonitor(objPath string, callback ExecCallback) error {
 		Name:    "exec_monitor",
 		ObjPath: objPath,
 		PinBase: "/sys/fs/bpf/ebpf-sentinel",
-		Maps:    []string{"events", "exec_whitelist", "agent_heartbeat"},
+		Maps:    []string{"events", "exec_whitelist", "agent_heartbeat", "link"},
 	}
 
-	mode := probeSpec.Prepare()
-	if mode == "reuse" {
-		log.Printf("🔗 检测到已有exec探针pin，尝试接管...")
-		if reuseErr := reusePinnedExecMonitor(probeSpec, callback); reuseErr == nil {
-			log.Printf("✅ 已接管已有exec探针")
-			return nil
-		} else {
-			log.Printf("⚠️ 接管失败，重新加载: %v", reuseErr)
-			probeSpec.CleanPins()
-		}
-	}
+	// 每次启动强制清理旧 pin，按 Server 名单重新加载
+	probeSpec.CleanPins()
 
 	collSpec, err := ebpf.LoadCollectionSpec(objPath)
 	if err != nil { return fmt.Errorf("加载spec失败: %w", err) }
@@ -136,19 +127,30 @@ func LoadExecMonitor(objPath string, callback ExecCallback) error {
 	}
 	log.Printf("📋 exec白名单: %v", defaultExecWhitelist)
 
-	// 用原始 syscall attach，不使用 link.Tracepoint
-	progFD := objs.TraceExecve.FD()
-	if err := attachTracepointSyscall(progFD, "syscalls", "sys_enter_execve"); err != nil {
+	// 使用标准 link 库挂载 tracepoint
+	tpLink, err := link.Tracepoint("syscalls", "sys_enter_execve", objs.TraceExecve, nil)
+	if err != nil {
 		objs.TraceExecve.Close()
-		return fmt.Errorf("attach失败: %w", err)
+		return fmt.Errorf("attach tracepoint 失败: %w", err)
 	}
+
+	// Pin link 到 bpffs（持久化，脱离 Agent 进程存活）
+	linkPinPath := probeSpec.PinPaths()["link"]
+	if err := tpLink.Pin(linkPinPath); err != nil {
+		tpLink.Close()
+		return fmt.Errorf("Pin link 失败: %w", err)
+	}
+	log.Printf("📌 tracepoint link 已 pin 到 %s", linkPinPath)
 
 	log.Printf("✅ eBPF进程监控已启动: execve (持久化模式)")
 
 	// 启动 ring buffer reader
 	go func() {
-		rd, _ := ringbuf.NewReader(objs.Events)
-		if rd == nil { return }
+		rd, err := ringbuf.NewReader(objs.Events)
+		if err != nil {
+			log.Printf("❌ 创建 ring buffer reader 失败: %v", err)
+			return
+		}
 		defer rd.Close()
 
 		for {
@@ -179,70 +181,6 @@ func LoadExecMonitor(objPath string, callback ExecCallback) error {
 	return nil
 }
 
-// attachTracepointSyscall 用 perf_event_open 做持久化 attach
-func attachTracepointSyscall(progFD int, subsystem, event string) error {
-	// 获取 tracepoint ID
-	tpID, err := getTracepointID(subsystem, event)
-	if err != nil {
-		return fmt.Errorf("获取tracepoint ID失败: %w", err)
-	}
-
-	attr := &unix.PerfEventAttr{
-		Type:        unix.PERF_TYPE_TRACEPOINT,
-		Size:        uint32(unsafe.Sizeof(unix.PerfEventAttr{})),
-		Config:      uint64(tpID),
-		Sample_type: unix.PERF_SAMPLE_RAW,
-		Sample:      1,
-		Wakeup:      1,
-	}
-
-	// perf_event_open 返回值 -1 表示在所有 CPU 上
-	fd, err := unix.PerfEventOpen(attr, -1, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
-	if err != nil {
-		return fmt.Errorf("perf_event_open失败: %w", err)
-	}
-
-	// 绑定 eBPF 程序
-	if err := unix.IoctlSetInt(fd, unix.PERF_EVENT_IOC_SET_BPF, progFD); err != nil {
-		unix.Close(fd)
-		return fmt.Errorf("SET_BPF失败: %w", err)
-	}
-
-	// 启用
-	if err := unix.IoctlSetInt(fd, unix.PERF_EVENT_IOC_ENABLE, 0); err != nil {
-		unix.Close(fd)
-		return fmt.Errorf("ENABLE失败: %w", err)
-	}
-
-	// 保存 FD，不关闭
-	savedPerfFDs = append(savedPerfFDs, fd)
-	log.Printf("📌 tracepoint %s/%s 持久化挂载成功 (FD=%d)", subsystem, event, fd)
-
-	return nil
-}
-
-func getTracepointID(subsystem, event string) (int, error) {
-	path := fmt.Sprintf("/sys/kernel/debug/tracing/events/%s/%s/id", subsystem, event)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0, err
-	}
-	id, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil {
-		return 0, err
-	}
-	return id, nil
-}
-
-// CleanupSavedFDs Agent 正常退出时清理
-func CleanupSavedFDs() {
-	for _, fd := range savedPerfFDs {
-		unix.Close(fd)
-	}
-	savedPerfFDs = nil
-	log.Println("🧹 已清理持久化 FD")
-}
-
 
 // reusePinnedExecMonitor 复用已 pin 的 exec 探针
 func reusePinnedExecMonitor(spec *ProbeSpec, callback ExecCallback) error {
@@ -267,7 +205,10 @@ func reusePinnedExecMonitor(spec *ProbeSpec, callback ExecCallback) error {
 		return fmt.Errorf("pin collection缺少白名单map")
 	}
 
-	_ = coll.Maps["agent_heartbeat"]  // 心跳 map 可能不在collection里
+	// 心跳 map 可能不在collection里，检查但不强制
+	if coll.Maps["agent_heartbeat"] == nil {
+		log.Printf("⚠️ pin collection缺少心跳map，跳过心跳更新")
+	}
 
 	// 写白名单（确保还是最新的）
 	for _, name := range defaultExecWhitelist {
@@ -277,16 +218,27 @@ func reusePinnedExecMonitor(spec *ProbeSpec, callback ExecCallback) error {
 		whMap.Put(&key, &val)
 	}
 
-	// 用 perf_event_open 重新 attach
-	progFD := prog.FD()
-	if err := attachTracepointSyscall(progFD, "syscalls", "sys_enter_execve"); err != nil {
-		return fmt.Errorf("重新attach失败: %w", err)
+	// 使用标准 link 库重新 attach
+	tpLink, err := link.Tracepoint("syscalls", "sys_enter_execve", prog, nil)
+	if err != nil {
+		return fmt.Errorf("重新 attach tracepoint 失败: %w", err)
 	}
+
+	// Pin link 到 bpffs
+	linkPinPath := spec.PinPaths()["link"]
+	if err := tpLink.Pin(linkPinPath); err != nil {
+		tpLink.Close()
+		return fmt.Errorf("Pin link 失败: %w", err)
+	}
+	log.Printf("📌 tracepoint link 已 pin 到 %s", linkPinPath)
 
 	// 启动 ring buffer reader
 	go func() {
-		rd, _ := ringbuf.NewReader(eventsMap)
-		if rd == nil { return }
+		rd, err := ringbuf.NewReader(eventsMap)
+		if err != nil {
+			log.Printf("❌ 创建 ring buffer reader 失败: %v", err)
+			return
+		}
 		defer rd.Close()
 		for {
 			record, err := rd.Read()

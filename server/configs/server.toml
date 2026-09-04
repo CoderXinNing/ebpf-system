@@ -1,12 +1,20 @@
-# eBPF Sentinel Server 配置
-
 [server]
 http_port = 8080
 grpc_port = 50051
-jwt_secret = "change-me-in-production"
 
 [database]
-path = "sentinel.db"
+type = "postgres"
+host = "localhost"
+port = 5432
+user = "sentinel"
+password = "sentinel_dev_2026"
+dbname = "sentinel"
+
+[tls]
+cert_file = "certs/server.crt"
+key_file = "certs/server.key"
+ca_file = "certs/ca.crt"
 
 [log]
 level = "info"
+format = "text"

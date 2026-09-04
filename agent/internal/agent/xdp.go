@@ -37,7 +37,7 @@ func (a *Agent) startXDP() {
 		if evt.PID == uint32(os.Getpid()) {
 			return
 		}
-		a.eventQueue <- &pb.ProbeEvent{
+		a.eventQueue.Push(&pb.ProbeEvent{
 			ProbeName: "xdp",
 			Timestamp: time.Now().Unix(),
 			EventType: "xdp_alert",
@@ -45,7 +45,7 @@ func (a *Agent) startXDP() {
 			Comm:      string(evt.Comm[:]),
 			Filename:  "xdp_alert",
 			Details:   string(evt.Details[:]),
-		}
+		}, PriorityHigh)
 	})
 	if err != nil {
 		log.Printf("⚠️ XDP加载失败（降级为纯CMDB）: %v", err)
@@ -71,12 +71,12 @@ func (a *Agent) startExecMonitor() {
 		childComm := strings.TrimRight(string(evt.Comm[:]), "\x00")
 		if parentComm != "" && childComm != "" {
 			chainKey := parentComm + "->" + childComm
-			a.baselineCount[chainKey+":proc_chain"]++
+			a.probeStateActor.Send(msgIncrementBaseline{key: chainKey + ":proc_chain"})
 		}
 
 		// 原有：用户维度 exec 计数
 		key := ebpf.ResolveUser(evt.UID) + ":exec_count"
-		a.baselineCount[key]++
+		a.probeStateActor.Send(msgIncrementBaseline{key: key})
 
 		if int32(evt.PID) == int32(os.Getpid()) {
 			return
@@ -84,7 +84,7 @@ func (a *Agent) startExecMonitor() {
 
 		// 正常事件不上报（硬规则匹配还需要）
 		userName := ebpf.ResolveUser(evt.UID)
-		a.eventQueue <- &pb.ProbeEvent{
+		a.eventQueue.Push(&pb.ProbeEvent{
 			ProbeName: "execve",
 			Timestamp: time.Now().Unix(),
 			EventType: "execve",
@@ -92,7 +92,7 @@ func (a *Agent) startExecMonitor() {
 			Comm:      string(evt.Comm[:]),
 			Filename:  "execve",
 			Details:   userName + ": " + cmdline,
-		}
+		}, PriorityNormal)
 	})
 	if err != nil {
 		log.Printf("⚠️ 进程监控探针加载失败（降级）: %v", err)
@@ -102,11 +102,11 @@ func (a *Agent) startExecMonitor() {
 func (a *Agent) startBashMonitor() error {
 	err := ebpf.LoadBashMonitor(a.getProbePath("bash_monitor"), "/bin/bash", func(evt ebpf.BashEvent, userName string, line string) {
 		// 本地基线窗口计数
-		a.baselineCount[userName+":bash_count"]++
+		a.probeStateActor.Send(msgIncrementBaseline{key: userName + ":bash_count"})
 		if line == "" {
 			return
 		}
-		a.eventQueue <- &pb.ProbeEvent{
+		a.eventQueue.Push(&pb.ProbeEvent{
 			ProbeName: "bash_input",
 			Timestamp: time.Now().Unix(),
 			EventType: "bash_input",
@@ -114,7 +114,7 @@ func (a *Agent) startBashMonitor() error {
 			Comm:      strings.ToValidUTF8(string(evt.Comm[:]), ""),
 			Filename:  "bash_input",
 			Details:   userName + ": " + strings.ToValidUTF8(line, ""),
-		}
+		}, PriorityNormal)
 	})
 	if err != nil {
 		log.Printf("⚠️ Bash监控加载失败（降级）: %v", err)
@@ -126,15 +126,15 @@ func (a *Agent) startBashMonitor() error {
 func (a *Agent) startTCPMonitor() {
 	err := ebpf.LoadTCPMonitor(a.getProbePath("tcp_monitor"), func(pid uint32, comm string, count uint64) {
 		// 本地基线窗口计数
-		a.baselineCount[strings.TrimRight(comm, "\x00")+":tcp_count"]++
-		a.eventQueue <- &pb.ProbeEvent{
+		a.probeStateActor.Send(msgIncrementBaseline{key: strings.TrimRight(comm, "\x00") + ":tcp_count"})
+		a.eventQueue.Push(&pb.ProbeEvent{
 			ProbeName: "tcp_connect",
 			Timestamp: time.Now().Unix(),
 			EventType: "tcp_connect",
 			Pid:       int32(pid),
 			Comm:      strings.TrimRight(comm, "\x00"),
 			Filename:  fmt.Sprintf("外联x%d次", count),
-		}
+		}, PriorityNormal)
 	})
 	if err != nil {
 		log.Printf("⚠️ TCP监控加载失败: %v", err)
