@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/actor"
@@ -13,11 +15,16 @@ import (
 // ProbeState 是所有需要并发保护的状态集合。
 // 所有字段只能由 ProbeStateActor 的 handler 访问。
 type ProbeState struct {
-	probeStatus           map[string]string       // probe_name -> "loaded" / "failed: reason"
-	probePaths            map[string]string       // probe_name -> path from Server
-	baselineCount         map[string]int          // 窗口计数
-	falsePositiveFeatures map[string]bool         // 误报特征黑名单
+	probeStatus           map[string]string        // probe_name -> "loaded" / "failed: reason"
+	probePaths            map[string]string        // probe_name -> path from Server
+	baselineCount         map[string]int           // 窗口计数
+	falsePositiveFeatures map[string]bool          // 误报特征黑名单
 	baselineEngine        *baseline.BaselineEngine // 基线引擎引用（只读）
+
+	// 非阻塞读取缓存（心跳定时器直接读，无需 Ask）
+	cacheMu       sync.RWMutex
+	statusJSON    string // 缓存的探针状态 JSON
+	activeCount   int32  // 缓存的活跃探针数
 }
 
 func newProbeState(baselineEngine *baseline.BaselineEngine) *ProbeState {
@@ -27,6 +34,7 @@ func newProbeState(baselineEngine *baseline.BaselineEngine) *ProbeState {
 		baselineCount:         make(map[string]int),
 		falsePositiveFeatures: make(map[string]bool),
 		baselineEngine:        baselineEngine,
+		statusJSON:            "{}",
 	}
 }
 
@@ -43,8 +51,7 @@ type msgSetProbePath struct {
 }
 
 type msgGetProbePath struct {
-	name    string
-	replyCh chan string
+	name string
 }
 
 type msgAddFalsePositive struct {
@@ -56,12 +63,7 @@ type msgIncrementBaseline struct {
 }
 
 type msgFlushBaselineWindow struct {
-	ipAddr  string
-	replyCh chan []*pb.ProbeEvent
-}
-
-type msgGetProbeStatusJSON struct {
-	replyCh chan string
+	ipAddr string
 }
 
 // ---- ProbeStateActor 的 handler ----
@@ -72,9 +74,11 @@ func probeStateHandler(state interface{}, msg actor.Message) interface{} {
 	switch m := msg.(type) {
 	case msgSetProbeStatus:
 		s.probeStatus[m.name] = m.status
+		s.refreshCache()
 
 	case msgSetProbePath:
 		s.probePaths[m.name] = m.path
+		s.refreshCache()
 
 	case msgGetProbePath:
 		return s.probePaths[m.name]
@@ -87,13 +91,47 @@ func probeStateHandler(state interface{}, msg actor.Message) interface{} {
 
 	case msgFlushBaselineWindow:
 		return s.flushBaselineWindowLocked(m.ipAddr, s.baselineEngine)
-
-	case msgGetProbeStatusJSON:
-		// 返回 JSON 字符串作为 Ask 的响应
-		return s.getProbeStatusJSONLocked()
 	}
 
 	return s
+}
+
+// refreshCache 在状态变化时更新缓存（handler goroutine 内调用）
+func (s *ProbeState) refreshCache() {
+	// 用 json.Marshal 替代手写拼接
+	data, err := json.Marshal(s.probeStatus)
+	if err != nil {
+		s.statusJSON = "{}"
+	} else {
+		s.statusJSON = string(data)
+	}
+
+	// 统计活跃探针数（状态为 "loaded" 或 "loading"）
+	count := int32(0)
+	for _, status := range s.probeStatus {
+		if status == "loaded" || status == "loading" {
+			count++
+		}
+	}
+
+	s.cacheMu.Lock()
+	s.statusJSON = string(data)
+	s.activeCount = count
+	s.cacheMu.Unlock()
+}
+
+// GetProbeStatusJSON 非阻塞读取缓存的探针状态 JSON
+func (s *ProbeState) GetProbeStatusJSON() string {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	return s.statusJSON
+}
+
+// GetActiveProbeCount 非阻塞读取缓存的活跃探针数
+func (s *ProbeState) GetActiveProbeCount() int32 {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	return s.activeCount
 }
 
 // ---- 锁内方法（只在 handler goroutine 内调用） ----
@@ -105,12 +143,10 @@ func (s *ProbeState) flushBaselineWindowLocked(ipAddr string, baselineEngine *ba
 
 	events := make([]*pb.ProbeEvent, 0, len(s.baselineCount))
 	for key, count := range s.baselineCount {
-		// 跳过误报特征
 		if s.falsePositiveFeatures[key] {
 			delete(s.baselineCount, key)
 			continue
 		}
-		// key 格式: user:metric
 		isAnomaly, zScore := s.baselineEngine.Update(baseline.Feature{
 			IP:    ipAddr,
 			Key:   key,
@@ -132,15 +168,4 @@ func (s *ProbeState) flushBaselineWindowLocked(ipAddr string, baselineEngine *ba
 		delete(s.baselineCount, key)
 	}
 	return events
-}
-
-func (s *ProbeState) getProbeStatusJSONLocked() string {
-	if len(s.probeStatus) == 0 {
-		return "{}"
-	}
-	parts := make([]string, 0, len(s.probeStatus))
-	for name, status := range s.probeStatus {
-		parts = append(parts, fmt.Sprintf(`"%s":"%s"`, name, status))
-	}
-	return "{" + strings.Join(parts, ",") + "}"
 }

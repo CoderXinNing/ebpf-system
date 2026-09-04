@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -516,27 +515,13 @@ func (a *Agent) startTCPMonitorWithStatus(name string) {
 }
 
 func (a *Agent) getActiveProbeCount() int32 {
-	result, err := a.probeStateActor.Ask(msgGetProbeStatusJSON{}, 100*time.Millisecond)
-	if err != nil {
-		return 0
-	}
-	json := result.(string)
-	if json == "{}" {
-		return 0
-	}
-	// 简单统计：逗号数量 + 1
-	return int32(strings.Count(json, ",") + 1)
+	state := a.probeStateActor.GetState().(*ProbeState)
+	return state.GetActiveProbeCount()
 }
 
 func (a *Agent) getProbeDetailsJSON() string {
-	result, err := a.probeStateActor.Ask(msgGetProbeStatusJSON{}, 100*time.Millisecond)
-	if err != nil {
-		return "{}"
-	}
-	if json, ok := result.(string); ok {
-		return json
-	}
-	return "{}"
+	state := a.probeStateActor.GetState().(*ProbeState)
+	return state.GetProbeStatusJSON()
 }
 
 func (a *Agent) flushBaselineWindow() {

@@ -136,6 +136,13 @@ func (a *Actor) Stop() {
 	a.cancel()
 }
 
+// GetState 非阻塞读取当前状态（只读，不做任何修改）。
+// 注意：此方法直接返回 state 指针，调用方必须确保不修改它。
+// 用于高频读取场景（如心跳、状态展示），避免 Ask 的阻塞开销。
+func (a *Actor) GetState() interface{} {
+	return a.state
+}
+
 // Send 非阻塞发送消息。返回值表示发送结果。
 // - Sent: 成功
 // - Full: inbox 满，消息被丢弃
