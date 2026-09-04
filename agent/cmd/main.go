@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -23,21 +24,32 @@ func main() {
 		return
 	}
 	cfg, err := config.Load(*configPath)
-	if err != nil { log.Fatalf("❌ 配置加载失败: %v", err) }
+	if err != nil {
+		log.Fatalf("❌ 配置加载失败: %v", err)
+	}
 
 	ag := agent.New(cfg)
 	if err := ag.Init(); err != nil {
-		log.Fatalf("❌ %v", err)
+		log.Fatalf("❌ 环境初始化失败: %v", err)
 	}
 
+	// 使用 context 贯穿全生命周期
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 信号处理：收到 SIGINT/SIGTERM 时取消 context
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		<-sigChan
-		log.Println("\n🛑 退出...")
-		ag.Shutdown()
-		os.Exit(0)
+		sig := <-sigChan
+		log.Printf("🛑 收到信号 %v，准备优雅退出...", sig)
+		cancel()
 	}()
 
-	ag.Run()
+	// 运行 Agent（阻塞直到 ctx 被取消）
+	ag.Run(ctx)
+
+	// 优雅退出
+	ag.Shutdown()
+	log.Println("✅ Agent 已优雅退出")
 }

@@ -9,10 +9,26 @@ import (
 )
 
 func (a *Agent) runHeartbeatLoop() {
+	a.runHeartbeatLoopWithCtx(context.Background())
+}
+
+func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 	ticker := time.NewTicker(a.cfg.Agent.HeartbeatInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("💓 心跳循环停止")
+			return
+		case <-ticker.C:
+			// 检查 ctx 是否已取消
+			select {
+			case <-ctx.Done():
+				log.Println("💓 心跳循环停止")
+				return
+			default:
+			}
 		// 确保已注册
 		if a.token == "" {
 			continue
@@ -44,6 +60,7 @@ func (a *Agent) runHeartbeatLoop() {
 			for _, cmd := range resp.Commands {
 				a.handleCommand(cmd)
 			}
+		}
 		}
 	}
 }

@@ -122,10 +122,7 @@ func (a *Actor) Stop() {
 	a.stopped = true
 	a.mu.Unlock()
 
-	// 等待 inbox 排空
-	for len(a.inbox) > 0 {
-		time.Sleep(time.Millisecond)
-	}
+	// 关闭 inbox 并等待处理循环退出
 	close(a.inbox)
 	a.wg.Wait()
 
@@ -204,9 +201,8 @@ func (a *Actor) Ask(msg Message, timeout time.Duration) (interface{}, error) {
 func (a *Actor) loop() {
 	defer a.wg.Done()
 	for msg := range a.inbox {
-		// 处理 Ask 请求
+		// 处理 Ask 请求：handler 的返回值是响应，state 不变
 		if req, ok := msg.(askRequest); ok {
-			// 对于 Ask，handler 的返回值是响应，state 不变
 			result := a.handler(a.state, req.msg)
 			select {
 			case req.replyCh <- result:
@@ -216,7 +212,7 @@ func (a *Actor) loop() {
 			continue
 		}
 
-		// 普通消息
+		// 普通消息：handler 的返回值成为新的 state
 		a.state = a.handler(a.state, msg)
 	}
 }

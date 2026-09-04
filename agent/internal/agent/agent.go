@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -112,17 +110,8 @@ func (a *Agent) decideLevel() string {
 	return "basic"
 }
 
-func (a *Agent) Run() {
+func (a *Agent) Run(ctx context.Context) {
 	log.Printf("🛡️  eBPF Sentinel Agent  ID: %s", a.id)
-
-	// 信号处理
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
-	go func() {
-		sig := <-sigCh
-		log.Printf("🛑 收到信号 %v，正常退出...", sig)
-		a.Shutdown()
-	}()
 
 	if err := a.connectAndRegister(); err != nil {
 		log.Println("⚠️ Server不可达，进入离线保命模式")
@@ -173,7 +162,8 @@ func (a *Agent) Run() {
 		}
 	}()
 
-	a.runHeartbeatLoop()
+	// 心跳循环（阻塞直到 ctx 被取消）
+	a.runHeartbeatLoopWithCtx(ctx)
 }
 
 func (a *Agent) connectAndRegister() error {
