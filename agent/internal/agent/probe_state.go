@@ -101,9 +101,7 @@ func (s *ProbeState) refreshCache() {
 	// 用 json.Marshal 替代手写拼接
 	data, err := json.Marshal(s.probeStatus)
 	if err != nil {
-		s.statusJSON = "{}"
-	} else {
-		s.statusJSON = string(data)
+		data = []byte("{}")
 	}
 
 	// 统计活跃探针数（状态为 "loaded" 或 "loading"）
