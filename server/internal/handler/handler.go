@@ -178,6 +178,17 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			}
 			c.BindJSON(&req)
 			h.Store.SaveAlertFeedback(id, req.Type, h.getUsername(c))
+
+			// 误报 → 记录特征到黑名单
+			if req.Type == "false_positive" {
+				// 从告警里提取特征信息存入黑名单
+				alerts, _ := h.Store.GetAlerts(1)
+				if len(alerts) > 0 {
+					featureKey := alerts[0].Comm + ":" + alerts[0].Filename
+					h.Store.SaveFeedbackFeature(featureKey)
+					log.Printf("📝 误报特征已记录: %s", featureKey)
+				}
+			}
 			c.JSON(200, gin.H{"success": true})
 		})
 		api.GET("/users", h.roleMiddleware("admin"), h.ListUsers)
@@ -188,12 +199,43 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"success": true})
 		})
 
+		api.GET("/logs/export", h.roleMiddleware("admin"), func(c *gin.Context) {
+			logs, _ := h.Store.GetAuditLogs(10000)
+			c.Header("Content-Type", "text/csv")
+			c.Header("Content-Disposition", "attachment; filename=audit_logs.csv")
+			c.String(200, "id,username,action,detail,ip,created_at\n")
+			for _, l := range logs {
+				c.String(200, "%v,%s,%s,%s,%s,%v\n",
+					l["id"], l["username"], l["action"], l["detail"], l["ip"], l["created_at"])
+			}
+		})
+
 		api.GET("/logs", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
 			logs, _ := h.Store.GetAuditLogs(200)
 			c.JSON(200, gin.H{"logs": logs})
 		})
 
 		// 日志设置
+		api.GET("/security-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"max_login_attempts": h.GetSecuritySetting("max_login_attempts", 5),
+				"lock_minutes":       h.GetSecuritySetting("lock_minutes", 15),
+				"min_password_len":   h.GetSecuritySetting("min_password_len", 8),
+			})
+		})
+		api.POST("/security-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
+			var req struct {
+				MaxLoginAttempts int `json:"max_login_attempts"`
+				LockMinutes      int `json:"lock_minutes"`
+				MinPasswordLen   int `json:"min_password_len"`
+			}
+			c.BindJSON(&req)
+			if req.MaxLoginAttempts > 0 { h.SetIntSetting("max_login_attempts", req.MaxLoginAttempts) }
+			if req.LockMinutes > 0 { h.SetIntSetting("lock_minutes", req.LockMinutes) }
+			if req.MinPasswordLen > 0 { h.SetIntSetting("min_password_len", req.MinPasswordLen) }
+			c.JSON(200, gin.H{"success": true})
+		})
+
 		api.GET("/log-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
 			eventDays, _ := h.Store.GetLogSetting("event_days")
 			alertDays, _ := h.Store.GetLogSetting("alert_days")
@@ -222,12 +264,39 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 func (h *Handler) Login(c *gin.Context) {
 	var req struct{ Username, Password string }
 	c.BindJSON(&req)
-	user, err := h.Auth.VerifyPassword(req.Username, req.Password)
-	if err != nil {
-		h.Store.SaveAuditLog(req.Username, "登录失败", "密码错误", c.ClientIP())
-		c.JSON(401, gin.H{"error": "用户名或密码错误"})
+	// 检查是否锁定
+	maxAttempts := h.GetSecuritySetting("max_login_attempts", 5)
+	lockMinutes := h.GetSecuritySetting("lock_minutes", 15)
+	attemptKey := "login_attempt:" + req.Username
+
+	attempts := h.GetIntSetting(attemptKey, 0)
+	lockUntil := h.GetIntSetting("lock_until:"+req.Username, 0)
+	if lockUntil > int(time.Now().Unix()) {
+		remain := (lockUntil - int(time.Now().Unix())) / 60
+		h.Store.SaveAuditLog(req.Username, "登录失败", fmt.Sprintf("账户锁定中,剩余%d分钟", remain), c.ClientIP())
+		c.JSON(401, gin.H{"error": fmt.Sprintf("账户已锁定，请 %d 分钟后重试", remain)})
 		return
 	}
+
+	user, err := h.Auth.VerifyPassword(req.Username, req.Password)
+	if err != nil {
+		attempts++
+		h.SetIntSetting(attemptKey, attempts)
+		if attempts >= maxAttempts {
+			lockUntil := int(time.Now().Unix()) + lockMinutes*60
+			h.SetIntSetting("lock_until:"+req.Username, lockUntil)
+			h.SetIntSetting(attemptKey, 0)
+			h.Store.SaveAuditLog(req.Username, "登录锁定", fmt.Sprintf("连续失败%d次,锁定%d分钟", attempts, lockMinutes), c.ClientIP())
+			c.JSON(401, gin.H{"error": fmt.Sprintf("连续失败 %d 次，账户锁定 %d 分钟", maxAttempts, lockMinutes)})
+			return
+		}
+		h.Store.SaveAuditLog(req.Username, "登录失败", fmt.Sprintf("密码错误(%d/%d)", attempts, maxAttempts), c.ClientIP())
+		c.JSON(401, gin.H{"error": fmt.Sprintf("用户名或密码错误（剩余尝试 %d 次）", maxAttempts-attempts)})
+		return
+	}
+
+	// 登录成功，清除计数
+	h.SetIntSetting(attemptKey, 0)
 	token, _ := h.Auth.GenerateToken(user)
 	h.Store.SaveAuditLog(user.Username, "登录成功", "Web登录", c.ClientIP())
 	c.JSON(200, gin.H{"token": token, "user": user})
@@ -643,4 +712,31 @@ func (h *Handler) getUsername(c *gin.Context) string {
 		}
 	}
 	return "unknown"
+}
+
+
+func (h *Handler) GetSecuritySetting(key string, defaultVal int) int {
+	val, err := h.Store.GetLogSetting(key)
+	if err != nil || val == "" {
+		return defaultVal
+	}
+	if n, err := strconv.Atoi(val); err == nil {
+		return n
+	}
+	return defaultVal
+}
+
+func (h *Handler) GetIntSetting(key string, defaultVal int) int {
+	val, err := h.Store.GetLogSetting(key)
+	if err != nil || val == "" {
+		return defaultVal
+	}
+	if n, err := strconv.Atoi(val); err == nil {
+		return n
+	}
+	return defaultVal
+}
+
+func (h *Handler) SetIntSetting(key string, val int) {
+	h.Store.SetLogSetting(key, strconv.Itoa(val))
 }

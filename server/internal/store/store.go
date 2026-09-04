@@ -522,3 +522,29 @@ func (s *Store) GetAlertStats() map[string]interface{} {
 
 	return stats
 }
+
+// SaveFeedbackFeature 保存误报特征（用于基线引擎过滤）
+func (s *Store) SaveFeedbackFeature(featureKey string) error {
+	_, err := s.db.Exec(
+		"INSERT INTO log_settings (key, value) VALUES ('fp_' || ?, '1') ON CONFLICT(key) DO NOTHING",
+		featureKey,
+	)
+	return err
+}
+
+// GetFeedbackFeatures 获取所有误报特征
+func (s *Store) GetFeedbackFeatures() ([]string, error) {
+	rows, err := s.db.Query("SELECT key FROM log_settings WHERE key LIKE 'fp_%'")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var features []string
+	for rows.Next() {
+		var key string
+		rows.Scan(&key)
+		features = append(features, key[3:]) // 去掉 fp_ 前缀
+	}
+	return features, nil
+}

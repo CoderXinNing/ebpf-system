@@ -4,6 +4,7 @@
       <div class="table-card">
         <div class="card-header">
           <span class="card-title">日志审计</span>
+          <n-button size="small" @click="exportLogs">导出 CSV</n-button>
         </div>
         <n-data-table
           :columns="cols"
@@ -32,6 +33,20 @@ const cols = [
   { title: '详情', key: 'detail', ellipsis: true },
   { title: 'IP', key: 'ip', minWidth: 110 },
 ]
+
+async function exportLogs() {
+  const token = localStorage.getItem('token')
+  const resp = await fetch('/api/logs/export', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  const blob = await resp.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'audit_logs.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 async function load() {
   const token = localStorage.getItem('token')

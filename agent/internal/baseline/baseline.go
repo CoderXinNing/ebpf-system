@@ -315,7 +315,17 @@ func (b *BaselineEngine) Persist() {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	data, err := json.Marshal(b.baselines)
+	snapshot := struct {
+		State     string               `json:"state"`
+		StartTime time.Time            `json:"start_time"`
+		Baselines map[string]*Baseline `json:"baselines"`
+	}{
+		State:     b.state.String(),
+		StartTime: b.startTime,
+		Baselines: b.baselines,
+	}
+
+	data, err := json.Marshal(snapshot)
 	if err != nil {
 		log.Printf("⚠️ 基线序列化失败: %v", err)
 		return
@@ -340,11 +350,43 @@ func (b *BaselineEngine) Restore() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if err := json.Unmarshal(data, &b.baselines); err != nil {
+	snapshot := struct {
+		State     string               `json:"state"`
+		StartTime time.Time            `json:"start_time"`
+		Baselines map[string]*Baseline `json:"baselines"`
+	}{}
+
+	if err := json.Unmarshal(data, &snapshot); err == nil && snapshot.Baselines != nil {
+		// 新格式
+		b.baselines = snapshot.Baselines
+		b.startTime = snapshot.StartTime
+		switch snapshot.State {
+		case "observe":
+			b.state = StateObserve
+		case "protect":
+			b.state = StateProtect
+		default:
+			b.state = StateLearning
+		}
+		log.Printf("📥 基线已恢复: %d 个特征, 状态=%s", len(b.baselines), b.state.String())
+		return
+	}
+
+	// 兼容旧格式（纯 baselines map）
+	oldBaselines := make(map[string]*Baseline)
+	if err := json.Unmarshal(data, &oldBaselines); err != nil {
 		log.Printf("⚠️ 基线恢复失败: %v", err)
 		return
 	}
-	log.Printf("📥 基线已恢复: %d 个特征", len(b.baselines))
+	b.baselines = oldBaselines
+	// 测试期间：旧格式恢复后直接进入防护状态
+	b.state = StateProtect
+	log.Printf("📥 基线已恢复(旧格式): %d 个特征, 跳过学习期直接防护", len(b.baselines))
+
+	// 旧文件改名备份
+	backupPath := "agent/data/baseline.json.old"
+	os.Rename("agent/data/baseline.json", backupPath)
+	log.Printf("📦 旧格式文件已备份: %s", backupPath)
 }
 
 
