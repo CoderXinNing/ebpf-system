@@ -396,3 +396,11 @@ func (b *BaselineEngine) ForceProtectMode() {
 	b.startTime = time.Now().Add(-time.Duration(b.config.Learning.DurationMinutes+1) * time.Minute)
 	log.Printf("🧪 强制防护模式（跳过学习期）")
 }
+
+// GetLearningMinutes 返回学习期分钟数
+func (b *BaselineEngine) GetLearningMinutes() int {
+	if b.config.Learning.DurationMinutes <= 0 {
+		return 1
+	}
+	return b.config.Learning.DurationMinutes
+}
