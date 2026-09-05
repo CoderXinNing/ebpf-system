@@ -98,7 +98,7 @@ func main() {
 		h = handler.NewHandler(sqliteDB.Store, am, nil)
 	} else {
 		// PSQL 模式：Handler 层用 repository 接口（过渡期）
-		h = handler.NewHandlerWithNilStore(nil, nil)
+		h = handler.NewHandlerWithNilStore(am, nil)
 	}
 
 	agentAuth := middleware.NewAgentAuthInterceptor()
@@ -193,7 +193,7 @@ func main() {
 	r := gin.Default()
 	r.StaticFile("/install.sh", "./server/static/install.sh")
 	r.Static("/bin", "./server/static")
-	if h != nil && h.Store != nil {
+	if h != nil {
 		h.SetupRoutes(r)
 	}
 

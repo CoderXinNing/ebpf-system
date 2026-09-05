@@ -11,6 +11,9 @@ func (h *Handler) GetSecuritySetting(key string, defaultVal int) int {
 
 // GetIntSetting 获取整数设置
 func (h *Handler) GetIntSetting(key string, defaultVal int) int {
+	if h.Store == nil {
+		return defaultVal
+	}
 	val, err := h.Store.GetLogSetting(key)
 	if err != nil || val == "" {
 		return defaultVal
@@ -24,5 +27,8 @@ func (h *Handler) GetIntSetting(key string, defaultVal int) int {
 
 // SetIntSetting 设置整数配置
 func (h *Handler) SetIntSetting(key string, val int) {
+	if h.Store == nil {
+		return
+	}
 	h.Store.SetLogSetting(key, strconv.Itoa(val))
 }

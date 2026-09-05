@@ -25,7 +25,7 @@ func (h *Handler) Login(c *gin.Context) {
 	lockUntil := h.GetIntSetting("lock_until:"+req.Username, 0)
 	if lockUntil > int(time.Now().Unix()) {
 		remain := (lockUntil - int(time.Now().Unix())) / 60
-		h.Store.SaveAuditLog(req.Username, "登录失败", fmt.Sprintf("账户锁定中,剩余%d分钟", remain), c.ClientIP())
+		if h.Store != nil { h.Store.SaveAuditLog(req.Username, "登录失败", fmt.Sprintf("账户锁定中,剩余%d分钟", remain), c.ClientIP()) }
 		c.JSON(401, gin.H{"error": fmt.Sprintf("账户已锁定，请 %d 分钟后重试", remain)})
 		return
 	}
@@ -38,11 +38,11 @@ func (h *Handler) Login(c *gin.Context) {
 			lockUntil := int(time.Now().Unix()) + lockMinutes*60
 			h.SetIntSetting("lock_until:"+req.Username, lockUntil)
 			h.SetIntSetting(attemptKey, 0)
-			h.Store.SaveAuditLog(req.Username, "登录锁定", fmt.Sprintf("连续失败%d次,锁定%d分钟", attempts, lockMinutes), c.ClientIP())
+			if h.Store != nil { h.Store.SaveAuditLog(req.Username, "登录锁定", fmt.Sprintf("连续失败%d次,锁定%d分钟", attempts, lockMinutes), c.ClientIP()) }
 			c.JSON(401, gin.H{"error": fmt.Sprintf("连续失败 %d 次，账户锁定 %d 分钟", maxAttempts, lockMinutes)})
 			return
 		}
-		h.Store.SaveAuditLog(req.Username, "登录失败", fmt.Sprintf("密码错误(%d/%d)", attempts, maxAttempts), c.ClientIP())
+		if h.Store != nil { h.Store.SaveAuditLog(req.Username, "登录失败", fmt.Sprintf("密码错误(%d/%d)", attempts, maxAttempts), c.ClientIP()) }
 		c.JSON(401, gin.H{"error": fmt.Sprintf("用户名或密码错误（剩余尝试 %d 次）", maxAttempts-attempts)})
 		return
 	}
@@ -50,7 +50,7 @@ func (h *Handler) Login(c *gin.Context) {
 	// 登录成功，清除计数
 	h.SetIntSetting(attemptKey, 0)
 	token, _ := h.Auth.GenerateToken(user)
-	h.Store.SaveAuditLog(user.Username, "登录成功", "Web登录", c.ClientIP())
+	if h.Store != nil { h.Store.SaveAuditLog(user.Username, "登录成功", "Web登录", c.ClientIP()) }
 	c.JSON(200, gin.H{"token": token, "user": user})
 }
 
