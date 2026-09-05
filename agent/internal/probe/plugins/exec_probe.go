@@ -26,7 +26,12 @@ func (p *ExecProbe) Init() error {
 }
 
 func (p *ExecProbe) Attach() error {
-	if err := ebpf.LoadExecMonitor(p.objPath, p.callback); err != nil {
+	if err := ebpf.LoadExecMonitorV2(p.objPath, func(evt ebpf.ExecEventV2) {
+		p.callback(ebpf.ExecEvent{
+			PID: evt.Header.PID, PPID: evt.Header.PPID, UID: evt.Header.UID,
+			Comm: [16]byte{}, Filename: [256]byte{},
+		}, evt.Cmdline)
+	}); err != nil {
 		return err
 	}
 	p.loaded = true

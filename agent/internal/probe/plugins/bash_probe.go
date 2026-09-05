@@ -26,7 +26,11 @@ func (p *BashProbe) Name() string { return "bash_monitor" }
 func (p *BashProbe) Init() error { return nil }
 
 func (p *BashProbe) Attach() error {
-	if err := ebpf.LoadBashMonitor(p.objPath, p.bashPath, p.callback); err != nil {
+	if err := ebpf.LoadBashMonitorV2(p.objPath, p.bashPath, func(evt ebpf.BashEventV2) {
+		var comm [16]byte
+		copy(comm[:], evt.Header.Comm)
+		p.callback(ebpf.BashEvent{PID: evt.Header.PID, UID: evt.Header.UID, Comm: comm}, "", evt.Line)
+	}); err != nil {
 		return err
 	}
 	p.loaded = true

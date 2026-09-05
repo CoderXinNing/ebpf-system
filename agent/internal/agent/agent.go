@@ -384,9 +384,9 @@ func (a *Agent) getProbePath(name string) string {
 	}
 	// 默认路径
 	paths := map[string]string{
-		"exec_monitor": "probes/templates/exec_monitor_ebpf/exec_monitor.o",
-		"bash_monitor": "probes/templates/bash_monitor/bash_monitor.o",
-		"tcp_monitor":  "probes/templates/tcp_monitor/tcp_monitor.o",
+		"exec_monitor": "probes/new/exec_monitor/exec_monitor.o",
+		"bash_monitor": "probes/new/bash_monitor/bash_monitor.o",
+		"tcp_monitor":  "probes/new/tcp_monitor/tcp_monitor.o",
 	}
 	return paths[name]
 }

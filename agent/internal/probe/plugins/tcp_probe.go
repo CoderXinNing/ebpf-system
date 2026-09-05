@@ -24,7 +24,9 @@ func (p *TCPProbe) Name() string { return "tcp_monitor" }
 func (p *TCPProbe) Init() error { return nil }
 
 func (p *TCPProbe) Attach() error {
-	if err := ebpf.LoadTCPMonitor(p.objPath, p.callback); err != nil {
+	if err := ebpf.LoadTCPMonitorV2(p.objPath, func(evt ebpf.TCPEventV2) {
+		p.callback(evt.Header.PID, evt.Header.Comm, 1)
+	}); err != nil {
 		return err
 	}
 	p.loaded = true

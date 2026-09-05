@@ -9,7 +9,7 @@ import (
 type XDPProbe struct {
 	cfg      ebpf.XDPConfig
 	callback func(ebpf.XDPEvent)
-	handle   *ebpf.XDPHandle
+	handle   *ebpf.XDPHandleV2
 }
 
 func NewXDPProbe(cfg ebpf.XDPConfig, callback func(ebpf.XDPEvent)) *XDPProbe {
@@ -24,7 +24,9 @@ func (p *XDPProbe) Name() string { return "xdp_reporter" }
 func (p *XDPProbe) Init() error { return nil }
 
 func (p *XDPProbe) Attach() error {
-	handle, err := ebpf.LoadXDPReporter(p.cfg, p.callback)
+	handle, err := ebpf.LoadXDPReporterV2(p.cfg, func(evt ebpf.XDPEventV2) {
+		p.callback(ebpf.XDPEvent{PID: evt.Header.PID, Comm: [16]byte{}, Details: [96]byte{}})
+	})
 	if err != nil {
 		return err
 	}

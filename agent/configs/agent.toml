@@ -10,21 +10,21 @@ name = "exec_monitor"
 id = "auto-exec-001"
 enabled = true
 remove = true
-path = "probes/templates/exec_monitor_ebpf/exec_monitor.o"
+path = "probes/new/exec_monitor/exec_monitor.o"
 
 [[autoload]]
 name = "bash_monitor"
 id = "auto-bash-001"
 enabled = true
 remove = true
-path = "probes/templates/bash_monitor/bash_monitor.o"
+path = "probes/new/bash_monitor/bash_monitor.o"
 
 [[autoload]]
 name = "tcp_monitor"
 id = "auto-tcp-001"
 enabled = true
 remove = true
-path = "probes/templates/tcp_monitor/tcp_monitor.o"
+path = "probes/new/tcp_monitor/tcp_monitor.o"
 
 [xdp]
 enabled = true
