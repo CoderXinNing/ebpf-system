@@ -50,6 +50,9 @@ type Agent struct {
 	// 星轨激活状态
 	starCorrelationID string
 	starMode          string
+
+	// TCP 突变检测
+	tcpAnomaly *TCPAnomalyDetector
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -81,6 +84,14 @@ func New(cfg *config.AgentConfig) *Agent {
 	// 初始化探针管理器并注册插件
 	agent.probeManager = framework.NewManager()
 	agent.registerProbePlugins()
+
+	// 初始化 TCP 突变检测器（默认配置，后续从配置文件读取）
+	agent.tcpAnomaly = NewTCPAnomalyDetector(
+		60, // 窗口秒数
+		3,  // 端口阈值
+		4,  // IP阈值
+		[]uint16{22, 3389, 445, 21, 1433, 3306, 6379, 5985, 8080, 8443},
+	)
 
 	agent.baseline.Restore()
 	return agent
@@ -176,6 +187,9 @@ func (a *Agent) Run(ctx context.Context) {
 			a.baseline.Persist()
 		}
 	}()
+
+	// TCP 突变检测循环
+	go a.tcpAnomalyLoop(ctx)
 
 	// 心跳循环（阻塞直到 ctx 被取消）
 	a.runHeartbeatLoopWithCtx(ctx)
@@ -673,4 +687,26 @@ func calculateFileSHA256(path string) (string, error) {
 	}
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:]), nil
+}
+
+// tcpAnomalyLoop 定期分析 TCP 连接突变
+func (a *Agent) tcpAnomalyLoop(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.analyzeTCPAnomalies()
+		}
+	}
+}
+
+// analyzeTCPAnomalies 从 BPF Map 读连接统计并检测突变
+func (a *Agent) analyzeTCPAnomalies() {
+	// TODO: 从 BPF Map 读取 pid_conn_map
+	// 当前先占位——后续通过 cilium/ebpf 读取 Map
+	// 突变的完整检测在 C 层完成，Go 层只做结果上报
 }
