@@ -60,15 +60,11 @@ static __always_inline void get_parent_comm(char *buf, __u32 buf_len) {
         return;
     }
 
-    const char *parent_comm = NULL;
-    if (bpf_core_read(&parent_comm, sizeof(parent_comm), &parent->comm) != 0) {
+    // 用 bpf_core_read 直接读 comm 数组
+    if (bpf_core_read(buf, buf_len, &parent->comm) != 0) {
+        buf[0] = '\0';
         return;
     }
-    if (!parent_comm) {
-        return;
-    }
-
-    bpf_probe_read_kernel_str(buf, buf_len, parent_comm);
     buf[buf_len - 1] = '\0';
 }
 

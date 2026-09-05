@@ -30,30 +30,30 @@ int xdp_reporter(struct xdp_md *ctx) {
         return XDP_PASS;  // 只处理 IPv4
     }
 
-    // 3. 获取基本信息
-    __u32 pid = bpf_get_current_pid_tgid() >> 32;
-    __u32 uid = bpf_get_current_uid_gid() & 0xFFFFFFFF;
-
-    // 4. 提交事件（保底通道，只用 ring buffer 不额外处理）
+    // 3. 提交事件（XDP 上下文无进程概念，pid/uid 置 0）
     struct sentinel_event_header *evt;
     evt = bpf_ringbuf_reserve(&sentinel_events, sizeof(*evt), 0);
     if (!evt) {
         return XDP_PASS;
     }
 
-    evt->pid = pid;
+    evt->pid = 0;
     evt->ppid = 0;
-    evt->uid = uid;
+    evt->uid = 0;
     evt->event_type = EVENT_XDP;
     evt->timestamp = bpf_ktime_get_ns();
-
-    char comm[16] = {};
-    bpf_get_current_comm(&comm, sizeof(comm));
-    sentinel_strncpy(evt->comm, comm, sizeof(evt->comm));
+    evt->comm[0] = 'x';
+    evt->comm[1] = 'd';
+    evt->comm[2] = 'p';
+    evt->comm[3] = '\0';
     evt->parent_comm[0] = '\0';
 
-    // data 存网络事件摘要
-    sentinel_strncpy(evt->data, "xdp_packet", 11);
+    // data 存协议类型
+    if (eth->h_proto == bpf_htons(ETH_P_IP)) {
+        sentinel_strncpy(evt->data, "ipv4", 5);
+    } else {
+        sentinel_strncpy(evt->data, "other", 6);
+    }
 
     bpf_ringbuf_submit(evt, 0);
     return XDP_PASS;  // 始终放行，不拦截
