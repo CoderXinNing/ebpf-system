@@ -18,37 +18,37 @@ type TCPEventV2 struct {
 type TCPCallbackV2 func(TCPEventV2)
 
 // LoadTCPMonitorV2 加载新格式的 TCP 探针
-func LoadTCPMonitorV2(objPath string, callback TCPCallbackV2) error {
+func LoadTCPMonitorV2(objPath string, callback TCPCallbackV2) (*ebpf.Map, error) {
 	if err := rlimit.RemoveMemlock(); err != nil {
-		return fmt.Errorf("解除内存锁失败: %w", err)
+		return nil, fmt.Errorf("解除内存锁失败: %w", err)
 	}
 
 	spec, err := ebpf.LoadCollectionSpec(objPath)
 	if err != nil {
-		return fmt.Errorf("加载 spec 失败: %w", err)
+		return nil, fmt.Errorf("加载 spec 失败: %w", err)
 	}
 
 	var objs struct {
 		TraceConnect     *ebpf.Program `ebpf:"trace_connect"`
 		SentinelEvents   *ebpf.Map     `ebpf:"sentinel_events"`
 		SentinelWhitelist *ebpf.Map    `ebpf:"sentinel_whitelist"`
-		TcpConnStats     *ebpf.Map     `ebpf:"tcp_conn_stats"`
+		PidConnMap     *ebpf.Map     `ebpf:"pid_conn_map"`
 	}
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {
-		return fmt.Errorf("加载失败: %w", err)
+		return nil, fmt.Errorf("加载失败: %w", err)
 	}
 
 	tp, err := link.Tracepoint("syscalls", "sys_enter_connect", objs.TraceConnect, nil)
 	if err != nil {
 		objs.TraceConnect.Close()
-		return fmt.Errorf("attach tracepoint 失败: %w", err)
+		return nil, fmt.Errorf("attach tracepoint 失败: %w", err)
 	}
 
 	rd, err := ringbuf.NewReader(objs.SentinelEvents)
 	if err != nil {
 		tp.Close()
 		objs.TraceConnect.Close()
-		return fmt.Errorf("创建 ring buffer reader 失败: %w", err)
+		return nil, fmt.Errorf("创建 ring buffer reader 失败: %w", err)
 	}
 
 	log.Printf("✅ 新 TCP 探针已启动 (统一 header + PERCPU_HASH)")
@@ -79,5 +79,12 @@ func LoadTCPMonitorV2(objPath string, callback TCPCallbackV2) error {
 		}
 	}()
 
-	return nil
+	return objs.PidConnMap, nil
+}
+
+// LoadTCPMonitorV2Silent 加载 TCP 探针但不启动事件回调（只用于计数统计）
+func LoadTCPMonitorV2Silent(objPath string) (*ebpf.Map, error) {
+	return LoadTCPMonitorV2(objPath, func(evt TCPEventV2) {
+		// 静默模式：默认只计数不上报
+	})
 }
