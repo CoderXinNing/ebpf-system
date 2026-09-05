@@ -723,32 +723,58 @@ func (a *Agent) analyzeTCPAnomalies() {
 	}
 	log.Printf("✅ pidConnMap 可用")
 
-	// 遍历 Map（当前 C 端只有 conn_count）
+	// 遍历 Map（匹配 C 端 pid_conn_stats 结构）
 	type pidConnStats struct {
-		ConnCount uint64
+		RecentPorts [4]uint32
+		RecentIPs   [4]uint32
+		ConnCount   uint64
 	}
 
 	var key uint32
 	var value pidConnStats
-	recordCount := 0
 	iter := pidConnMap.Iterate()
 	for iter.Next(&key, &value) {
-		recordCount++
-		if value.ConnCount >= 3 {
-			log.Printf("🚨 连接数突变: PID=%d count=%d", key, value.ConnCount)
-			// 上报星轨触发
+		// 统计敏感端口多样性
+		sensitivePorts := make(map[uint32]bool)
+		for _, port := range value.RecentPorts {
+			if a.tcpAnomaly.sensitivePorts[uint16(port)] {
+				sensitivePorts[port] = true
+			}
+		}
+
+		// 统计 IP 多样性
+		uniqueIPs := make(map[uint32]bool)
+		for _, ip := range value.RecentIPs {
+			if ip != 0 {
+				uniqueIPs[ip] = true
+			}
+		}
+
+		triggered := false
+		reason := ""
+
+		if len(sensitivePorts) >= a.tcpAnomaly.portThreshold {
+			triggered = true
+			reason = fmt.Sprintf("端口多样性=%d", len(sensitivePorts))
+		}
+		if len(uniqueIPs) >= a.tcpAnomaly.ipThreshold {
+			triggered = true
+			reason = fmt.Sprintf("IP多样性=%d", len(uniqueIPs))
+		}
+
+		if triggered {
+			log.Printf("🚨 TCP突变: PID=%d %s", key, reason)
 			if a.client != nil && a.token != "" {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				a.client.ReportMutation(a.getAuthContext(ctx), &pb.MutationTrigger{
 					AgentId:     a.id,
 					Pid:         int32(key),
-					TriggerType: "tcp_conn_count",
-					Detail:      fmt.Sprintf("连接数=%d", value.ConnCount),
+					TriggerType: "tcp_anomaly",
+					Detail:      reason,
 					Timestamp:   time.Now().Unix(),
 				})
 			}
 		}
-		// TODO: 端口/IP 多样性检测（等 C 层正确读取 sockaddr 后实现）
 	}
 }
