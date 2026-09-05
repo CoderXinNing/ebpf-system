@@ -1,6 +1,6 @@
 [learning]
 mode = "silent"              # silent / report
-duration_minutes = 1     # 7天
+duration_minutes = 0     # 7天
 observe_minutes = 1         # 观察期48小时
 alpha = 0.05                  # EWMA 平滑系数
 threshold = 3.0              # 防护期 Z-Score 阈值

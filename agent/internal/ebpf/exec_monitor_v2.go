@@ -64,6 +64,7 @@ func LoadExecMonitorV2(objPath string, callback ExecCallbackV2) error {
 
 		for {
 			record, err := rd.Read()
+			log.Printf("🔔 ring buffer 收到事件")
 			if err != nil {
 				if err == ringbuf.ErrClosed {
 					return

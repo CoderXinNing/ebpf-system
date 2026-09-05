@@ -136,7 +136,7 @@ int trace_execve(struct trace_event_raw_sys_enter *args) {
     // 9. 更新 PID 关联 Map（星轨支持）
     pctx.comm[0] = '\0';
     sentinel_strncpy(pctx.comm, comm, sizeof(pctx.comm));
-    sentinel_strncpy(pctx.cmdline, evt->data, sizeof(pctx.cmdline));
+    bpf_probe_read_user_str(pctx.cmdline, sizeof(pctx.cmdline), evt->data);
     bpf_map_update_elem(&pid_correlations, &pid, &pctx, BPF_ANY);
 
     return 0;

@@ -53,6 +53,9 @@ type Agent struct {
 
 	// TCP 突变检测
 	tcpAnomaly *TCPAnomalyDetector
+
+	// 身份基线
+	identityBaseline *IdentityBaseline
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -84,6 +87,13 @@ func New(cfg *config.AgentConfig) *Agent {
 	// 初始化探针管理器并注册插件
 	agent.probeManager = framework.NewManager()
 	agent.registerProbePlugins()
+
+	// 初始化身份基线（学习期从 baseline.toml 读取）
+	learningMinutes := 1
+	if baselineEngine != nil {
+		learningMinutes = baselineEngine.GetLearningMinutes()
+	}
+	agent.identityBaseline = NewIdentityBaseline(time.Duration(learningMinutes) * time.Minute)
 
 	// 初始化 TCP 突变检测器（默认配置，后续从配置文件读取）
 	agent.tcpAnomaly = NewTCPAnomalyDetector(
@@ -475,6 +485,13 @@ func (a *Agent) registerProbePlugins() {
 
 // handleExecEvent 处理 exec 探针事件
 func (a *Agent) handleExecEvent(evt ebpf.ExecEvent, cmdline string) {
+	// 身份基线检测
+	userName := ebpf.ResolveUser(evt.UID)
+	tmpComm := strings.TrimRight(string(evt.Comm[:]), "\x00")
+	if isAnomaly, reason := a.identityBaseline.Record(userName, tmpComm); isAnomaly {
+		log.Printf("🚨 身份基线异常: %s", reason)
+	}
+
 	parentComm := getParentComm(evt.PPID)
 	childComm := strings.TrimRight(string(evt.Comm[:]), "\x00")
 	if parentComm != "" && childComm != "" {
@@ -487,7 +504,6 @@ func (a *Agent) handleExecEvent(evt ebpf.ExecEvent, cmdline string) {
 	if int32(evt.PID) == int32(os.Getpid()) {
 		return
 	}
-	userName := ebpf.ResolveUser(evt.UID)
 	a.eventQueue.Push(&pb.ProbeEvent{
 		ProbeName: "execve",
 		Timestamp: time.Now().Unix(),

@@ -21,15 +21,22 @@ func NewExecProbe(objPath string, callback ebpf.ExecCallback) *ExecProbe {
 
 func (p *ExecProbe) Name() string { return "exec_monitor" }
 
-func (p *ExecProbe) Init() error {
-	return nil // 加载在 Attach 里做
-}
+func (p *ExecProbe) Init() error { return nil }
 
 func (p *ExecProbe) Attach() error {
 	if err := ebpf.LoadExecMonitorV2(p.objPath, func(evt ebpf.ExecEventV2) {
+		// 正确转换 V2 事件到 V1 格式
+		var comm [16]byte
+		copy(comm[:], evt.Header.Comm)
+		var filename [256]byte
+		copy(filename[:], evt.Cmdline)
+
 		p.callback(ebpf.ExecEvent{
-			PID: evt.Header.PID, PPID: evt.Header.PPID, UID: evt.Header.UID,
-			Comm: [16]byte{}, Filename: [256]byte{},
+			PID:      evt.Header.PID,
+			PPID:     evt.Header.PPID,
+			UID:      evt.Header.UID,
+			Comm:     comm,
+			Filename: filename,
 		}, evt.Cmdline)
 	}); err != nil {
 		return err
@@ -39,13 +46,10 @@ func (p *ExecProbe) Attach() error {
 }
 
 func (p *ExecProbe) UpdateRules(rules []framework.Rule) error {
-	// exec_monitor 的白名单通过 BPF Map 更新
-	// 当前先返回 nil，等动态规则通道做完再实现
 	return nil
 }
 
 func (p *ExecProbe) Stop() error {
-	// exec_monitor 的持久化 pin 在 Shutdown 里统一清理
 	p.loaded = false
 	return nil
 }
