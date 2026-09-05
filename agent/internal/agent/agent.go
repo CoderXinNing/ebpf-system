@@ -706,7 +706,49 @@ func (a *Agent) tcpAnomalyLoop(ctx context.Context) {
 
 // analyzeTCPAnomalies 从 BPF Map 读连接统计并检测突变
 func (a *Agent) analyzeTCPAnomalies() {
-	// TODO: 从 BPF Map 读取 pid_conn_map
-	// 当前先占位——后续通过 cilium/ebpf 读取 Map
-	// 突变的完整检测在 C 层完成，Go 层只做结果上报
+	log.Printf("🔍 分析 TCP 突变...")
+	// 从 TCP 探针适配器获取 Map
+	tcpProbe, exists := a.probeManager.Get("tcp_monitor")
+	if !exists {
+		return
+	}
+	tcpAdapter, ok := tcpProbe.(*plugins.TCPProbe)
+	if !ok {
+		return
+	}
+	pidConnMap := tcpAdapter.GetPidConnMap()
+	if pidConnMap == nil {
+		log.Printf("⚠️ pidConnMap 为 nil")
+		return
+	}
+	log.Printf("✅ pidConnMap 可用")
+
+	// 遍历 Map（当前 C 端只有 conn_count）
+	type pidConnStats struct {
+		ConnCount uint64
+	}
+
+	var key uint32
+	var value pidConnStats
+	recordCount := 0
+	iter := pidConnMap.Iterate()
+	for iter.Next(&key, &value) {
+		recordCount++
+		if value.ConnCount >= 3 {
+			log.Printf("🚨 连接数突变: PID=%d count=%d", key, value.ConnCount)
+			// 上报星轨触发
+			if a.client != nil && a.token != "" {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				a.client.ReportMutation(a.getAuthContext(ctx), &pb.MutationTrigger{
+					AgentId:     a.id,
+					Pid:         int32(key),
+					TriggerType: "tcp_conn_count",
+					Detail:      fmt.Sprintf("连接数=%d", value.ConnCount),
+					Timestamp:   time.Now().Unix(),
+				})
+			}
+		}
+		// TODO: 端口/IP 多样性检测（等 C 层正确读取 sockaddr 后实现）
+	}
 }

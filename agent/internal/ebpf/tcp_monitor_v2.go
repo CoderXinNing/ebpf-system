@@ -43,6 +43,7 @@ func LoadTCPMonitorV2(objPath string, callback TCPCallbackV2) (*ebpf.Map, error)
 		objs.TraceConnect.Close()
 		return nil, fmt.Errorf("attach tracepoint 失败: %w", err)
 	}
+	log.Printf("🔗 tracepoint 已挂载: %v", tp)
 
 	rd, err := ringbuf.NewReader(objs.SentinelEvents)
 	if err != nil {
