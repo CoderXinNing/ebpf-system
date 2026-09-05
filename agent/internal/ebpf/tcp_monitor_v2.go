@@ -18,14 +18,14 @@ type TCPEventV2 struct {
 type TCPCallbackV2 func(TCPEventV2)
 
 // LoadTCPMonitorV2 加载新格式的 TCP 探针
-func LoadTCPMonitorV2(objPath string, callback TCPCallbackV2) (*ebpf.Map, error) {
+func LoadTCPMonitorV2(objPath string, callback TCPCallbackV2) (*ebpf.Map, *ebpf.Map, error) {
 	if err := rlimit.RemoveMemlock(); err != nil {
-		return nil, fmt.Errorf("解除内存锁失败: %w", err)
+		return nil, nil, fmt.Errorf("解除内存锁失败: %w", err)
 	}
 
 	spec, err := ebpf.LoadCollectionSpec(objPath)
 	if err != nil {
-		return nil, fmt.Errorf("加载 spec 失败: %w", err)
+		return nil, nil, fmt.Errorf("加载 spec 失败: %w", err)
 	}
 
 	var objs struct {
@@ -33,15 +33,16 @@ func LoadTCPMonitorV2(objPath string, callback TCPCallbackV2) (*ebpf.Map, error)
 		SentinelEvents   *ebpf.Map     `ebpf:"sentinel_events"`
 		SentinelWhitelist *ebpf.Map    `ebpf:"sentinel_whitelist"`
 		PidConnMap     *ebpf.Map     `ebpf:"pid_conn_map"`
+		ConnDetails    *ebpf.Map     `ebpf:"conn_details"`
 	}
 	if err := spec.LoadAndAssign(&objs, nil); err != nil {
-		return nil, fmt.Errorf("加载失败: %w", err)
+		return nil, nil, fmt.Errorf("加载失败: %w", err)
 	}
 
 	tp, err := link.Tracepoint("syscalls", "sys_enter_connect", objs.TraceConnect, nil)
 	if err != nil {
 		objs.TraceConnect.Close()
-		return nil, fmt.Errorf("attach tracepoint 失败: %w", err)
+		return nil, nil, fmt.Errorf("attach tracepoint 失败: %w", err)
 	}
 	log.Printf("🔗 tracepoint 已挂载: %v", tp)
 
@@ -49,7 +50,7 @@ func LoadTCPMonitorV2(objPath string, callback TCPCallbackV2) (*ebpf.Map, error)
 	if err != nil {
 		tp.Close()
 		objs.TraceConnect.Close()
-		return nil, fmt.Errorf("创建 ring buffer reader 失败: %w", err)
+		return nil, nil, fmt.Errorf("创建 ring buffer reader 失败: %w", err)
 	}
 
 	log.Printf("✅ 新 TCP 探针已启动 (统一 header + PERCPU_HASH)")
@@ -80,12 +81,16 @@ func LoadTCPMonitorV2(objPath string, callback TCPCallbackV2) (*ebpf.Map, error)
 		}
 	}()
 
-	return objs.PidConnMap, nil
+	return objs.PidConnMap, objs.ConnDetails, nil
 }
 
 // LoadTCPMonitorV2Silent 加载 TCP 探针但不启动事件回调（只用于计数统计）
-func LoadTCPMonitorV2Silent(objPath string) (*ebpf.Map, error) {
-	return LoadTCPMonitorV2(objPath, func(evt TCPEventV2) {
+func LoadTCPMonitorV2Silent(objPath string) (*ebpf.Map, *ebpf.Map, error) {
+	pidMap, detailMap, err := LoadTCPMonitorV2(objPath, func(evt TCPEventV2) {
 		// 静默模式：默认只计数不上报
 	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return pidMap, detailMap, nil
 }
