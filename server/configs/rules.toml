@@ -243,3 +243,45 @@ description = "添加特权账户"
 field = "cmdline"
 op = "regex"
 value = "useradd.*-o.*-u 0|adduser.*sudo|usermod.*-aG sudo"
+
+# ========== 文件访问检测 ==========
+
+[[rules]]
+name = "SSH私钥读取"
+severity = "CRITICAL"
+description = "读取SSH私钥文件"
+
+[[rules.conditions]]
+field = "filename"
+op = "regex"
+value = "\\.ssh/id_rsa|\\.ssh/id_ed25519|\\.ssh/authorized_keys"
+
+[[rules]]
+name = "密码文件读取"
+severity = "CRITICAL"
+description = "读取系统密码文件"
+
+[[rules.conditions]]
+field = "filename"
+op = "regex"
+value = "/etc/shadow|/etc/passwd|/etc/sudoers"
+
+[[rules]]
+name = "数据库配置读取"
+severity = "HIGH"
+description = "读取数据库配置文件"
+
+[[rules.conditions]]
+field = "filename"
+op = "regex"
+value = "my\\.cnf|redis\\.conf|mongod\\.conf|postgresql\\.conf"
+
+[[rules]]
+name = "Web配置文件读取"
+severity = "HIGH"
+description = "读取Web应用配置"
+
+[[rules.conditions]]
+field = "filename"
+op = "regex"
+value = "tomcat-users\\.xml|\\.env$|config\\.php|wp-config\\.php|application\\.properties"

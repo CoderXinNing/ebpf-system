@@ -46,6 +46,10 @@ type Agent struct {
 
 	// gRPC Metadata（token 鉴权）
 	authContext context.Context
+
+	// 星轨激活状态
+	starCorrelationID string
+	starMode          string
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -300,7 +304,11 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	resp, err := a.client.ReportEvents(a.getAuthContext(ctx), &pb.EventReport{AgentId: a.id, Events: events})
+	resp, err := a.client.ReportEvents(a.getAuthContext(ctx), &pb.EventReport{
+		AgentId:       a.id,
+		Events:        events,
+		CorrelationId: a.starCorrelationID,
+	})
 	if err != nil {
 		log.Printf("⚠️ 事件上报失败: %v", err)
 	} else if !resp.Success {

@@ -24,6 +24,8 @@ const (
 	Sentinel_ReportEvents_FullMethodName        = "/sentinel.Sentinel/ReportEvents"
 	Sentinel_GetProbeList_FullMethodName        = "/sentinel.Sentinel/GetProbeList"
 	Sentinel_ReportShutdown_FullMethodName      = "/sentinel.Sentinel/ReportShutdown"
+	Sentinel_ReportMutation_FullMethodName      = "/sentinel.Sentinel/ReportMutation"
+	Sentinel_ActivateStarMode_FullMethodName    = "/sentinel.Sentinel/ActivateStarMode"
 	Sentinel_ReportProcesses_FullMethodName     = "/sentinel.Sentinel/ReportProcesses"
 	Sentinel_ReportUsers_FullMethodName         = "/sentinel.Sentinel/ReportUsers"
 	Sentinel_ReportSystemInfo_FullMethodName    = "/sentinel.Sentinel/ReportSystemInfo"
@@ -46,7 +48,8 @@ type SentinelClient interface {
 	ReportEvents(ctx context.Context, in *EventReport, opts ...grpc.CallOption) (*ReportResponse, error)
 	GetProbeList(ctx context.Context, in *ProbeListRequest, opts ...grpc.CallOption) (*ProbeListResponse, error)
 	ReportShutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
-	// 资产上报
+	ReportMutation(ctx context.Context, in *MutationTrigger, opts ...grpc.CallOption) (*ReportResponse, error)
+	ActivateStarMode(ctx context.Context, in *StarActivation, opts ...grpc.CallOption) (*StarActivationAck, error)
 	ReportProcesses(ctx context.Context, in *ProcessReport, opts ...grpc.CallOption) (*ReportResponse, error)
 	ReportUsers(ctx context.Context, in *UserReport, opts ...grpc.CallOption) (*ReportResponse, error)
 	ReportSystemInfo(ctx context.Context, in *SystemReport, opts ...grpc.CallOption) (*ReportResponse, error)
@@ -112,6 +115,26 @@ func (c *sentinelClient) ReportShutdown(ctx context.Context, in *ShutdownRequest
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ShutdownResponse)
 	err := c.cc.Invoke(ctx, Sentinel_ReportShutdown_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sentinelClient) ReportMutation(ctx context.Context, in *MutationTrigger, opts ...grpc.CallOption) (*ReportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportResponse)
+	err := c.cc.Invoke(ctx, Sentinel_ReportMutation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sentinelClient) ActivateStarMode(ctx context.Context, in *StarActivation, opts ...grpc.CallOption) (*StarActivationAck, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StarActivationAck)
+	err := c.cc.Invoke(ctx, Sentinel_ActivateStarMode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +260,8 @@ type SentinelServer interface {
 	ReportEvents(context.Context, *EventReport) (*ReportResponse, error)
 	GetProbeList(context.Context, *ProbeListRequest) (*ProbeListResponse, error)
 	ReportShutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
-	// 资产上报
+	ReportMutation(context.Context, *MutationTrigger) (*ReportResponse, error)
+	ActivateStarMode(context.Context, *StarActivation) (*StarActivationAck, error)
 	ReportProcesses(context.Context, *ProcessReport) (*ReportResponse, error)
 	ReportUsers(context.Context, *UserReport) (*ReportResponse, error)
 	ReportSystemInfo(context.Context, *SystemReport) (*ReportResponse, error)
@@ -273,6 +297,12 @@ func (UnimplementedSentinelServer) GetProbeList(context.Context, *ProbeListReque
 }
 func (UnimplementedSentinelServer) ReportShutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportShutdown not implemented")
+}
+func (UnimplementedSentinelServer) ReportMutation(context.Context, *MutationTrigger) (*ReportResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportMutation not implemented")
+}
+func (UnimplementedSentinelServer) ActivateStarMode(context.Context, *StarActivation) (*StarActivationAck, error) {
+	return nil, status.Error(codes.Unimplemented, "method ActivateStarMode not implemented")
 }
 func (UnimplementedSentinelServer) ReportProcesses(context.Context, *ProcessReport) (*ReportResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportProcesses not implemented")
@@ -414,6 +444,42 @@ func _Sentinel_ReportShutdown_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SentinelServer).ReportShutdown(ctx, req.(*ShutdownRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Sentinel_ReportMutation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MutationTrigger)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SentinelServer).ReportMutation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Sentinel_ReportMutation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SentinelServer).ReportMutation(ctx, req.(*MutationTrigger))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Sentinel_ActivateStarMode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StarActivation)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SentinelServer).ActivateStarMode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Sentinel_ActivateStarMode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SentinelServer).ActivateStarMode(ctx, req.(*StarActivation))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -642,6 +708,14 @@ var Sentinel_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportShutdown",
 			Handler:    _Sentinel_ReportShutdown_Handler,
+		},
+		{
+			MethodName: "ReportMutation",
+			Handler:    _Sentinel_ReportMutation_Handler,
+		},
+		{
+			MethodName: "ActivateStarMode",
+			Handler:    _Sentinel_ActivateStarMode_Handler,
 		},
 		{
 			MethodName: "ReportProcesses",

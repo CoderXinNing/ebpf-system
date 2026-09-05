@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package sentinel;
+
+option go_package = "github.com/CoderXinNing/ebpf-system/proto/pb";
+
+message ReportResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message ProbeCommand {
+    enum CommandType {
+        LOAD = 0;
+        UNLOAD = 1;
+        RELOAD = 3;
+        INSTALL = 4;
+        COLLECT = 5;
+        SET_GROUP = 6;
+    }
+    CommandType type = 1;
+    string probe_id = 2;
+    string probe_name = 3;
+    bytes probe_data = 4;
+    string probe_config = 5;
+    string group_name = 6;
+}

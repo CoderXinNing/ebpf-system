@@ -42,15 +42,16 @@ type AgentInfo struct {
 }
 
 type ProbeEvent struct {
-	ID        string `json:"id"`
-	AgentID   string `json:"agent_id"`
-	ProbeName string `json:"probe_name"`
-	Timestamp int64  `json:"timestamp"`
-	EventType string `json:"event_type"`
-	PID       int32  `json:"pid"`
-	Comm      string `json:"comm"`
-	Filename  string `json:"filename"`
-	Details   string `json:"details,omitempty"`
+	ID            string `json:"id"`
+	AgentID       string `json:"agent_id"`
+	ProbeName     string `json:"probe_name"`
+	Timestamp     int64  `json:"timestamp"`
+	EventType     string `json:"event_type"`
+	PID           int32  `json:"pid"`
+	Comm          string `json:"comm"`
+	Filename      string `json:"filename"`
+	Details       string `json:"details,omitempty"`
+	CorrelationID string `json:"correlation_id,omitempty"`
 }
 
 func NewHandler(st *store.Store, am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {
@@ -85,6 +86,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/health", h.Health)
 		api.GET("/agents", h.ListAgents)
 		api.GET("/events", h.ListEvents)
+		api.GET("/star/:correlation_id", h.rbacMiddleware("events", "read"), h.GetStarChain)
 		api.DELETE("/agents/:id", h.rbacMiddleware("agents", "delete"), func(c *gin.Context) {
 			agentID := c.Param("id")
 			h.Store.DeleteAgentAll(agentID)

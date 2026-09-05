@@ -21,7 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// RegisterRequest 注册请求（token 由服务端生成返回）
+// RegisterRequest 注册请求
 type RegisterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
@@ -126,7 +126,7 @@ type RegisterResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	AgentToken    string                 `protobuf:"bytes,3,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"` // 仅在注册响应中返回，后续通过 Metadata 传递
+	AgentToken    string                 `protobuf:"bytes,3,opt,name=agent_token,json=agentToken,proto3" json:"agent_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -342,7 +342,6 @@ func (x *KernelInfo) GetBtfEnabled() bool {
 	return false
 }
 
-// HeartbeatRequest 心跳（Unary RPC）
 type HeartbeatRequest struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	AgentId           string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
@@ -479,7 +478,6 @@ func (x *HeartbeatResponse) GetCommands() []*ProbeCommand {
 	return nil
 }
 
-// ProbeEvent 探针事件
 type ProbeEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ProbeId       string                 `protobuf:"bytes,1,opt,name=probe_id,json=probeId,proto3" json:"probe_id,omitempty"`
@@ -580,11 +578,11 @@ func (x *ProbeEvent) GetDetails() string {
 	return ""
 }
 
-// EventReport 事件上报
 type EventReport struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
 	Events        []*ProbeEvent          `protobuf:"bytes,2,rep,name=events,proto3" json:"events,omitempty"`
+	CorrelationId string                 `protobuf:"bytes,3,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"` // 星轨激活时携带
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -633,7 +631,13 @@ func (x *EventReport) GetEvents() []*ProbeEvent {
 	return nil
 }
 
-// ShutdownRequest 下线通知
+func (x *EventReport) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
 type ShutdownRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
@@ -722,7 +726,6 @@ func (x *ShutdownResponse) GetSuccess() bool {
 	return false
 }
 
-// ProbeListRequest 探针名单查询
 type ProbeListRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
@@ -911,6 +914,194 @@ func (x *ProbeListResponse) GetFalsePositiveFeatures() []string {
 	return nil
 }
 
+type MutationTrigger struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	Pid           int32                  `protobuf:"varint,2,opt,name=pid,proto3" json:"pid,omitempty"`
+	TriggerType   string                 `protobuf:"bytes,3,opt,name=trigger_type,json=triggerType,proto3" json:"trigger_type,omitempty"`
+	Detail        string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MutationTrigger) Reset() {
+	*x = MutationTrigger{}
+	mi := &file_agent_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MutationTrigger) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MutationTrigger) ProtoMessage() {}
+
+func (x *MutationTrigger) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MutationTrigger.ProtoReflect.Descriptor instead.
+func (*MutationTrigger) Descriptor() ([]byte, []int) {
+	return file_agent_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *MutationTrigger) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *MutationTrigger) GetPid() int32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
+}
+
+func (x *MutationTrigger) GetTriggerType() string {
+	if x != nil {
+		return x.TriggerType
+	}
+	return ""
+}
+
+func (x *MutationTrigger) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *MutationTrigger) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+type StarActivation struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CorrelationId string                 `protobuf:"bytes,1,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	Mode          string                 `protobuf:"bytes,2,opt,name=mode,proto3" json:"mode,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StarActivation) Reset() {
+	*x = StarActivation{}
+	mi := &file_agent_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StarActivation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StarActivation) ProtoMessage() {}
+
+func (x *StarActivation) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StarActivation.ProtoReflect.Descriptor instead.
+func (*StarActivation) Descriptor() ([]byte, []int) {
+	return file_agent_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *StarActivation) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *StarActivation) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *StarActivation) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type StarActivationAck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ModeActivated bool                   `protobuf:"varint,1,opt,name=mode_activated,json=modeActivated,proto3" json:"mode_activated,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StarActivationAck) Reset() {
+	*x = StarActivationAck{}
+	mi := &file_agent_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StarActivationAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StarActivationAck) ProtoMessage() {}
+
+func (x *StarActivationAck) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StarActivationAck.ProtoReflect.Descriptor instead.
+func (*StarActivationAck) Descriptor() ([]byte, []int) {
+	return file_agent_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *StarActivationAck) GetModeActivated() bool {
+	if x != nil {
+		return x.ModeActivated
+	}
+	return false
+}
+
+func (x *StarActivationAck) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
 var File_agent_service_proto protoreflect.FileDescriptor
 
 const file_agent_service_proto_rawDesc = "" +
@@ -970,10 +1161,11 @@ const file_agent_service_proto_rawDesc = "" +
 	"\x03pid\x18\x05 \x01(\x05R\x03pid\x12\x12\n" +
 	"\x04comm\x18\x06 \x01(\tR\x04comm\x12\x1a\n" +
 	"\bfilename\x18\a \x01(\tR\bfilename\x12\x18\n" +
-	"\adetails\x18\b \x01(\tR\adetails\"V\n" +
+	"\adetails\x18\b \x01(\tR\adetails\"}\n" +
 	"\vEventReport\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12,\n" +
-	"\x06events\x18\x02 \x03(\v2\x14.sentinel.ProbeEventR\x06events\",\n" +
+	"\x06events\x18\x02 \x03(\v2\x14.sentinel.ProbeEventR\x06events\x12%\n" +
+	"\x0ecorrelation_id\x18\x03 \x01(\tR\rcorrelationId\",\n" +
 	"\x0fShutdownRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\",\n" +
 	"\x10ShutdownResponse\x12\x18\n" +
@@ -990,13 +1182,28 @@ const file_agent_service_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12+\n" +
 	"\x06probes\x18\x03 \x03(\v2\x13.sentinel.ProbeInfoR\x06probes\x126\n" +
-	"\x17false_positive_features\x18\x04 \x03(\tR\x15falsePositiveFeatures2\xe3\b\n" +
+	"\x17false_positive_features\x18\x04 \x03(\tR\x15falsePositiveFeatures\"\x97\x01\n" +
+	"\x0fMutationTrigger\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x10\n" +
+	"\x03pid\x18\x02 \x01(\x05R\x03pid\x12!\n" +
+	"\ftrigger_type\x18\x03 \x01(\tR\vtriggerType\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\x12\x1c\n" +
+	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\"c\n" +
+	"\x0eStarActivation\x12%\n" +
+	"\x0ecorrelation_id\x18\x01 \x01(\tR\rcorrelationId\x12\x12\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"_\n" +
+	"\x11StarActivationAck\x12%\n" +
+	"\x0emode_activated\x18\x01 \x01(\bR\rmodeActivated\x12#\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage2\xf5\t\n" +
 	"\bSentinel\x12A\n" +
 	"\bRegister\x12\x19.sentinel.RegisterRequest\x1a\x1a.sentinel.RegisterResponse\x12D\n" +
 	"\tHeartbeat\x12\x1a.sentinel.HeartbeatRequest\x1a\x1b.sentinel.HeartbeatResponse\x12?\n" +
 	"\fReportEvents\x12\x15.sentinel.EventReport\x1a\x18.sentinel.ReportResponse\x12G\n" +
 	"\fGetProbeList\x12\x1a.sentinel.ProbeListRequest\x1a\x1b.sentinel.ProbeListResponse\x12G\n" +
-	"\x0eReportShutdown\x12\x19.sentinel.ShutdownRequest\x1a\x1a.sentinel.ShutdownResponse\x12D\n" +
+	"\x0eReportShutdown\x12\x19.sentinel.ShutdownRequest\x1a\x1a.sentinel.ShutdownResponse\x12E\n" +
+	"\x0eReportMutation\x12\x19.sentinel.MutationTrigger\x1a\x18.sentinel.ReportResponse\x12I\n" +
+	"\x10ActivateStarMode\x12\x18.sentinel.StarActivation\x1a\x1b.sentinel.StarActivationAck\x12D\n" +
 	"\x0fReportProcesses\x12\x17.sentinel.ProcessReport\x1a\x18.sentinel.ReportResponse\x12=\n" +
 	"\vReportUsers\x12\x14.sentinel.UserReport\x1a\x18.sentinel.ReportResponse\x12D\n" +
 	"\x10ReportSystemInfo\x12\x16.sentinel.SystemReport\x1a\x18.sentinel.ReportResponse\x12C\n" +
@@ -1021,7 +1228,7 @@ func file_agent_service_proto_rawDescGZIP() []byte {
 	return file_agent_service_proto_rawDescData
 }
 
-var file_agent_service_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_agent_service_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_agent_service_proto_goTypes = []any{
 	(*RegisterRequest)(nil),    // 0: sentinel.RegisterRequest
 	(*RegisterResponse)(nil),   // 1: sentinel.RegisterResponse
@@ -1036,24 +1243,27 @@ var file_agent_service_proto_goTypes = []any{
 	(*ProbeListRequest)(nil),   // 10: sentinel.ProbeListRequest
 	(*ProbeInfo)(nil),          // 11: sentinel.ProbeInfo
 	(*ProbeListResponse)(nil),  // 12: sentinel.ProbeListResponse
-	(*ProbeCommand)(nil),       // 13: sentinel.ProbeCommand
-	(*ProcessReport)(nil),      // 14: sentinel.ProcessReport
-	(*UserReport)(nil),         // 15: sentinel.UserReport
-	(*SystemReport)(nil),       // 16: sentinel.SystemReport
-	(*PackageReport)(nil),      // 17: sentinel.PackageReport
-	(*CronReport)(nil),         // 18: sentinel.CronReport
-	(*ServiceReport)(nil),      // 19: sentinel.ServiceReport
-	(*WebComponentReport)(nil), // 20: sentinel.WebComponentReport
-	(*HardwareReport)(nil),     // 21: sentinel.HardwareReport
-	(*NetworkReport)(nil),      // 22: sentinel.NetworkReport
-	(*PerfReport)(nil),         // 23: sentinel.PerfReport
-	(*AgentSelfReport)(nil),    // 24: sentinel.AgentSelfReport
-	(*ReportResponse)(nil),     // 25: sentinel.ReportResponse
+	(*MutationTrigger)(nil),    // 13: sentinel.MutationTrigger
+	(*StarActivation)(nil),     // 14: sentinel.StarActivation
+	(*StarActivationAck)(nil),  // 15: sentinel.StarActivationAck
+	(*ProbeCommand)(nil),       // 16: sentinel.ProbeCommand
+	(*ProcessReport)(nil),      // 17: sentinel.ProcessReport
+	(*UserReport)(nil),         // 18: sentinel.UserReport
+	(*SystemReport)(nil),       // 19: sentinel.SystemReport
+	(*PackageReport)(nil),      // 20: sentinel.PackageReport
+	(*CronReport)(nil),         // 21: sentinel.CronReport
+	(*ServiceReport)(nil),      // 22: sentinel.ServiceReport
+	(*WebComponentReport)(nil), // 23: sentinel.WebComponentReport
+	(*HardwareReport)(nil),     // 24: sentinel.HardwareReport
+	(*NetworkReport)(nil),      // 25: sentinel.NetworkReport
+	(*PerfReport)(nil),         // 26: sentinel.PerfReport
+	(*AgentSelfReport)(nil),    // 27: sentinel.AgentSelfReport
+	(*ReportResponse)(nil),     // 28: sentinel.ReportResponse
 }
 var file_agent_service_proto_depIdxs = []int32{
 	2,  // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
 	3,  // 1: sentinel.RegisterRequest.kernel_info:type_name -> sentinel.KernelInfo
-	13, // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
+	16, // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
 	6,  // 3: sentinel.EventReport.events:type_name -> sentinel.ProbeEvent
 	11, // 4: sentinel.ProbeListResponse.probes:type_name -> sentinel.ProbeInfo
 	0,  // 5: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
@@ -1061,35 +1271,39 @@ var file_agent_service_proto_depIdxs = []int32{
 	7,  // 7: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
 	10, // 8: sentinel.Sentinel.GetProbeList:input_type -> sentinel.ProbeListRequest
 	8,  // 9: sentinel.Sentinel.ReportShutdown:input_type -> sentinel.ShutdownRequest
-	14, // 10: sentinel.Sentinel.ReportProcesses:input_type -> sentinel.ProcessReport
-	15, // 11: sentinel.Sentinel.ReportUsers:input_type -> sentinel.UserReport
-	16, // 12: sentinel.Sentinel.ReportSystemInfo:input_type -> sentinel.SystemReport
-	17, // 13: sentinel.Sentinel.ReportPackages:input_type -> sentinel.PackageReport
-	18, // 14: sentinel.Sentinel.ReportCronJobs:input_type -> sentinel.CronReport
-	19, // 15: sentinel.Sentinel.ReportServices:input_type -> sentinel.ServiceReport
-	20, // 16: sentinel.Sentinel.ReportWebComponents:input_type -> sentinel.WebComponentReport
-	21, // 17: sentinel.Sentinel.ReportHardware:input_type -> sentinel.HardwareReport
-	22, // 18: sentinel.Sentinel.ReportNetwork:input_type -> sentinel.NetworkReport
-	23, // 19: sentinel.Sentinel.ReportPerformance:input_type -> sentinel.PerfReport
-	24, // 20: sentinel.Sentinel.ReportAgentSelf:input_type -> sentinel.AgentSelfReport
-	1,  // 21: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
-	5,  // 22: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
-	25, // 23: sentinel.Sentinel.ReportEvents:output_type -> sentinel.ReportResponse
-	12, // 24: sentinel.Sentinel.GetProbeList:output_type -> sentinel.ProbeListResponse
-	9,  // 25: sentinel.Sentinel.ReportShutdown:output_type -> sentinel.ShutdownResponse
-	25, // 26: sentinel.Sentinel.ReportProcesses:output_type -> sentinel.ReportResponse
-	25, // 27: sentinel.Sentinel.ReportUsers:output_type -> sentinel.ReportResponse
-	25, // 28: sentinel.Sentinel.ReportSystemInfo:output_type -> sentinel.ReportResponse
-	25, // 29: sentinel.Sentinel.ReportPackages:output_type -> sentinel.ReportResponse
-	25, // 30: sentinel.Sentinel.ReportCronJobs:output_type -> sentinel.ReportResponse
-	25, // 31: sentinel.Sentinel.ReportServices:output_type -> sentinel.ReportResponse
-	25, // 32: sentinel.Sentinel.ReportWebComponents:output_type -> sentinel.ReportResponse
-	25, // 33: sentinel.Sentinel.ReportHardware:output_type -> sentinel.ReportResponse
-	25, // 34: sentinel.Sentinel.ReportNetwork:output_type -> sentinel.ReportResponse
-	25, // 35: sentinel.Sentinel.ReportPerformance:output_type -> sentinel.ReportResponse
-	25, // 36: sentinel.Sentinel.ReportAgentSelf:output_type -> sentinel.ReportResponse
-	21, // [21:37] is the sub-list for method output_type
-	5,  // [5:21] is the sub-list for method input_type
+	13, // 10: sentinel.Sentinel.ReportMutation:input_type -> sentinel.MutationTrigger
+	14, // 11: sentinel.Sentinel.ActivateStarMode:input_type -> sentinel.StarActivation
+	17, // 12: sentinel.Sentinel.ReportProcesses:input_type -> sentinel.ProcessReport
+	18, // 13: sentinel.Sentinel.ReportUsers:input_type -> sentinel.UserReport
+	19, // 14: sentinel.Sentinel.ReportSystemInfo:input_type -> sentinel.SystemReport
+	20, // 15: sentinel.Sentinel.ReportPackages:input_type -> sentinel.PackageReport
+	21, // 16: sentinel.Sentinel.ReportCronJobs:input_type -> sentinel.CronReport
+	22, // 17: sentinel.Sentinel.ReportServices:input_type -> sentinel.ServiceReport
+	23, // 18: sentinel.Sentinel.ReportWebComponents:input_type -> sentinel.WebComponentReport
+	24, // 19: sentinel.Sentinel.ReportHardware:input_type -> sentinel.HardwareReport
+	25, // 20: sentinel.Sentinel.ReportNetwork:input_type -> sentinel.NetworkReport
+	26, // 21: sentinel.Sentinel.ReportPerformance:input_type -> sentinel.PerfReport
+	27, // 22: sentinel.Sentinel.ReportAgentSelf:input_type -> sentinel.AgentSelfReport
+	1,  // 23: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
+	5,  // 24: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
+	28, // 25: sentinel.Sentinel.ReportEvents:output_type -> sentinel.ReportResponse
+	12, // 26: sentinel.Sentinel.GetProbeList:output_type -> sentinel.ProbeListResponse
+	9,  // 27: sentinel.Sentinel.ReportShutdown:output_type -> sentinel.ShutdownResponse
+	28, // 28: sentinel.Sentinel.ReportMutation:output_type -> sentinel.ReportResponse
+	15, // 29: sentinel.Sentinel.ActivateStarMode:output_type -> sentinel.StarActivationAck
+	28, // 30: sentinel.Sentinel.ReportProcesses:output_type -> sentinel.ReportResponse
+	28, // 31: sentinel.Sentinel.ReportUsers:output_type -> sentinel.ReportResponse
+	28, // 32: sentinel.Sentinel.ReportSystemInfo:output_type -> sentinel.ReportResponse
+	28, // 33: sentinel.Sentinel.ReportPackages:output_type -> sentinel.ReportResponse
+	28, // 34: sentinel.Sentinel.ReportCronJobs:output_type -> sentinel.ReportResponse
+	28, // 35: sentinel.Sentinel.ReportServices:output_type -> sentinel.ReportResponse
+	28, // 36: sentinel.Sentinel.ReportWebComponents:output_type -> sentinel.ReportResponse
+	28, // 37: sentinel.Sentinel.ReportHardware:output_type -> sentinel.ReportResponse
+	28, // 38: sentinel.Sentinel.ReportNetwork:output_type -> sentinel.ReportResponse
+	28, // 39: sentinel.Sentinel.ReportPerformance:output_type -> sentinel.ReportResponse
+	28, // 40: sentinel.Sentinel.ReportAgentSelf:output_type -> sentinel.ReportResponse
+	23, // [23:41] is the sub-list for method output_type
+	5,  // [5:23] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
 	5,  // [5:5] is the sub-list for extension extendee
 	0,  // [0:5] is the sub-list for field type_name
@@ -1108,7 +1322,7 @@ func file_agent_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_service_proto_rawDesc), len(file_agent_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

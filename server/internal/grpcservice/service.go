@@ -12,20 +12,23 @@ import (
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/handler"
 	"github.com/CoderXinNing/ebpf-system/server/internal/middleware"
+	"github.com/CoderXinNing/ebpf-system/server/internal/service"
 	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 )
 
 // Service 实现 gRPC Sentinel 服务
 type Service struct {
 	pb.UnimplementedSentinelServer
-	handler   *handler.Handler
-	agentAuth *middleware.AgentAuthInterceptor
+	handler     *handler.Handler
+	agentAuth   *middleware.AgentAuthInterceptor
+	starService *service.StarActivationService
 }
 
 func NewService(h *handler.Handler, auth *middleware.AgentAuthInterceptor) *Service {
 	return &Service{
-		handler:   h,
-		agentAuth: auth,
+		handler:     h,
+		agentAuth:   auth,
+		starService: service.NewStarActivationService(),
 	}
 }
 
@@ -95,15 +98,16 @@ func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Re
 	h := s.handler
 	for _, evt := range req.Events {
 		evtRecord := handler.ProbeEvent{
-			ID:        genToken()[:8],
-			AgentID:   req.AgentId,
-			ProbeName: evt.ProbeName,
-			Timestamp: evt.Timestamp,
-			EventType: evt.EventType,
-			PID:       evt.Pid,
-			Comm:      evt.Comm,
-			Filename:  evt.Filename,
-			Details:   evt.Details,
+			ID:            genToken()[:8],
+			AgentID:       req.AgentId,
+			ProbeName:     evt.ProbeName,
+			Timestamp:     evt.Timestamp,
+			EventType:     evt.EventType,
+			PID:           evt.Pid,
+			Comm:          evt.Comm,
+			Filename:      evt.Filename,
+			Details:       evt.Details,
+			CorrelationID: req.CorrelationId,
 		}
 		h.EventMu.Lock()
 		h.Events = append(h.Events, evtRecord)
@@ -276,4 +280,23 @@ func getGroup(g string) string {
 		return "未分组"
 	}
 	return g
+}
+
+// ReportMutation 处理 Agent 上报的突变触发
+func (s *Service) ReportMutation(ctx context.Context, req *pb.MutationTrigger) (*pb.ReportResponse, error) {
+	corrID := s.starService.HandleMutation(req.AgentId, req.Pid)
+	log.Printf("⭐ 星轨触发: agent=%s pid=%d type=%s corr=%s",
+		req.AgentId, req.Pid, req.TriggerType, corrID)
+	return &pb.ReportResponse{Success: true, Message: corrID}, nil
+}
+
+// ActivateStarMode 广播警戒模式（Server → Agent）
+// Agent 端实现此 RPC，Server 端作为客户端调用
+func (s *Service) ActivateStarMode(ctx context.Context, req *pb.StarActivation) (*pb.StarActivationAck, error) {
+	// Server 端不直接实现此方法（是 Agent 端的方法）
+	// 这里返回"未实现"，实际调用由 Agent 处理
+	return &pb.StarActivationAck{
+		ModeActivated: false,
+		ErrorMessage:  "此方法在 Agent 端实现",
+	}, nil
 }

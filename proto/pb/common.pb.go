@@ -79,7 +79,6 @@ func (ProbeCommand_CommandType) EnumDescriptor() ([]byte, []int) {
 	return file_common_proto_rawDescGZIP(), []int{1, 0}
 }
 
-// ReportResponse 是所有上报类 RPC 的通用响应
 type ReportResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -132,7 +131,6 @@ func (x *ReportResponse) GetMessage() string {
 	return ""
 }
 
-// ProbeCommand 下发命令（心跳响应中携带）
 type ProbeCommand struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
 	Type          ProbeCommand_CommandType `protobuf:"varint,1,opt,name=type,proto3,enum=sentinel.ProbeCommand_CommandType" json:"type,omitempty"`
