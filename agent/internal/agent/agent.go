@@ -7,13 +7,17 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
-	"github.com/cilium/ebpf"
+	ciliumebpf "github.com/cilium/ebpf"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/actor"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/baseline"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/ebpf"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/plugins"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 	"crypto/tls"
 	"crypto/x509"
@@ -38,6 +42,7 @@ type Agent struct {
 	probeState      *ProbeState       // 缓存引用（只读，心跳非阻塞用）
 	eventQueue      *EventQueue       // 非阻塞事件队列
 	baseline        *baseline.BaselineEngine
+	probeManager    *framework.Manager // 探针管理器
 
 	// gRPC Metadata（token 鉴权）
 	authContext context.Context
@@ -68,6 +73,10 @@ func New(cfg *config.AgentConfig) *Agent {
 		actor.ActorConfig{InboxSize: 1000},
 	)
 	agent.probeStateActor.Start()
+
+	// 初始化探针管理器并注册插件
+	agent.probeManager = framework.NewManager()
+	agent.registerProbePlugins()
 
 	agent.baseline.Restore()
 	return agent
@@ -348,7 +357,7 @@ func cstring(b []byte) string {
 }
 
 func updateHeartbeatMap() {
-	hbMap, err := ebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/agent_heartbeat", nil)
+	hbMap, err := ciliumebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/agent_heartbeat", nil)
 	if err != nil {
 		return
 	}
@@ -413,6 +422,107 @@ func (a *Agent) fetchProbeList() []*pb.ProbeInfo {
 	return resp.Probes
 }
 
+// registerProbePlugins 注册所有探针插件
+func (a *Agent) registerProbePlugins() {
+	a.probeManager.Register(plugins.NewExecProbe(
+		a.getProbePath("exec_monitor"),
+		func(evt ebpf.ExecEvent, cmdline string) {
+			a.handleExecEvent(evt, cmdline)
+		},
+	))
+	a.probeManager.Register(plugins.NewBashProbe(
+		a.getProbePath("bash_monitor"),
+		"/bin/bash",
+		func(evt ebpf.BashEvent, userName string, line string) {
+			a.handleBashEvent(evt, userName, line)
+		},
+	))
+	a.probeManager.Register(plugins.NewTCPProbe(
+		a.getProbePath("tcp_monitor"),
+		func(pid uint32, comm string, count uint64) {
+			a.handleTCPEvent(pid, comm, count)
+		},
+	))
+	a.probeManager.Register(plugins.NewXDPProbe(
+		ebpf.XDPConfig{Iface: a.cfg.XDP.Iface, Mode: a.cfg.XDP.Mode},
+		func(evt ebpf.XDPEvent) {
+			a.handleXDPEvent(evt)
+		},
+	))
+}
+
+// handleExecEvent 处理 exec 探针事件
+func (a *Agent) handleExecEvent(evt ebpf.ExecEvent, cmdline string) {
+	parentComm := getParentComm(evt.PPID)
+	childComm := strings.TrimRight(string(evt.Comm[:]), "\x00")
+	if parentComm != "" && childComm != "" {
+		chainKey := parentComm + "->" + childComm
+		a.probeStateActor.Send(msgIncrementBaseline{key: chainKey + ":proc_chain"})
+	}
+	key := ebpf.ResolveUser(evt.UID) + ":exec_count"
+	a.probeStateActor.Send(msgIncrementBaseline{key: key})
+
+	if int32(evt.PID) == int32(os.Getpid()) {
+		return
+	}
+	userName := ebpf.ResolveUser(evt.UID)
+	a.eventQueue.Push(&pb.ProbeEvent{
+		ProbeName: "execve",
+		Timestamp: time.Now().Unix(),
+		EventType: "execve",
+		Pid:       int32(evt.PID),
+		Comm:      string(evt.Comm[:]),
+		Filename:  "execve",
+		Details:   userName + ": " + cmdline,
+	}, PriorityNormal)
+}
+
+// handleBashEvent 处理 bash 探针事件
+func (a *Agent) handleBashEvent(evt ebpf.BashEvent, userName string, line string) {
+	a.probeStateActor.Send(msgIncrementBaseline{key: userName + ":bash_count"})
+	if line == "" {
+		return
+	}
+	a.eventQueue.Push(&pb.ProbeEvent{
+		ProbeName: "bash_input",
+		Timestamp: time.Now().Unix(),
+		EventType: "bash_input",
+		Pid:       int32(evt.PID),
+		Comm:      strings.ToValidUTF8(string(evt.Comm[:]), ""),
+		Filename:  "bash_input",
+		Details:   userName + ": " + strings.ToValidUTF8(line, ""),
+	}, PriorityNormal)
+}
+
+// handleTCPEvent 处理 tcp 探针事件
+func (a *Agent) handleTCPEvent(pid uint32, comm string, count uint64) {
+	a.probeStateActor.Send(msgIncrementBaseline{key: strings.TrimRight(comm, "\x00") + ":tcp_count"})
+	a.eventQueue.Push(&pb.ProbeEvent{
+		ProbeName: "tcp_connect",
+		Timestamp: time.Now().Unix(),
+		EventType: "tcp_connect",
+		Pid:       int32(pid),
+		Comm:      strings.TrimRight(comm, "\x00"),
+		Filename:  fmt.Sprintf("外联x%d次", count),
+	}, PriorityNormal)
+}
+
+// handleXDPEvent 处理 XDP 事件
+func (a *Agent) handleXDPEvent(evt ebpf.XDPEvent) {
+	if evt.PID == uint32(os.Getpid()) {
+		return
+	}
+	a.eventQueue.Push(&pb.ProbeEvent{
+		ProbeName: "xdp",
+		Timestamp: time.Now().Unix(),
+		EventType: "xdp_alert",
+		Pid:       int32(evt.PID),
+		Comm:      string(evt.Comm[:]),
+		Filename:  "xdp_alert",
+		Details:   string(evt.Details[:]),
+	}, PriorityHigh)
+}
+
 func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
 	for _, p := range probes {
 		if !p.Enabled {
@@ -439,27 +549,29 @@ func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
 
 		log.Printf("▶️ 加载探针: %s", p.Name)
 		a.probeStateActor.Send(msgSetProbePath{name: p.Name, path: p.Path})
-		switch p.Name {
-		case "exec_monitor":
-			a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "loading"})
-			go a.startExecMonitorWithStatus(p.Name)
-		case "bash_monitor":
-			a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "loading"})
-			go a.startBashMonitorWithStatus(p.Name)
-		case "tcp_monitor":
-			a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "loading"})
-			go a.startTCPMonitorWithStatus(p.Name)
-		case "xdp_reporter":
-			if a.level == "full" {
-				a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "loading"})
-				go a.startXDP()
-			} else {
-				a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "skipped: xdp not available"})
-			}
-		default:
+
+		// 通过 Manager 启动探针
+		probeInst, exists := a.probeManager.Get(p.Name)
+		if !exists {
 			a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "unknown probe"})
 			log.Printf("⚠️ 未知探针: %s", p.Name)
+			continue
 		}
+
+		a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "loading"})
+		go func(name string, p framework.Probe) {
+			defer func() {
+				if r := recover(); r != nil {
+					a.probeStateActor.Send(msgSetProbeStatus{name: name, status: fmt.Sprintf("failed: %v", r)})
+				}
+			}()
+			if err := a.probeManager.Start(context.Background(), name); err != nil {
+				a.probeStateActor.Send(msgSetProbeStatus{name: name, status: fmt.Sprintf("failed: %v", err)})
+				log.Printf("❌ %s 加载失败: %v", name, err)
+				return
+			}
+			a.probeStateActor.Send(msgSetProbeStatus{name: name, status: "loaded"})
+		}(p.Name, probeInst)
 	}
 }
 
