@@ -485,6 +485,7 @@ func (a *Agent) registerProbePlugins() {
 
 // handleExecEvent 处理 exec 探针事件
 func (a *Agent) handleExecEvent(evt ebpf.ExecEvent, cmdline string) {
+
 	// 身份基线检测
 	userName := ebpf.ResolveUser(evt.UID)
 	tmpComm := strings.TrimRight(string(evt.Comm[:]), "\x00")

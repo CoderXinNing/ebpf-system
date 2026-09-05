@@ -1,6 +1,8 @@
 package plugins
 
 import (
+	"runtime"
+
 	"github.com/cilium/ebpf"
 	agentebpf "github.com/CoderXinNing/ebpf-system/agent/internal/ebpf"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
@@ -13,6 +15,7 @@ type TCPProbe struct {
 	loaded      bool
 	pidConnMap  *ebpf.Map
 	connDetails *ebpf.Map
+	link        *agentebpf.ManualTracepointLink
 }
 
 func NewTCPProbe(objPath string, callback func(pid uint32, comm string, count uint64)) *TCPProbe {
@@ -27,7 +30,7 @@ func (p *TCPProbe) Name() string { return "tcp_monitor" }
 func (p *TCPProbe) Init() error { return nil }
 
 func (p *TCPProbe) Attach() error {
-	pidConnMap, connDetails, err := agentebpf.LoadTCPMonitorV2(p.objPath, func(evt agentebpf.TCPEventV2) {
+	pidConnMap, connDetails, tp, err := agentebpf.LoadTCPMonitorV2(p.objPath, func(evt agentebpf.TCPEventV2) {
 		// 默认只计数不上报
 	})
 	if err != nil {
@@ -35,7 +38,10 @@ func (p *TCPProbe) Attach() error {
 	}
 	p.pidConnMap = pidConnMap
 	p.connDetails = connDetails
+	p.link = tp
 	p.loaded = true
+	runtime.KeepAlive(p)
+	runtime.KeepAlive(tp)
 	return nil
 }
 
@@ -44,6 +50,10 @@ func (p *TCPProbe) UpdateRules(rules []framework.Rule) error {
 }
 
 func (p *TCPProbe) Stop() error {
+	if p.link != nil {
+		p.link.Close()
+		p.link = nil
+	}
 	p.loaded = false
 	p.pidConnMap = nil
 	p.connDetails = nil
