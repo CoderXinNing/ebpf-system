@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/cilium/ebpf"
+
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 )
@@ -56,6 +58,14 @@ func (p *TCPProbe) Stop() error {
 		p.probe = nil
 	}
 	p.loaded = false
+	return nil
+}
+
+// GetPidConnStats 返回 PID 连接统计 Map
+func (p *TCPProbe) GetPidConnStats() *ebpf.Map {
+	if p.probe != nil {
+		return p.probe.GetPidConnStats()
+	}
 	return nil
 }
 

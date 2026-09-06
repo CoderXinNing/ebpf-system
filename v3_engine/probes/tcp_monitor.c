@@ -18,7 +18,7 @@ struct tcp_conn_stats {
 };
 
 struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
+    __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 4096);
     __type(key, __u32);          // pid
     __type(value, struct tcp_conn_stats);
@@ -41,25 +41,22 @@ struct {
 static __always_inline int parse_sockaddr(struct sockaddr *addr, struct tcp_conn_detail *detail) {
     if (!addr) return -1;
     
-    // 只处理 IPv4（AF_INET = 2）
-    __u16 family = 0;
-    bpf_probe_read(&family, sizeof(family), &addr->sa_family);
-    if (family != 2) { // AF_INET
+    // 分步读取 sockaddr_in（避免大结构体读取失败）
+    __u16 sin_port = 0;
+    __u32 sin_addr = 0;
+    
+    // 跳过 family(2字节)，读端口
+    long ret1 = bpf_probe_read_user(&sin_port, 2, (void *)addr + 2);
+    long ret2 = bpf_probe_read_user(&sin_addr, 4, (void *)addr + 4);
+    if (ret1 != 0 || ret2 != 0) {
+        bpf_printk("parse fail: ret1=%ld ret2=%ld", ret1, ret2);
         return -1;
     }
     
-    // 读取 sockaddr_in
-    struct sockaddr_in {
-        __u16 sin_family;
-        __u16 sin_port;      // 网络字节序
-        __u32 sin_addr;      // 网络字节序
-        __u8 padding[8];
-    } *addr_in = (void *)addr;
+    bpf_printk("parse ok: addr=%llu port=%u ip=%u", (unsigned long long)addr, sin_port, sin_addr);
+    detail->dst_port = __builtin_bswap16(sin_port);
+    detail->dst_ip = __builtin_bswap32(sin_addr);
     
-    bpf_probe_read(&detail->dst_port, sizeof(detail->dst_port), &addr_in->sin_port);
-    bpf_probe_read(&detail->dst_ip, sizeof(detail->dst_ip), &addr_in->sin_addr);
-    
-    // src_ip 从当前任务获取（简化：用 0，Go 层补充）
     detail->src_ip = 0;
     detail->src_port = 0;
     detail->protocol = 6; // TCP
@@ -73,8 +70,8 @@ static __always_inline int parse_sockaddr(struct sockaddr *addr, struct tcp_conn
 // ============================================
 // tracepoint 挂载（sys_enter_connect）
 // ============================================
-SEC("tracepoint/syscalls/sys_enter_connect")
-int trace_connect(struct trace_event_raw_sys_enter *args) {
+SEC("kprobe/__sys_connect")
+int BPF_KPROBE(trace_connect, int fd, struct sockaddr *uservaddr, int addrlen) {
     __u32 pid = bpf_get_current_pid_tgid() >> 32;
     __u32 uid = bpf_get_current_uid_gid() & 0xFFFFFFFF;
     __u64 now = bpf_ktime_get_ns();
@@ -94,8 +91,8 @@ int trace_connect(struct trace_event_raw_sys_enter *args) {
     
     // 3. 解析目标地址
     struct tcp_conn_detail detail = {};
-    if (args->args[1]) {
-        parse_sockaddr((struct sockaddr *)args->args[1], &detail);
+    if (uservaddr) {
+        parse_sockaddr((struct sockaddr *)uservaddr, &detail);
     }
     
     // 4. 更新连接统计
@@ -107,6 +104,21 @@ int trace_connect(struct trace_event_raw_sys_enter *args) {
         struct tcp_conn_stats init = {.count = 1, .last_seen_ns = now};
         bpf_map_update_elem(&pid_conn_stats, &pid, &init, BPF_ANY);
         stats = bpf_map_lookup_elem(&pid_conn_stats, &pid);
+    }
+
+    // 更新最近端口和 IP（用于突变检测）
+    if (stats && detail.dst_port != 0) {
+        // 左移并插入新端口
+        stats->recent_ports[3] = stats->recent_ports[2];
+        stats->recent_ports[2] = stats->recent_ports[1];
+        stats->recent_ports[1] = stats->recent_ports[0];
+        stats->recent_ports[0] = detail.dst_port;
+
+        // 左移并插入新 IP
+        stats->recent_ips[3] = stats->recent_ips[2];
+        stats->recent_ips[2] = stats->recent_ips[1];
+        stats->recent_ips[1] = stats->recent_ips[0];
+        stats->recent_ips[0] = detail.dst_ip;
     }
     
     // 5. 更新连接明细

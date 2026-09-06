@@ -715,5 +715,75 @@ func (a *Agent) tcpAnomalyLoop(ctx context.Context) {
 
 // analyzeTCPAnomalies 从 BPF Map 读连接统计并检测突变
 func (a *Agent) analyzeTCPAnomalies() {
-	log.Printf("🔍 V3 TCP 突变检测待适配")
+	// 获取 TCP 探针的连接统计 Map
+	tcpProbe, exists := a.probeManager.Get("tcp_monitor")
+	if !exists {
+		return
+	}
+	tcpAdapter, ok := tcpProbe.(*plugins.TCPProbe)
+	if !ok {
+		return
+	}
+	pidConnMap := tcpAdapter.GetPidConnStats()
+	if pidConnMap == nil {
+		log.Printf("⚠️ pidConnMap 为 nil")
+		return
+	}
+	log.Printf("✅ pidConnMap 可用")
+
+	// 遍历 Map（匹配 C 层 tcp_conn_stats 结构）
+	type tcpConnStats struct {
+		Count       uint64
+		LastSeenNs  uint64
+		RecentPorts [4]uint32
+		RecentIPs   [4]uint32
+	}
+
+	var key uint32
+	var value tcpConnStats
+	iter := pidConnMap.Iterate()
+	for iter.Next(&key, &value) {
+		// 统计敏感端口多样性
+		sensitivePorts := make(map[uint32]bool)
+		for _, port := range value.RecentPorts {
+			if a.tcpAnomaly.sensitivePorts[uint16(port)] {
+				sensitivePorts[port] = true
+			}
+		}
+
+		// 统计 IP 多样性
+		uniqueIPs := make(map[uint32]bool)
+		for _, ip := range value.RecentIPs {
+			if ip != 0 {
+				uniqueIPs[ip] = true
+			}
+		}
+
+		triggered := false
+		reason := ""
+
+		if len(sensitivePorts) >= a.tcpAnomaly.portThreshold {
+			triggered = true
+			reason = fmt.Sprintf("端口多样性=%d", len(sensitivePorts))
+		}
+		if len(uniqueIPs) >= a.tcpAnomaly.ipThreshold {
+			triggered = true
+			reason = fmt.Sprintf("IP多样性=%d", len(uniqueIPs))
+		}
+
+		if triggered {
+			log.Printf("🚨 TCP突变: PID=%d %s", key, reason)
+			if a.client != nil && a.token != "" {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				a.client.ReportMutation(a.getAuthContext(ctx), &pb.MutationTrigger{
+					AgentId:     a.id,
+					Pid:         int32(key),
+					TriggerType: "tcp_anomaly",
+					Detail:      reason,
+					Timestamp:   time.Now().Unix(),
+				})
+			}
+		}
+	}
 }

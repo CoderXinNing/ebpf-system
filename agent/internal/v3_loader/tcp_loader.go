@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"golang.org/x/sys/unix"
@@ -32,7 +33,8 @@ type TCPEventCallback func(header *SentinelEventHeader, detail *TCPConnDetail)
 
 // ManualTracepointLink 手动管理 tracepoint fd
 type ManualTracepointLink struct {
-	fd int
+	fd   int
+	link link.Link // kprobe 时使用
 }
 
 func (l *ManualTracepointLink) Close() error {
@@ -142,12 +144,14 @@ func (p *TCPProbe) Load() error {
 	}
 
 	// 手动 attach
-	tp, err := attachTracepointManual(p.objs.TraceConnect, "/sys/kernel/debug/tracing/events/syscalls/sys_enter_connect")
+	// 使用 kprobe attach（不是 tracepoint）
+	tp, err := link.Kprobe("__sys_connect", p.objs.TraceConnect, nil)
 	if err != nil {
 		p.objs.TraceConnect.Close()
-		return fmt.Errorf("attach tracepoint 失败: %w", err)
+		return fmt.Errorf("attach kprobe 失败: %w", err)
 	}
-	p.link = tp
+	log.Printf("✅ kprobe attach 成功")
+	p.link = &ManualTracepointLink{fd: -1, link: tp}
 
 	// 启动 Ring Buffer 读取
 	rd, err := ringbuf.NewReader(p.objs.SentinelEvents)
@@ -180,6 +184,14 @@ func (p *TCPProbe) Load() error {
 		}
 	}()
 
+	return nil
+}
+
+// GetPidConnStats 返回 PID 连接统计 Map
+func (p *TCPProbe) GetPidConnStats() *ebpf.Map {
+	if p.objs != nil {
+		return p.objs.PidConnStats
+	}
 	return nil
 }
 
