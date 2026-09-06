@@ -484,6 +484,16 @@ func (a *Agent) registerProbePlugins() {
 		},
 	))
 
+	// V3 bash 探针
+	a.probeManager.Register(plugins.NewBashProbe(
+		"v3_engine/probes/bash_monitor.o",
+		"/bin/bash",
+		agentHash,
+		func(pid uint32, comm string, line string, correlationKey uint64) {
+			a.handleBashEventV3(pid, comm, line, correlationKey)
+		},
+	))
+
 	// V3 TCP 探针
 	a.probeManager.Register(plugins.NewTCPProbe(
 		"v3_engine/probes/tcp_monitor.o",
@@ -570,6 +580,35 @@ func (a *Agent) handleFileEventV3(pid uint32, comm string, filename string, corr
 	if localCorrID != "" {
 		log.Printf("⭐ 敏感文件访问已关联: PID=%d corrID=%s", pid, localCorrID)
 	}
+}
+
+func (a *Agent) handleBashEventV3(pid uint32, comm string, line string, correlationKey uint64) {
+	// 过滤空命令和 Agent 自身命令
+	if strings.TrimSpace(line) == "" {
+		return
+	}
+	if strings.Contains(line, "tail -f /tmp/agent") || strings.Contains(line, "grep bash") {
+		return
+	}
+
+	log.Printf("🔔 V3 bash 事件: PID=%d COMM=%s CMD=%s", pid, comm, line)
+
+	var localCorrID string
+	if correlationKey != 0 && a.correlationManager != nil {
+		localCorrID = a.correlationManager.GetOrCreate(correlationKey)
+	}
+
+	a.eventQueue.Push(&pb.ProbeEvent{
+		ProbeName:       "bash_input",
+		Timestamp:       time.Now().Unix(),
+		EventType:       "bash_input",
+		Pid:             int32(pid),
+		Comm:            comm,
+		Filename:        "bash_input",
+		Details:         line,
+		CorrelationKey:  correlationKey,
+		CorrelationId:   localCorrID,
+	}, PriorityNormal)
 }
 
 func (a *Agent) handleTCPEvent(pid uint32, comm string, count uint64) {
