@@ -49,6 +49,11 @@ func (p *ExecProbe) UpdateRules(rules []framework.Rule) error {
 	return nil
 }
 
+// GetProbe 返回底层 V3 探针
+func (p *ExecProbe) GetProbe() *v3_loader.ExecProbe {
+	return p.probe
+}
+
 func (p *ExecProbe) Stop() error {
 	if p.probe != nil {
 		p.probe.Close()

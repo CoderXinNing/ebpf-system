@@ -31,7 +31,7 @@ static __always_inline int is_sensitive_path(const char *filename) {
     char path[64] = {};
     bpf_probe_read_user_str(path, 64, filename);
     
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 6; i++) {
         int matched = 1;
         for (int j = 0; j < 64; j++) {
             if (sensitive_prefixes[i][j] == '\0') break;

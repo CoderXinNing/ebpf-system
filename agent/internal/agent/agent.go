@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilium/ebpf"
 	ciliumebpf "github.com/cilium/ebpf"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/actor"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/baseline"
@@ -496,6 +497,18 @@ func (a *Agent) registerProbePlugins() {
 // handleExecEvent 处理 exec 探针事件
 // handleBashEvent 处理 bash 探针事件
 // handleTCPEvent 处理 tcp 探针事件
+// getPidCorrelationsMap 获取 PID 关联 Map
+func (a *Agent) getPidCorrelationsMap() *ebpf.Map {
+	if execProbe, exists := a.probeManager.Get("exec_monitor"); exists {
+		if ep, ok := execProbe.(*plugins.ExecProbe); ok {
+			if ep.GetProbe() != nil {
+				return ep.GetProbe().GetPidCorrelations()
+			}
+		}
+	}
+	return nil
+}
+
 func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string, correlationKey uint64) {
 	// 生成或复用 local_correlation_id
 	var localCorrID string
@@ -523,6 +536,18 @@ func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string, corre
 
 func (a *Agent) handleFileEventV3(pid uint32, comm string, filename string, correlationKey uint64) {
 	log.Printf("🔔 V3 file_access 事件: PID=%d COMM=%s FILE=%s", pid, comm, filename)
+
+	// 如果 correlationKey 为 0，尝试向上查父进程
+	if correlationKey == 0 {
+		pidMap := a.getPidCorrelationsMap()
+		if pidMap != nil {
+			parentPid := findParentCorrelationKey(pid, pidMap, 0)
+			if parentPid != 0 {
+				correlationKey = parentPid
+				log.Printf("🔗 file_access 父进程关联: PID=%d → PPID=%d", pid, parentPid)
+			}
+		}
+	}
 
 	// 生成或复用 local_correlation_id
 	var localCorrID string

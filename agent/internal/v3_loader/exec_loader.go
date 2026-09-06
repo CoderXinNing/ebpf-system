@@ -103,6 +103,14 @@ func (p *ExecProbe) Load() error {
 	return nil
 }
 
+// GetPidCorrelations 返回 PID 关联 Map（用于父进程查询）
+func (p *ExecProbe) GetPidCorrelations() *ebpf.Map {
+	if p.objs != nil {
+		return p.objs.PidCorrelations
+	}
+	return nil
+}
+
 // Close 清理资源
 func (p *ExecProbe) Close() {
 	if p.link != nil {
