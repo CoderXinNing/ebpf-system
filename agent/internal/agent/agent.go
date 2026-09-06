@@ -453,6 +453,17 @@ func (a *Agent) fetchProbeList() []*pb.ProbeInfo {
 // registerProbePlugins 注册所有探针插件
 func (a *Agent) registerProbePlugins() {
 	agentHash := generateAgentHash(a.id)
+
+	// V3 exec 探针
+	a.probeManager.Register(plugins.NewExecProbe(
+		"v3_engine/probes/exec_monitor.o",
+		agentHash,
+		func(pid uint32, comm string, cmdline string) {
+			a.handleExecEventV3(pid, comm, cmdline)
+		},
+	))
+
+	// V3 TCP 探针
 	a.probeManager.Register(plugins.NewTCPProbe(
 		"v3_engine/probes/tcp_monitor.o",
 		agentHash,
@@ -465,6 +476,20 @@ func (a *Agent) registerProbePlugins() {
 // handleExecEvent 处理 exec 探针事件
 // handleBashEvent 处理 bash 探针事件
 // handleTCPEvent 处理 tcp 探针事件
+func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string) {
+	
+	// 上报事件
+	a.eventQueue.Push(&pb.ProbeEvent{
+		ProbeName: "execve",
+		Timestamp: time.Now().Unix(),
+		EventType: "execve",
+		Pid:       int32(pid),
+		Comm:      comm,
+		Filename:  "execve",
+		Details:   cmdline,
+	}, PriorityNormal)
+}
+
 func (a *Agent) handleTCPEvent(pid uint32, comm string, count uint64) {
 	a.probeStateActor.Send(msgIncrementBaseline{key: strings.TrimRight(comm, "\x00") + ":tcp_count"})
 	a.eventQueue.Push(&pb.ProbeEvent{

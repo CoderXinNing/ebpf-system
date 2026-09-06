@@ -85,10 +85,7 @@ struct {
 // ============================================
 static __always_inline void sentinel_strncpy(char *dst, const char *src, __u32 len) {
     if (!dst || !src) return;
-    for (__u32 i = 0; i < len - 1; i++) {
-        dst[i] = src[i];
-        if (src[i] == '\0') return;
-    }
+    bpf_probe_read_kernel_str(dst, len, src);
     dst[len - 1] = '\0';
 }
 
