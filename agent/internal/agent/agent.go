@@ -474,6 +474,15 @@ func (a *Agent) registerProbePlugins() {
 		},
 	))
 
+	// V3 file_access 探针
+	a.probeManager.Register(plugins.NewFileProbe(
+		"v3_engine/probes/file_access.o",
+		agentHash,
+		func(pid uint32, comm string, filename string, correlationKey uint64) {
+			a.handleFileEventV3(pid, comm, filename, correlationKey)
+		},
+	))
+
 	// V3 TCP 探针
 	a.probeManager.Register(plugins.NewTCPProbe(
 		"v3_engine/probes/tcp_monitor.o",
@@ -509,6 +518,33 @@ func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string, corre
 
 	if localCorrID != "" {
 		log.Printf("⭐ 事件已关联: PID=%d corrID=%s", pid, localCorrID)
+	}
+}
+
+func (a *Agent) handleFileEventV3(pid uint32, comm string, filename string, correlationKey uint64) {
+	log.Printf("🔔 V3 file_access 事件: PID=%d COMM=%s FILE=%s", pid, comm, filename)
+
+	// 生成或复用 local_correlation_id
+	var localCorrID string
+	if correlationKey != 0 && a.correlationManager != nil {
+		localCorrID = a.correlationManager.GetOrCreate(correlationKey)
+	}
+
+	// 上报事件
+	a.eventQueue.Push(&pb.ProbeEvent{
+		ProbeName:       "file_access",
+		Timestamp:       time.Now().Unix(),
+		EventType:       "file_access",
+		Pid:             int32(pid),
+		Comm:            comm,
+		Filename:        filename,
+		Details:         filename,
+		CorrelationKey:  correlationKey,
+		CorrelationId:   localCorrID,
+	}, PriorityHigh)
+
+	if localCorrID != "" {
+		log.Printf("⭐ 敏感文件访问已关联: PID=%d corrID=%s", pid, localCorrID)
 	}
 }
 
