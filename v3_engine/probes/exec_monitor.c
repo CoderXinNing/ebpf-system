@@ -10,7 +10,6 @@ char LICENSE[] SEC("license") = "GPL";
 // PID 关联 Map
 // ============================================
 struct pid_context {
-    __u32 ppid;
     char comm[16];
     char cmdline[256];
 };
@@ -27,6 +26,14 @@ struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 512 * 1024);
 } exec_events SEC(".maps");
+
+// PPID 关联 Map（Key: pid, Value: ppid）
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 8192);
+    __type(key, __u32);
+    __type(value, __u32);
+} pid_ppid_map SEC(".maps");
 
 // ============================================
 // 读取父进程 TGID
@@ -61,8 +68,8 @@ static __always_inline void get_parent_comm(char *buf, __u32 buf_len) {
         return;
     }
 
-    // 直接读父进程的 comm 数组，不使用中间指针
-    bpf_probe_read_kernel(buf, 16, &parent->comm);
+    // 使用 bpf_probe_read_kernel_str 读取，避免 verifier 拒绝
+    bpf_probe_read_kernel_str(buf, 16, &parent->comm);
     buf[15] = '\0';
 }
 
@@ -119,15 +126,20 @@ int trace_execve(struct trace_event_raw_sys_enter *args) {
     // correlation_key
     evt->correlation_key = make_correlation_key(pid);
 
+    // 在提交前保存 ppid（Ring Buffer 提交后指针失效）
+    __u32 parent_pid = evt->ppid;
+
     // 提交事件
     bpf_ringbuf_submit(evt, 0);
 
     // 更新 PID 关联 Map
     struct pid_context pctx = {};
-    pctx.ppid = evt->ppid;
     sentinel_strncpy(pctx.comm, comm, sizeof(pctx.comm));
     sentinel_strncpy(pctx.cmdline, evt->data, sizeof(pctx.cmdline));
     bpf_map_update_elem(&pid_correlations, &pid, &pctx, BPF_ANY);
+
+    // 单独记录 PPID
+    bpf_map_update_elem(&pid_ppid_map, &pid, &parent_pid, BPF_ANY);
 
     return 0;
 }

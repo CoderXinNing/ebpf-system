@@ -22,11 +22,12 @@ type ExecProbe struct {
 }
 
 type execObjects struct {
-	TraceExecve     *ebpf.Program `ebpf:"trace_execve"`
-	ConfigMap       *ebpf.Map     `ebpf:"config_map"`
-	SentinelEvents  *ebpf.Map     `ebpf:"exec_events"`
-	SentinelWhitelist *ebpf.Map   `ebpf:"sentinel_whitelist"`
-	PidCorrelations *ebpf.Map     `ebpf:"pid_correlations"`
+	TraceExecve      *ebpf.Program `ebpf:"trace_execve"`
+	ConfigMap        *ebpf.Map     `ebpf:"config_map"`
+	SentinelEvents   *ebpf.Map     `ebpf:"exec_events"`
+	SentinelWhitelist *ebpf.Map    `ebpf:"sentinel_whitelist"`
+	PidCorrelations  *ebpf.Map     `ebpf:"pid_correlations"`
+	PidPpidMap       *ebpf.Map     `ebpf:"pid_ppid_map"`
 }
 
 // NewExecProbe 创建 exec 探针
@@ -107,6 +108,14 @@ func (p *ExecProbe) Load() error {
 func (p *ExecProbe) GetPidCorrelations() *ebpf.Map {
 	if p.objs != nil {
 		return p.objs.PidCorrelations
+	}
+	return nil
+}
+
+// GetPidPpidMap 返回 PPID 关联 Map
+func (p *ExecProbe) GetPidPpidMap() *ebpf.Map {
+	if p.objs != nil {
+		return p.objs.PidPpidMap
 	}
 	return nil
 }
