@@ -489,6 +489,7 @@ type ProbeEvent struct {
 	Filename       string                 `protobuf:"bytes,7,opt,name=filename,proto3" json:"filename,omitempty"`
 	Details        string                 `protobuf:"bytes,8,opt,name=details,proto3" json:"details,omitempty"`
 	CorrelationKey uint64                 `protobuf:"varint,9,opt,name=correlation_key,json=correlationKey,proto3" json:"correlation_key,omitempty"` // V3 星轨关联键
+	CorrelationId  string                 `protobuf:"bytes,10,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`    // local_correlation_id
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -584,6 +585,13 @@ func (x *ProbeEvent) GetCorrelationKey() uint64 {
 		return x.CorrelationKey
 	}
 	return 0
+}
+
+func (x *ProbeEvent) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
 }
 
 type EventReport struct {
@@ -1157,7 +1165,7 @@ const file_agent_service_proto_rawDesc = "" +
 	"\x12baseline_remaining\x18\x06 \x01(\x03R\x11baselineRemaining\"a\n" +
 	"\x11HeartbeatResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x122\n" +
-	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\x88\x02\n" +
+	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\xaf\x02\n" +
 	"\n" +
 	"ProbeEvent\x12\x19\n" +
 	"\bprobe_id\x18\x01 \x01(\tR\aprobeId\x12\x1d\n" +
@@ -1170,7 +1178,9 @@ const file_agent_service_proto_rawDesc = "" +
 	"\x04comm\x18\x06 \x01(\tR\x04comm\x12\x1a\n" +
 	"\bfilename\x18\a \x01(\tR\bfilename\x12\x18\n" +
 	"\adetails\x18\b \x01(\tR\adetails\x12'\n" +
-	"\x0fcorrelation_key\x18\t \x01(\x04R\x0ecorrelationKey\"}\n" +
+	"\x0fcorrelation_key\x18\t \x01(\x04R\x0ecorrelationKey\x12%\n" +
+	"\x0ecorrelation_id\x18\n" +
+	" \x01(\tR\rcorrelationId\"}\n" +
 	"\vEventReport\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12,\n" +
 	"\x06events\x18\x02 \x03(\v2\x14.sentinel.ProbeEventR\x06events\x12%\n" +

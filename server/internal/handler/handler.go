@@ -42,16 +42,17 @@ type AgentInfo struct {
 }
 
 type ProbeEvent struct {
-	ID            string `json:"id"`
-	AgentID       string `json:"agent_id"`
-	ProbeName     string `json:"probe_name"`
-	Timestamp     int64  `json:"timestamp"`
-	EventType     string `json:"event_type"`
-	PID           int32  `json:"pid"`
-	Comm          string `json:"comm"`
-	Filename      string `json:"filename"`
-	Details       string `json:"details,omitempty"`
-	CorrelationID string `json:"correlation_id,omitempty"`
+	ID             string `json:"id"`
+	AgentID        string `json:"agent_id"`
+	ProbeName      string `json:"probe_name"`
+	Timestamp      int64  `json:"timestamp"`
+	EventType      string `json:"event_type"`
+	PID            int32  `json:"pid"`
+	Comm           string `json:"comm"`
+	Filename       string `json:"filename"`
+	Details        string `json:"details,omitempty"`
+	CorrelationID  string `json:"correlation_id,omitempty"`
+	CorrelationKey uint64 `json:"correlation_key,omitempty"`
 }
 
 func NewHandler(st *store.Store, am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {

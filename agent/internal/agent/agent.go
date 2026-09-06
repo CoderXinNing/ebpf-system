@@ -55,6 +55,9 @@ type Agent struct {
 
 	// 身份基线
 	identityBaseline *IdentityBaseline
+
+	// V3 星轨关联管理器
+	correlationManager *CorrelationManager
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -93,6 +96,9 @@ func New(cfg *config.AgentConfig) *Agent {
 		learningMinutes = baselineEngine.GetLearningMinutes()
 	}
 	agent.identityBaseline = NewIdentityBaseline(time.Duration(learningMinutes) * time.Minute)
+
+	// 初始化星轨关联管理器（10 分钟 TTL）
+	agent.correlationManager = NewCorrelationManager(agent.id, 10*time.Minute)
 
 	// 初始化 TCP 突变检测器（默认配置，后续从配置文件读取）
 	agent.tcpAnomaly = NewTCPAnomalyDetector(
@@ -482,17 +488,28 @@ func (a *Agent) registerProbePlugins() {
 // handleBashEvent 处理 bash 探针事件
 // handleTCPEvent 处理 tcp 探针事件
 func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string, correlationKey uint64) {
+	// 生成或复用 local_correlation_id
+	var localCorrID string
+	if correlationKey != 0 && a.correlationManager != nil {
+		localCorrID = a.correlationManager.GetOrCreate(correlationKey)
+	}
+
 	// 上报事件
 	a.eventQueue.Push(&pb.ProbeEvent{
-		ProbeName: "execve",
-		Timestamp: time.Now().Unix(),
-		EventType: "execve",
-		Pid:       int32(pid),
-		Comm:      comm,
-		Filename:  "execve",
-		Details:   cmdline,
-		CorrelationKey: correlationKey,
+		ProbeName:       "execve",
+		Timestamp:       time.Now().Unix(),
+		EventType:       "execve",
+		Pid:             int32(pid),
+		Comm:            comm,
+		Filename:        "execve",
+		Details:         cmdline,
+		CorrelationKey:  correlationKey,
+		CorrelationId:   localCorrID,
 	}, PriorityNormal)
+
+	if localCorrID != "" {
+		log.Printf("⭐ 事件已关联: PID=%d corrID=%s", pid, localCorrID)
+	}
 }
 
 func (a *Agent) handleTCPEvent(pid uint32, comm string, count uint64) {

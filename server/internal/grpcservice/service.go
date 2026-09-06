@@ -97,10 +97,15 @@ func (s *Service) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.
 func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.ReportResponse, error) {
 	log.Printf("📥 Server 收到事件上报: %d 个事件", len(req.Events))
 	if len(req.Events) > 0 {
-		log.Printf("🔑 第一个事件 correlation_key=%d", req.Events[0].CorrelationKey)
+		log.Printf("🔑 第一个事件 correlation_key=%d correlation_id=%s", req.Events[0].CorrelationKey, req.Events[0].CorrelationId)
 	}
 	h := s.handler
 	for _, evt := range req.Events {
+		// 优先用事件级 correlation_id，兼容旧版外层
+		corrID := evt.CorrelationId
+		if corrID == "" {
+			corrID = req.CorrelationId
+		}
 		evtRecord := handler.ProbeEvent{
 			ID:            genToken()[:8],
 			AgentID:       req.AgentId,
@@ -111,7 +116,8 @@ func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Re
 			Comm:          evt.Comm,
 			Filename:      evt.Filename,
 			Details:       evt.Details,
-			CorrelationID: req.CorrelationId,
+			CorrelationID:  corrID,
+			CorrelationKey: evt.CorrelationKey,
 		}
 		h.EventMu.Lock()
 		h.Events = append(h.Events, evtRecord)
