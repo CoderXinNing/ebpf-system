@@ -1,27 +1,27 @@
 package plugins
 
 import (
-	"runtime"
+	"fmt"
+	"log"
 
-	"github.com/cilium/ebpf"
-	agentebpf "github.com/CoderXinNing/ebpf-system/agent/internal/ebpf"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 )
 
-// TCPProbe 是 tcp_monitor 探针的适配器
+// TCPProbe 是 V3 TCP 探针的适配器
 type TCPProbe struct {
-	objPath     string
-	callback    func(pid uint32, comm string, count uint64)
-	loaded      bool
-	pidConnMap  *ebpf.Map
-	connDetails *ebpf.Map
-	link        *agentebpf.ManualTracepointLink
+	objPath   string
+	callback  func(pid uint32, comm string, count uint64)
+	loaded    bool
+	probe     *v3_loader.TCPProbe
+	agentHash uint32
 }
 
-func NewTCPProbe(objPath string, callback func(pid uint32, comm string, count uint64)) *TCPProbe {
+func NewTCPProbe(objPath string, agentHash uint32, callback func(pid uint32, comm string, count uint64)) *TCPProbe {
 	return &TCPProbe{
-		objPath:  objPath,
-		callback: callback,
+		objPath:   objPath,
+		callback:  callback,
+		agentHash: agentHash,
 	}
 }
 
@@ -30,18 +30,19 @@ func (p *TCPProbe) Name() string { return "tcp_monitor" }
 func (p *TCPProbe) Init() error { return nil }
 
 func (p *TCPProbe) Attach() error {
-	pidConnMap, connDetails, tp, err := agentebpf.LoadTCPMonitorV2(p.objPath, func(evt agentebpf.TCPEventV2) {
-		// 默认只计数不上报
+	p.probe = v3_loader.NewTCPProbe(p.objPath, p.agentHash, func(header *v3_loader.SentinelEventHeader, detail *v3_loader.TCPConnDetail) {
+		// V3 事件回调：默认计数模式，明细模式下触发
+		if p.callback != nil {
+			p.callback(header.PID, v3_loader.CString(header.Comm[:]), 1)
+		}
 	})
-	if err != nil {
+
+	if err := p.probe.Load(); err != nil {
 		return err
 	}
-	p.pidConnMap = pidConnMap
-	p.connDetails = connDetails
-	p.link = tp
+
 	p.loaded = true
-	runtime.KeepAlive(p)
-	runtime.KeepAlive(tp)
+	log.Printf("✅ V3 TCP 探针已通过插件框架加载")
 	return nil
 }
 
@@ -50,22 +51,18 @@ func (p *TCPProbe) UpdateRules(rules []framework.Rule) error {
 }
 
 func (p *TCPProbe) Stop() error {
-	if p.link != nil {
-		p.link.Close()
-		p.link = nil
+	if p.probe != nil {
+		p.probe.Close()
+		p.probe = nil
 	}
 	p.loaded = false
-	p.pidConnMap = nil
-	p.connDetails = nil
 	return nil
 }
 
-// GetPidConnMap 返回 PID 连接统计 Map（供突变检测使用）
-func (p *TCPProbe) GetPidConnMap() *ebpf.Map {
-	return p.pidConnMap
-}
-
-// GetConnDetails 返回连接明细 Map（供星轨溯源使用）
-func (p *TCPProbe) GetConnDetails() *ebpf.Map {
-	return p.connDetails
+// SetCollectMode 动态切换采集模式
+func (p *TCPProbe) SetCollectMode(mode uint64) error {
+	if p.probe == nil {
+		return fmt.Errorf("探针未加载")
+	}
+	return p.probe.SetCollectMode(mode)
 }

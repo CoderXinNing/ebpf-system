@@ -14,7 +14,6 @@ import (
 	"github.com/CoderXinNing/ebpf-system/agent/internal/actor"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/baseline"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
-	"github.com/CoderXinNing/ebpf-system/agent/internal/ebpf"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/plugins"
@@ -357,9 +356,6 @@ func (a *Agent) Shutdown() {
 			AgentId: a.id,
 		})
 	}
-	if xdpHandle != nil {
-		xdpHandle.Close()
-	}
 	// 按配置清理探针 pin（remove=true 的才清理）
 	pinBase := "/sys/fs/bpf/ebpf-sentinel"
 	for _, p := range a.cfg.Autoload {
@@ -456,83 +452,18 @@ func (a *Agent) fetchProbeList() []*pb.ProbeInfo {
 
 // registerProbePlugins 注册所有探针插件
 func (a *Agent) registerProbePlugins() {
-	a.probeManager.Register(plugins.NewExecProbe(
-		a.getProbePath("exec_monitor"),
-		func(evt ebpf.ExecEvent, cmdline string) {
-			a.handleExecEvent(evt, cmdline)
-		},
-	))
-	a.probeManager.Register(plugins.NewBashProbe(
-		a.getProbePath("bash_monitor"),
-		"/bin/bash",
-		func(evt ebpf.BashEvent, userName string, line string) {
-			a.handleBashEvent(evt, userName, line)
-		},
-	))
+	agentHash := generateAgentHash(a.id)
 	a.probeManager.Register(plugins.NewTCPProbe(
-		a.getProbePath("tcp_monitor"),
+		"v3_engine/probes/tcp_monitor.o",
+		agentHash,
 		func(pid uint32, comm string, count uint64) {
 			a.handleTCPEvent(pid, comm, count)
-		},
-	))
-	a.probeManager.Register(plugins.NewXDPProbe(
-		ebpf.XDPConfig{Iface: a.cfg.XDP.Iface, Mode: a.cfg.XDP.Mode},
-		func(evt ebpf.XDPEvent) {
-			a.handleXDPEvent(evt)
 		},
 	))
 }
 
 // handleExecEvent 处理 exec 探针事件
-func (a *Agent) handleExecEvent(evt ebpf.ExecEvent, cmdline string) {
-
-	// 身份基线检测
-	userName := ebpf.ResolveUser(evt.UID)
-	tmpComm := strings.TrimRight(string(evt.Comm[:]), "\x00")
-	if isAnomaly, reason := a.identityBaseline.Record(userName, tmpComm); isAnomaly {
-		log.Printf("🚨 身份基线异常: %s", reason)
-	}
-
-	parentComm := getParentComm(evt.PPID)
-	childComm := strings.TrimRight(string(evt.Comm[:]), "\x00")
-	if parentComm != "" && childComm != "" {
-		chainKey := parentComm + "->" + childComm
-		a.probeStateActor.Send(msgIncrementBaseline{key: chainKey + ":proc_chain"})
-	}
-	key := ebpf.ResolveUser(evt.UID) + ":exec_count"
-	a.probeStateActor.Send(msgIncrementBaseline{key: key})
-
-	if int32(evt.PID) == int32(os.Getpid()) {
-		return
-	}
-	a.eventQueue.Push(&pb.ProbeEvent{
-		ProbeName: "execve",
-		Timestamp: time.Now().Unix(),
-		EventType: "execve",
-		Pid:       int32(evt.PID),
-		Comm:      string(evt.Comm[:]),
-		Filename:  "execve",
-		Details:   userName + ": " + cmdline,
-	}, PriorityNormal)
-}
-
 // handleBashEvent 处理 bash 探针事件
-func (a *Agent) handleBashEvent(evt ebpf.BashEvent, userName string, line string) {
-	a.probeStateActor.Send(msgIncrementBaseline{key: userName + ":bash_count"})
-	if line == "" {
-		return
-	}
-	a.eventQueue.Push(&pb.ProbeEvent{
-		ProbeName: "bash_input",
-		Timestamp: time.Now().Unix(),
-		EventType: "bash_input",
-		Pid:       int32(evt.PID),
-		Comm:      strings.ToValidUTF8(string(evt.Comm[:]), ""),
-		Filename:  "bash_input",
-		Details:   userName + ": " + strings.ToValidUTF8(line, ""),
-	}, PriorityNormal)
-}
-
 // handleTCPEvent 处理 tcp 探针事件
 func (a *Agent) handleTCPEvent(pid uint32, comm string, count uint64) {
 	a.probeStateActor.Send(msgIncrementBaseline{key: strings.TrimRight(comm, "\x00") + ":tcp_count"})
@@ -547,21 +478,6 @@ func (a *Agent) handleTCPEvent(pid uint32, comm string, count uint64) {
 }
 
 // handleXDPEvent 处理 XDP 事件
-func (a *Agent) handleXDPEvent(evt ebpf.XDPEvent) {
-	if evt.PID == uint32(os.Getpid()) {
-		return
-	}
-	a.eventQueue.Push(&pb.ProbeEvent{
-		ProbeName: "xdp",
-		Timestamp: time.Now().Unix(),
-		EventType: "xdp_alert",
-		Pid:       int32(evt.PID),
-		Comm:      string(evt.Comm[:]),
-		Filename:  "xdp_alert",
-		Details:   string(evt.Details[:]),
-	}, PriorityHigh)
-}
-
 func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
 	for _, p := range probes {
 		if !p.Enabled {
@@ -640,37 +556,6 @@ func (a *Agent) retryConnectLoop() {
 	}
 }
 
-func (a *Agent) startExecMonitorWithStatus(name string) {
-	defer func() {
-		if r := recover(); r != nil {
-			a.probeStateActor.Send(msgSetProbeStatus{name: name, status: fmt.Sprintf("failed: %v", r)})
-			log.Printf("❌ %s 加载失败: %v", name, r)
-		}
-	}()
-	a.startExecMonitor()
-	a.probeStateActor.Send(msgSetProbeStatus{name: name, status: "loaded"})
-}
-
-func (a *Agent) startBashMonitorWithStatus(name string) {
-	if err := a.startBashMonitor(); err != nil {
-		a.probeStateActor.Send(msgSetProbeStatus{name: name, status: fmt.Sprintf("failed: %v", err)})
-		log.Printf("❌ %s 加载失败: %v", name, err)
-		return
-	}
-	a.probeStateActor.Send(msgSetProbeStatus{name: name, status: "loaded"})
-}
-
-func (a *Agent) startTCPMonitorWithStatus(name string) {
-	defer func() {
-		if r := recover(); r != nil {
-			a.probeStateActor.Send(msgSetProbeStatus{name: name, status: fmt.Sprintf("failed: %v", r)})
-			log.Printf("❌ %s 加载失败: %v", name, r)
-		}
-	}()
-	a.startTCPMonitor()
-	a.probeStateActor.Send(msgSetProbeStatus{name: name, status: "loaded"})
-}
-
 func (a *Agent) getActiveProbeCount() int32 {
 	return a.probeState.GetActiveProbeCount()
 }
@@ -723,75 +608,5 @@ func (a *Agent) tcpAnomalyLoop(ctx context.Context) {
 
 // analyzeTCPAnomalies 从 BPF Map 读连接统计并检测突变
 func (a *Agent) analyzeTCPAnomalies() {
-	log.Printf("🔍 分析 TCP 突变...")
-	// 从 TCP 探针适配器获取 Map
-	tcpProbe, exists := a.probeManager.Get("tcp_monitor")
-	if !exists {
-		return
-	}
-	tcpAdapter, ok := tcpProbe.(*plugins.TCPProbe)
-	if !ok {
-		return
-	}
-	pidConnMap := tcpAdapter.GetPidConnMap()
-	if pidConnMap == nil {
-		log.Printf("⚠️ pidConnMap 为 nil")
-		return
-	}
-	log.Printf("✅ pidConnMap 可用")
-
-	// 遍历 Map（匹配 C 端 pid_conn_stats 结构）
-	type pidConnStats struct {
-		RecentPorts [4]uint32
-		RecentIPs   [4]uint32
-		ConnCount   uint64
-	}
-
-	var key uint32
-	var value pidConnStats
-	iter := pidConnMap.Iterate()
-	for iter.Next(&key, &value) {
-		// 统计敏感端口多样性
-		sensitivePorts := make(map[uint32]bool)
-		for _, port := range value.RecentPorts {
-			if a.tcpAnomaly.sensitivePorts[uint16(port)] {
-				sensitivePorts[port] = true
-			}
-		}
-
-		// 统计 IP 多样性
-		uniqueIPs := make(map[uint32]bool)
-		for _, ip := range value.RecentIPs {
-			if ip != 0 {
-				uniqueIPs[ip] = true
-			}
-		}
-
-		triggered := false
-		reason := ""
-
-		if len(sensitivePorts) >= a.tcpAnomaly.portThreshold {
-			triggered = true
-			reason = fmt.Sprintf("端口多样性=%d", len(sensitivePorts))
-		}
-		if len(uniqueIPs) >= a.tcpAnomaly.ipThreshold {
-			triggered = true
-			reason = fmt.Sprintf("IP多样性=%d", len(uniqueIPs))
-		}
-
-		if triggered {
-			log.Printf("🚨 TCP突变: PID=%d %s", key, reason)
-			if a.client != nil && a.token != "" {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				a.client.ReportMutation(a.getAuthContext(ctx), &pb.MutationTrigger{
-					AgentId:     a.id,
-					Pid:         int32(key),
-					TriggerType: "tcp_anomaly",
-					Detail:      reason,
-					Timestamp:   time.Now().Unix(),
-				})
-			}
-		}
-	}
+	log.Printf("🔍 V3 TCP 突变检测待适配")
 }
