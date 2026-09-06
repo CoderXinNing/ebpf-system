@@ -288,6 +288,7 @@ func (a *Agent) register() error {
 }
 
 func (a *Agent) eventReporter() {
+	log.Println("🔄 eventReporter 启动")
 	consumeCh := a.eventQueue.Consume()
 	batch := make([]*pb.ProbeEvent, 0, 100)
 	ticker := time.NewTicker(3 * time.Second)
@@ -300,12 +301,14 @@ func (a *Agent) eventReporter() {
 				// channel 已关闭，退出
 				return
 			}
+			log.Printf("📥 收到事件: %s PID=%d", evt.ProbeName, evt.Pid)
 			batch = append(batch, evt)
 			if len(batch) >= 100 {
 				a.flushEvents(batch)
 				batch = batch[:0]
 			}
 		case <-ticker.C:
+			log.Printf("⏰ ticker 触发, batch=%d", len(batch))
 			if len(batch) > 0 {
 				a.flushEvents(batch)
 				batch = batch[:0]
@@ -321,10 +324,12 @@ func (a *Agent) eventReporter() {
 }
 
 func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
+	log.Printf("🔄 flushEvents 被调用: %d 个事件", len(events))
 	if a.client == nil || a.token == "" {
 		log.Println("⚠️ Server未连接，跳过事件上报")
 		return
 	}
+	log.Printf("🔗 client 正常，准备上报...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	resp, err := a.client.ReportEvents(a.getAuthContext(ctx), &pb.EventReport{
@@ -479,6 +484,8 @@ func (a *Agent) registerProbePlugins() {
 func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string) {
 	
 	// 上报事件
+	stats := a.eventQueue.Stats()
+	log.Printf("📊 队列统计: 高优先总数=%d 低优先总数=%d", stats.TotalHigh, stats.TotalLow)
 	a.eventQueue.Push(&pb.ProbeEvent{
 		ProbeName: "execve",
 		Timestamp: time.Now().Unix(),

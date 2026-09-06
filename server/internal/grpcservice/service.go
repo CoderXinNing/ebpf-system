@@ -95,6 +95,7 @@ func (s *Service) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.
 
 // ReportEvents 事件上报
 func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.ReportResponse, error) {
+	log.Printf("📥 Server 收到事件上报: %d 个事件", len(req.Events))
 	h := s.handler
 	for _, evt := range req.Events {
 		evtRecord := handler.ProbeEvent{
