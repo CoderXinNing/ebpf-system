@@ -11,13 +11,13 @@ import (
 // ExecProbe 是 V3 exec 探针的适配器
 type ExecProbe struct {
 	objPath   string
-	callback  func(pid uint32, comm string, cmdline string)
+	callback  func(pid uint32, comm string, cmdline string, correlationKey uint64)
 	loaded    bool
 	probe     *v3_loader.ExecProbe
 	agentHash uint32
 }
 
-func NewExecProbe(objPath string, agentHash uint32, callback func(pid uint32, comm string, cmdline string)) *ExecProbe {
+func NewExecProbe(objPath string, agentHash uint32, callback func(pid uint32, comm string, cmdline string, correlationKey uint64)) *ExecProbe {
 	return &ExecProbe{
 		objPath:   objPath,
 		callback:  callback,
@@ -32,7 +32,7 @@ func (p *ExecProbe) Init() error { return nil }
 func (p *ExecProbe) Attach() error {
 	p.probe = v3_loader.NewExecProbe(p.objPath, p.agentHash, func(header *v3_loader.SentinelEventHeader, cmdline string) {
 		if p.callback != nil {
-			p.callback(header.PID, v3_loader.CString(header.Comm[:]), cmdline)
+			p.callback(header.PID, v3_loader.CString(header.Comm[:]), cmdline, header.CorrelationKey)
 		}
 	})
 

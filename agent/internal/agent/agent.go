@@ -463,8 +463,8 @@ func (a *Agent) registerProbePlugins() {
 	a.probeManager.Register(plugins.NewExecProbe(
 		"v3_engine/probes/exec_monitor.o",
 		agentHash,
-		func(pid uint32, comm string, cmdline string) {
-			a.handleExecEventV3(pid, comm, cmdline)
+		func(pid uint32, comm string, cmdline string, correlationKey uint64) {
+			a.handleExecEventV3(pid, comm, cmdline, correlationKey)
 		},
 	))
 
@@ -481,11 +481,8 @@ func (a *Agent) registerProbePlugins() {
 // handleExecEvent 处理 exec 探针事件
 // handleBashEvent 处理 bash 探针事件
 // handleTCPEvent 处理 tcp 探针事件
-func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string) {
-	
+func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string, correlationKey uint64) {
 	// 上报事件
-	stats := a.eventQueue.Stats()
-	log.Printf("📊 队列统计: 高优先总数=%d 低优先总数=%d", stats.TotalHigh, stats.TotalLow)
 	a.eventQueue.Push(&pb.ProbeEvent{
 		ProbeName: "execve",
 		Timestamp: time.Now().Unix(),
@@ -494,6 +491,7 @@ func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string) {
 		Comm:      comm,
 		Filename:  "execve",
 		Details:   cmdline,
+		CorrelationKey: correlationKey,
 	}, PriorityNormal)
 }
 

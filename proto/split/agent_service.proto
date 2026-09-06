@@ -65,6 +65,7 @@ message ProbeEvent {
     string comm = 6;
     string filename = 7;
     string details = 8;
+    uint64 correlation_key = 9;  // V3 星轨关联键
 }
 
 message EventReport {
