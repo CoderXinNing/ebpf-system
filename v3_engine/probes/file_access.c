@@ -26,7 +26,6 @@ static __always_inline int is_sensitive_path(const char *filename) {
         "/root/.ssh",
         "/home/",
         "/var/log/auth",
-        "/proc/",
     };
     
     char path[64] = {};
