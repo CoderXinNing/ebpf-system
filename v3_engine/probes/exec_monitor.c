@@ -10,6 +10,7 @@ char LICENSE[] SEC("license") = "GPL";
 // PID 关联 Map
 // ============================================
 struct pid_context {
+    __u32 ppid;
     char comm[16];
     char cmdline[256];
 };
@@ -123,6 +124,7 @@ int trace_execve(struct trace_event_raw_sys_enter *args) {
 
     // 更新 PID 关联 Map
     struct pid_context pctx = {};
+    pctx.ppid = evt->ppid;
     sentinel_strncpy(pctx.comm, comm, sizeof(pctx.comm));
     sentinel_strncpy(pctx.cmdline, evt->data, sizeof(pctx.cmdline));
     bpf_map_update_elem(&pid_correlations, &pid, &pctx, BPF_ANY);
