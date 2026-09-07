@@ -101,6 +101,32 @@ func main() {
 		// PSQL 模式：Handler 层用 repository 接口（过渡期）
 		h = handler.NewHandlerWithNilStore(am, nil)
 		if psqlDB != nil {
+			h.SetListAlertsFunc(func(limit int) ([]map[string]interface{}, error) {
+				alerts, err := psqlDB.ListAlerts(context.Background(), limit)
+				if err != nil {
+					return nil, err
+				}
+				result := make([]map[string]interface{}, 0, len(alerts))
+				for _, a := range alerts {
+					detectedAt := ""
+					if a.DetectedAt != nil {
+						detectedAt = a.DetectedAt.Format(time.RFC3339)
+					}
+					result = append(result, map[string]interface{}{
+						"id":             a.ID,
+						"rule_name":      a.RuleName,
+						"severity":       a.Severity,
+						"description":    a.Description,
+						"agent_id":       a.AgentID,
+						"pid":            a.PID,
+						"comm":           a.Comm,
+						"correlation_id": a.CorrelationID,
+						"status":         a.Status,
+						"detected_at":    detectedAt,
+					})
+				}
+				return result, nil
+			})
 			h.SetSaveAgentFunc(func(agent handler.AgentInfo) error {
 				return psqlDB.SaveAgent(context.Background(), &model.Agent{
 					ID:               agent.ID,
@@ -216,6 +242,32 @@ func main() {
 	// 告警引擎（保存引用，供事件检查使用）
 	alertEngine := alert.NewEngine("server/configs/rules.toml", func(a alert.Alert) {
 		log.Printf("🚨 告警: %s", a.RuleName)
+
+		// 保存告警到 PSQL
+		if psqlDB != nil {
+			detectedAt := a.Time
+			log.Printf("📝 保存告警到 PSQL: %s", a.RuleName)
+			if err := psqlDB.SaveAlert(context.Background(), &model.Alert{
+				RuleName:       a.RuleName,
+				Severity:       a.Severity,
+				Description:    a.Description,
+				AgentID:        a.AgentID,
+				PID:            a.PID,
+				Comm:           a.Comm,
+				Filename:       a.Filename,
+				Details:        a.Details,
+				Source:         "hard_rule",
+				DetectionLevel: "ebpf",
+				ActionType:     "detect",
+				Status:         "open",
+				DetectedAt:     &detectedAt,
+			}); err != nil {
+				log.Printf("⚠️ 告警落库失败: %v", err)
+			} else {
+				log.Printf("✅ 告警已落库: %s", a.RuleName)
+			}
+		}
+
 		// 触发星轨激活
 		if grpcSvc != nil && grpcSvc.StarService() != nil {
 			corrID := grpcSvc.StarService().HandleMutation(a.AgentID, a.PID)

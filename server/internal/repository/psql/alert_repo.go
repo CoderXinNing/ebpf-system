@@ -3,17 +3,20 @@ package psql
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/CoderXinNing/ebpf-system/server/internal/model"
 )
 
 // SaveAlert 保存告警
 func (p *PSQL) SaveAlert(ctx context.Context, alert *model.Alert) error {
+	// 转小写满足 CHECK 约束
+	alert.Severity = strings.ToLower(alert.Severity)
 	_, err := p.pool.Exec(ctx,
 		`INSERT INTO alerts (rule_name, severity, description, agent_id, pid, comm, filename, details, source, detection_level, action_type, correlation_id, status, detected_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		alert.RuleName, alert.Severity, alert.Description, alert.AgentID, alert.PID,
-		alert.Comm, alert.Filename, alert.Details, alert.Source, alert.DetectionLevel,
+		alert.Comm, alert.Filename, toJSON(alert.Details), alert.Source, alert.DetectionLevel,
 		alert.ActionType, alert.CorrelationID, alert.Status, alert.DetectedAt,
 	)
 	if err != nil {

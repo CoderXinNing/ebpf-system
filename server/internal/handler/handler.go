@@ -23,6 +23,7 @@ type Handler struct {
 	sendCmd func(agentID string, cmd *pb.ProbeCommand) error
 	SaveEventFunc func(evt ProbeEvent) error // PSQL 模式注入
 	SaveAgentFunc func(agent AgentInfo) error // PSQL 模式注入
+	ListAlertsFunc func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
 }
 
 type AgentInfo struct {
@@ -65,6 +66,11 @@ func (h *Handler) SetSaveEventFunc(fn func(ProbeEvent) error) {
 // SetSaveAgentFunc 设置 Agent 保存回调（PSQL 模式）
 func (h *Handler) SetSaveAgentFunc(fn func(AgentInfo) error) {
 	h.SaveAgentFunc = fn
+}
+
+// SetListAlertsFunc 设置告警列表回调（PSQL 模式）
+func (h *Handler) SetListAlertsFunc(fn func(int) ([]map[string]interface{}, error)) {
+	h.ListAlertsFunc = fn
 }
 
 func NewHandler(st *store.Store, am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {
@@ -165,11 +171,25 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		})
 		api.GET("/assets/category", h.AssetsByCategory)
 		api.GET("/alerts", func(c *gin.Context) {
-			alerts, _ := h.Store.GetAlerts(100)
-			if alerts == nil {
-				alerts = []store.AlertRecord{}
+			log.Printf("DEBUG: ListAlertsFunc = %v", h.ListAlertsFunc != nil)
+			if h.ListAlertsFunc != nil {
+				alerts, err := h.ListAlertsFunc(100)
+				if err != nil {
+					c.JSON(500, gin.H{"error": err.Error()})
+					return
+				}
+				c.JSON(200, gin.H{"alerts": alerts})
+				return
 			}
-			c.JSON(200, gin.H{"alerts": alerts})
+			if h.Store != nil {
+				alerts, _ := h.Store.GetAlerts(100)
+				if alerts == nil {
+					alerts = []store.AlertRecord{}
+				}
+				c.JSON(200, gin.H{"alerts": alerts})
+				return
+			}
+			c.JSON(200, gin.H{"alerts": []interface{}{}})
 		})
 		api.GET("/baseline/stats", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
 			h.Mu.RLock()
