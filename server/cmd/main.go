@@ -183,10 +183,12 @@ func main() {
 		}()
 	}
 
-	// 告警引擎
-	_ = alert.NewEngine("server/configs/rules.toml", func(a alert.Alert) {
+	// 告警引擎（保存引用，供事件检查使用）
+	alertEngine := alert.NewEngine("server/configs/rules.toml", func(a alert.Alert) {
 		log.Printf("🚨 告警: %s", a.RuleName)
+		// TODO: 触发星轨激活
 	})
+	grpcSvc.SetAlertEngine(alertEngine)
 	_ = alert.NewCorrelationEngine("server/configs/correlation.toml")
 
 	// 启动 HTTP

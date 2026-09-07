@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
+	"github.com/CoderXinNing/ebpf-system/server/internal/alert"
 	"github.com/CoderXinNing/ebpf-system/server/internal/handler"
 	"github.com/CoderXinNing/ebpf-system/server/internal/middleware"
 	"github.com/CoderXinNing/ebpf-system/server/internal/service"
@@ -22,6 +23,7 @@ type Service struct {
 	handler     *handler.Handler
 	agentAuth   *middleware.AgentAuthInterceptor
 	starService *service.StarActivationService
+	alertEngine *alert.Engine
 }
 
 func NewService(h *handler.Handler, auth *middleware.AgentAuthInterceptor) *Service {
@@ -30,6 +32,11 @@ func NewService(h *handler.Handler, auth *middleware.AgentAuthInterceptor) *Serv
 		agentAuth:   auth,
 		starService: service.NewStarActivationService(),
 	}
+}
+
+// SetAlertEngine 设置告警引擎（由 main 注入）
+func (s *Service) SetAlertEngine(e *alert.Engine) {
+	s.alertEngine = e
 }
 
 // sendCommand 向 Agent 下发命令
@@ -125,6 +132,11 @@ func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Re
 			h.Events = h.Events[len(h.Events)-1000:]
 		}
 		h.EventMu.Unlock()
+
+		// 告警引擎检查
+		if s.alertEngine != nil {
+			s.alertEngine.CheckEvent(req.AgentId, evt.Pid, evt.Comm, evt.Details, evt.Filename, evt.ProbeName)
+		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
