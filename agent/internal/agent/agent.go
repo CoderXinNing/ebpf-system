@@ -280,6 +280,8 @@ func (a *Agent) register() error {
 			LlvmAvailable: fw.LLVMAvailable, KernelHeadersAvailable: fw.KernelHeadersAvailable, GoEbpfAvailable: fw.GoEBPFAvailable,
 		},
 		KernelInfo: &pb.KernelInfo{Version: a.capabilities.KernelVersion, Arch: a.capabilities.Arch, BtfEnabled: a.capabilities.BTFEnabled},
+		CapabilityLevel: a.level,
+		ActiveProbes:    int32(len(a.cfg.Autoload)),
 	}
 
 	resp, err := a.client.Register(ctx, req)

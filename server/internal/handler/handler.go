@@ -33,6 +33,7 @@ type AgentInfo struct {
 	Token        string            `json:"-"`
 	Version     string            `json:"version"`
 	Group       string            `json:"group"`
+	CapabilityLevel string         `json:"capability_level"`
 	ActiveProbes int32             `json:"active_probes"`
 	ProbeDetails string            `json:"probe_details"`
 	BaselineState string           `json:"baseline_state"`

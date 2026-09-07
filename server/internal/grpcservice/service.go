@@ -65,6 +65,8 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 		Version: req.AgentVersion, Group: getGroup(req.AgentGroup),
 		Token: tk, FirstSeen: now, LastSeen: now,
 		Framework: req.Framework, KernelInfo: req.KernelInfo,
+		CapabilityLevel: req.CapabilityLevel,
+		ActiveProbes:    req.ActiveProbes,
 		Commands: make([]*pb.ProbeCommand, 0),
 	}
 	s.handler.Mu.Lock()
@@ -82,13 +84,14 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 		if err := s.handler.SaveAgentFunc(handler.AgentInfo{
 			ID: req.AgentId, Hostname: req.Hostname, IPAddr: req.IpAddress,
 			Version: req.AgentVersion, FirstSeen: now, LastSeen: now,
+			CapabilityLevel: req.CapabilityLevel,
 		}); err != nil {
 			log.Printf("⚠️ SaveAgentFunc 失败: %v", err)
 		} else {
 			log.Printf("✅ SaveAgentFunc 成功")
 		}
 	}
-	log.Printf("✅ Agent注册: %s (%s)", req.Hostname, req.IpAddress)
+	log.Printf("✅ Agent注册: %s (%s) capability=%s", req.Hostname, req.IpAddress, req.CapabilityLevel)
 
 	// 设置 token 到鉴权拦截器
 	if s.agentAuth != nil {

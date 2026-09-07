@@ -23,17 +23,19 @@ const (
 
 // RegisterRequest 注册请求
 type RegisterRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
-	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	KernelVersion string                 `protobuf:"bytes,3,opt,name=kernel_version,json=kernelVersion,proto3" json:"kernel_version,omitempty"`
-	IpAddress     string                 `protobuf:"bytes,4,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
-	AgentVersion  string                 `protobuf:"bytes,5,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
-	AgentGroup    string                 `protobuf:"bytes,6,opt,name=agent_group,json=agentGroup,proto3" json:"agent_group,omitempty"`
-	Framework     *FrameworkInfo         `protobuf:"bytes,7,opt,name=framework,proto3" json:"framework,omitempty"`
-	KernelInfo    *KernelInfo            `protobuf:"bytes,8,opt,name=kernel_info,json=kernelInfo,proto3" json:"kernel_info,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	AgentId         string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	Hostname        string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	KernelVersion   string                 `protobuf:"bytes,3,opt,name=kernel_version,json=kernelVersion,proto3" json:"kernel_version,omitempty"`
+	IpAddress       string                 `protobuf:"bytes,4,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
+	AgentVersion    string                 `protobuf:"bytes,5,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	AgentGroup      string                 `protobuf:"bytes,6,opt,name=agent_group,json=agentGroup,proto3" json:"agent_group,omitempty"`
+	Framework       *FrameworkInfo         `protobuf:"bytes,7,opt,name=framework,proto3" json:"framework,omitempty"`
+	KernelInfo      *KernelInfo            `protobuf:"bytes,8,opt,name=kernel_info,json=kernelInfo,proto3" json:"kernel_info,omitempty"`
+	CapabilityLevel string                 `protobuf:"bytes,9,opt,name=capability_level,json=capabilityLevel,proto3" json:"capability_level,omitempty"` // lsm/xdp/ebpf/cmdb
+	ActiveProbes    int32                  `protobuf:"varint,10,opt,name=active_probes,json=activeProbes,proto3" json:"active_probes,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RegisterRequest) Reset() {
@@ -120,6 +122,20 @@ func (x *RegisterRequest) GetKernelInfo() *KernelInfo {
 		return x.KernelInfo
 	}
 	return nil
+}
+
+func (x *RegisterRequest) GetCapabilityLevel() string {
+	if x != nil {
+		return x.CapabilityLevel
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetActiveProbes() int32 {
+	if x != nil {
+		return x.ActiveProbes
+	}
+	return 0
 }
 
 type RegisterResponse struct {
@@ -1122,7 +1138,7 @@ var File_agent_service_proto protoreflect.FileDescriptor
 
 const file_agent_service_proto_rawDesc = "" +
 	"\n" +
-	"\x13agent_service.proto\x12\bsentinel\x1a\fcommon.proto\x1a\vasset.proto\"\xc2\x02\n" +
+	"\x13agent_service.proto\x12\bsentinel\x1a\fcommon.proto\x1a\vasset.proto\"\x92\x03\n" +
 	"\x0fRegisterRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12%\n" +
@@ -1134,7 +1150,10 @@ const file_agent_service_proto_rawDesc = "" +
 	"agentGroup\x125\n" +
 	"\tframework\x18\a \x01(\v2\x17.sentinel.FrameworkInfoR\tframework\x125\n" +
 	"\vkernel_info\x18\b \x01(\v2\x14.sentinel.KernelInfoR\n" +
-	"kernelInfo\"g\n" +
+	"kernelInfo\x12)\n" +
+	"\x10capability_level\x18\t \x01(\tR\x0fcapabilityLevel\x12#\n" +
+	"\ractive_probes\x18\n" +
+	" \x01(\x05R\factiveProbes\"g\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1f\n" +
