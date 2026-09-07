@@ -103,6 +103,14 @@ func (m *CorrelationManager) Get(correlationKey uint64) (string, bool) {
 	return "", false
 }
 
+// Has 检查 correlation_key 是否有关联 ID
+func (m *CorrelationManager) Has(correlationKey uint64) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, exists := m.entries[correlationKey]
+	return exists
+}
+
 // End 标记关联结束（PID 退出触发）
 func (m *CorrelationManager) End(correlationKey uint64) {
 	m.mu.Lock()

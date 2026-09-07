@@ -550,11 +550,10 @@ func (a *Agent) handleFileEventV3(pid uint32, comm string, filename string, corr
 	// 总是尝试向上查父进程，看是否有更早的 correlation_id
 	pidMap := a.getPidPpidMap()
 	if pidMap != nil {
-		parentPid := findParentCorrelationKey(pid, pidMap, 0)
-		if parentPid != 0 {
-			// 用父 PID 作为关联键
-			correlationKey = uint64(parentPid)
-			log.Printf("🔗 file_access 父进程关联: PID=%d → PPID=%d", pid, parentPid)
+		parentKey := findParentCorrelationKey(pid, pidMap, a.correlationManager, 0)
+		if parentKey != 0 {
+			correlationKey = parentKey
+			log.Printf("🔗 file_access 锚点关联: PID=%d → 锚点=%d", pid, parentKey)
 		}
 	}
 
