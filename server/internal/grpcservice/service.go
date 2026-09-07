@@ -39,6 +39,11 @@ func (s *Service) SetAlertEngine(e *alert.Engine) {
 	s.alertEngine = e
 }
 
+// StarService 返回星轨服务
+func (s *Service) StarService() *service.StarActivationService {
+	return s.starService
+}
+
 // sendCommand 向 Agent 下发命令
 func (s *Service) sendCommand(agentID string, cmd *pb.ProbeCommand) error {
 	s.handler.Mu.Lock()

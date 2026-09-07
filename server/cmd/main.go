@@ -186,7 +186,11 @@ func main() {
 	// 告警引擎（保存引用，供事件检查使用）
 	alertEngine := alert.NewEngine("server/configs/rules.toml", func(a alert.Alert) {
 		log.Printf("🚨 告警: %s", a.RuleName)
-		// TODO: 触发星轨激活
+		// 触发星轨激活
+		if grpcSvc != nil && grpcSvc.StarService() != nil {
+			corrID := grpcSvc.StarService().HandleMutation(a.AgentID, a.PID)
+			log.Printf("⭐ 告警触发星轨: corrID=%s", corrID)
+		}
 	})
 	grpcSvc.SetAlertEngine(alertEngine)
 	_ = alert.NewCorrelationEngine("server/configs/correlation.toml")
