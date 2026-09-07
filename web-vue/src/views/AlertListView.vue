@@ -18,6 +18,7 @@ import { ref, onMounted, h } from 'vue'
 import { NTag, NButton, NCard, NSpace, NDataTable } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { getAlerts, type AlertItem } from '../api/alert'
+import { onWSMessage } from '../api/ws'
 
 const alerts = ref<AlertItem[]>([])
 const loading = ref(false)
@@ -72,6 +73,16 @@ const columns = [
 ]
 
 onMounted(async () => {
+  await loadAlerts()
+  
+  // WebSocket 监听新告警
+  onWSMessage('new_alert', async () => {
+    console.log('收到新告警，刷新列表')
+    await loadAlerts()
+  })
+})
+
+async function loadAlerts() {
   loading.value = true
   try {
     alerts.value = await getAlerts()
@@ -80,7 +91,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
 </script>
 
 <style scoped>

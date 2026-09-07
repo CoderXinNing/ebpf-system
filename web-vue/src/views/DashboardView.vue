@@ -27,6 +27,7 @@ import { ref, onMounted } from 'vue'
 import { NGrid, NGridItem, NStatistic, NDataTable } from 'naive-ui'
 import { getAgents, type AgentInfo } from '../api/agent'
 import { getAlerts } from '../api/alert'
+import { onWSMessage } from '../api/ws'
 
 const agents = ref<AgentInfo[]>([])
 const alertCount = ref(0)
@@ -48,6 +49,15 @@ const columns = [
 ]
 
 onMounted(async () => {
+  await loadDashboard()
+  
+  onWSMessage('new_alert', async () => {
+    console.log('收到新告警，刷新仪表盘')
+    await loadDashboard()
+  })
+})
+
+async function loadDashboard() {
   loading.value = true
   try {
     const [agentList, alertList] = await Promise.all([getAgents(), getAlerts()])
@@ -59,7 +69,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
 </script>
 
 <style scoped>

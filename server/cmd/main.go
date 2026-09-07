@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -22,6 +23,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/repository/psql"
 	"github.com/CoderXinNing/ebpf-system/server/internal/repository/sqlite"
 	"github.com/CoderXinNing/ebpf-system/server/internal/udp"
+	"github.com/CoderXinNing/ebpf-system/server/internal/ws"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -266,6 +268,13 @@ func main() {
 				log.Printf("⚠️ 告警落库失败: %v", err)
 			} else {
 				log.Printf("✅ 告警已落库: %s", a.RuleName)
+				ws.Broadcast("new_alert", map[string]interface{}{
+					"rule_name": a.RuleName,
+					"severity":  strings.ToLower(a.Severity),
+					"agent_id":  a.AgentID,
+					"pid":       a.PID,
+					"comm":      a.Comm,
+				})
 			}
 		}
 
@@ -298,6 +307,7 @@ func main() {
 
 	// 启动 HTTP
 	r := gin.Default()
+	r.GET("/ws", gin.WrapF(ws.HandleWS))
 	r.StaticFile("/install.sh", "./server/static/install.sh")
 	r.Static("/bin", "./server/static")
 	if h != nil {

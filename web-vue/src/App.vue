@@ -24,7 +24,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
+import { connectWS } from './api/ws'
 import { useRoute, useRouter } from 'vue-router'
 import { NConfigProvider, NMessageProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText } from 'naive-ui'
 
@@ -47,6 +48,10 @@ const menuOptions = [
   { label: '攻击链', key: '/star' },
   { label: '告警', key: '/alerts' },
 ]
+
+onMounted(() => {
+  connectWS()
+})
 
 const currentPath = computed(() => route.path)
 
