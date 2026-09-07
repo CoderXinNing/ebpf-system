@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/plugins"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 )
 
@@ -34,6 +35,7 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 			continue
 		}
 
+		log.Printf("💓 心跳发送中...")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		resp, err := a.client.Heartbeat(a.getAuthContext(ctx), &pb.HeartbeatRequest{
 			AgentId:           a.id,
@@ -47,7 +49,6 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 
 		if err != nil {
 			log.Printf("⚠️ 心跳失败: %v", err)
-			// 心跳失败可能是连接断开，尝试重连
 			if err := a.connectAndRegister(); err != nil {
 				log.Printf("⚠️ 重连失败: %v", err)
 			}
@@ -69,10 +70,20 @@ func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 	switch cmd.Type {
 	case pb.ProbeCommand_SET_GROUP:
 		log.Printf("📋 修改分组: %s", cmd.GroupName)
-		// 更新配置文件和localStorage下次启动生效
-		// 更新配置文件
 	case pb.ProbeCommand_COLLECT:
 		log.Println("🔄 手动触发: 全量资产采集")
 		a.collectAndReportAssets()
+	case pb.ProbeCommand_ACTIVATE_STAR:
+		log.Printf("⭐ 收到星轨激活命令: corrID=%s", cmd.ProbeConfig)
+		a.starCorrelationID = cmd.ProbeConfig
+		if tcpProbe, exists := a.probeManager.Get("tcp_monitor"); exists {
+			if tp, ok := tcpProbe.(*plugins.TCPProbe); ok {
+				if err := tp.SetCollectMode(1); err != nil {
+					log.Printf("⚠️ TCP 切明细失败: %v", err)
+				} else {
+					log.Println("✅ TCP 已切明细模式")
+				}
+			}
+		}
 	}
 }

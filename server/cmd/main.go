@@ -190,6 +190,20 @@ func main() {
 		if grpcSvc != nil && grpcSvc.StarService() != nil {
 			corrID := grpcSvc.StarService().HandleMutation(a.AgentID, a.PID)
 			log.Printf("⭐ 告警触发星轨: corrID=%s", corrID)
+
+			// 塞入 Agent 命令队列（下次心跳时下发）
+			if h != nil {
+				h.Mu.Lock()
+				if agent, ok := h.Agents[a.AgentID]; ok {
+					agent.Commands = append(agent.Commands, &pb.ProbeCommand{
+						Type:        pb.ProbeCommand_ACTIVATE_STAR,
+						ProbeName:   "tcp_monitor",
+						ProbeConfig: corrID,
+					})
+					log.Printf("📤 星轨激活命令已塞入 Agent %s 队列", a.AgentID)
+				}
+				h.Mu.Unlock()
+			}
 		}
 	})
 	grpcSvc.SetAlertEngine(alertEngine)

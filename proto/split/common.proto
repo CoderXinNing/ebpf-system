@@ -17,6 +17,7 @@ message ProbeCommand {
         INSTALL = 4;
         COLLECT = 5;
         SET_GROUP = 6;
+        ACTIVATE_STAR = 7;
     }
     CommandType type = 1;
     string probe_id = 2;

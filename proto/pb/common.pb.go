@@ -24,12 +24,13 @@ const (
 type ProbeCommand_CommandType int32
 
 const (
-	ProbeCommand_LOAD      ProbeCommand_CommandType = 0
-	ProbeCommand_UNLOAD    ProbeCommand_CommandType = 1
-	ProbeCommand_RELOAD    ProbeCommand_CommandType = 3
-	ProbeCommand_INSTALL   ProbeCommand_CommandType = 4
-	ProbeCommand_COLLECT   ProbeCommand_CommandType = 5
-	ProbeCommand_SET_GROUP ProbeCommand_CommandType = 6
+	ProbeCommand_LOAD          ProbeCommand_CommandType = 0
+	ProbeCommand_UNLOAD        ProbeCommand_CommandType = 1
+	ProbeCommand_RELOAD        ProbeCommand_CommandType = 3
+	ProbeCommand_INSTALL       ProbeCommand_CommandType = 4
+	ProbeCommand_COLLECT       ProbeCommand_CommandType = 5
+	ProbeCommand_SET_GROUP     ProbeCommand_CommandType = 6
+	ProbeCommand_ACTIVATE_STAR ProbeCommand_CommandType = 7
 )
 
 // Enum value maps for ProbeCommand_CommandType.
@@ -41,14 +42,16 @@ var (
 		4: "INSTALL",
 		5: "COLLECT",
 		6: "SET_GROUP",
+		7: "ACTIVATE_STAR",
 	}
 	ProbeCommand_CommandType_value = map[string]int32{
-		"LOAD":      0,
-		"UNLOAD":    1,
-		"RELOAD":    3,
-		"INSTALL":   4,
-		"COLLECT":   5,
-		"SET_GROUP": 6,
+		"LOAD":          0,
+		"UNLOAD":        1,
+		"RELOAD":        3,
+		"INSTALL":       4,
+		"COLLECT":       5,
+		"SET_GROUP":     6,
+		"ACTIVATE_STAR": 7,
 	}
 )
 
@@ -222,7 +225,7 @@ const file_common_proto_rawDesc = "" +
 	"\fcommon.proto\x12\bsentinel\"D\n" +
 	"\x0eReportResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xbb\x02\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xce\x02\n" +
 	"\fProbeCommand\x126\n" +
 	"\x04type\x18\x01 \x01(\x0e2\".sentinel.ProbeCommand.CommandTypeR\x04type\x12\x19\n" +
 	"\bprobe_id\x18\x02 \x01(\tR\aprobeId\x12\x1d\n" +
@@ -232,7 +235,7 @@ const file_common_proto_rawDesc = "" +
 	"probe_data\x18\x04 \x01(\fR\tprobeData\x12!\n" +
 	"\fprobe_config\x18\x05 \x01(\tR\vprobeConfig\x12\x1d\n" +
 	"\n" +
-	"group_name\x18\x06 \x01(\tR\tgroupName\"X\n" +
+	"group_name\x18\x06 \x01(\tR\tgroupName\"k\n" +
 	"\vCommandType\x12\b\n" +
 	"\x04LOAD\x10\x00\x12\n" +
 	"\n" +
@@ -241,7 +244,8 @@ const file_common_proto_rawDesc = "" +
 	"\x06RELOAD\x10\x03\x12\v\n" +
 	"\aINSTALL\x10\x04\x12\v\n" +
 	"\aCOLLECT\x10\x05\x12\r\n" +
-	"\tSET_GROUP\x10\x06B.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
+	"\tSET_GROUP\x10\x06\x12\x11\n" +
+	"\rACTIVATE_STAR\x10\aB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
 
 var (
 	file_common_proto_rawDescOnce sync.Once
