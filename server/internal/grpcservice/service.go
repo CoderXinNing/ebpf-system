@@ -77,6 +77,17 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 		s.handler.Store.SaveAgent(req.AgentId, req.Hostname, req.IpAddress,
 			req.AgentVersion, getGroup(req.AgentGroup), tk, now, now)
 	}
+	if s.handler != nil && s.handler.SaveAgentFunc != nil {
+		log.Printf("📝 调用 SaveAgentFunc: ID=%s", req.AgentId)
+		if err := s.handler.SaveAgentFunc(handler.AgentInfo{
+			ID: req.AgentId, Hostname: req.Hostname, IPAddr: req.IpAddress,
+			Version: req.AgentVersion, FirstSeen: now, LastSeen: now,
+		}); err != nil {
+			log.Printf("⚠️ SaveAgentFunc 失败: %v", err)
+		} else {
+			log.Printf("✅ SaveAgentFunc 成功")
+		}
+	}
 	log.Printf("✅ Agent注册: %s (%s)", req.Hostname, req.IpAddress)
 
 	// 设置 token 到鉴权拦截器
@@ -137,6 +148,13 @@ func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Re
 			h.Events = h.Events[len(h.Events)-1000:]
 		}
 		h.EventMu.Unlock()
+
+		// PSQL 落库
+		if h.SaveEventFunc != nil {
+			if err := h.SaveEventFunc(evtRecord); err != nil {
+				log.Printf("⚠️ 事件落库失败: %v", err)
+			}
+		}
 
 		// 告警引擎检查
 		if s.alertEngine != nil {

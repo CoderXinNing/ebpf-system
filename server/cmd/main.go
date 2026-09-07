@@ -18,6 +18,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/grpcservice"
 	"github.com/CoderXinNing/ebpf-system/server/internal/handler"
 	"github.com/CoderXinNing/ebpf-system/server/internal/middleware"
+	"github.com/CoderXinNing/ebpf-system/server/internal/model"
 	"github.com/CoderXinNing/ebpf-system/server/internal/repository/psql"
 	"github.com/CoderXinNing/ebpf-system/server/internal/repository/sqlite"
 	"github.com/CoderXinNing/ebpf-system/server/internal/udp"
@@ -99,6 +100,35 @@ func main() {
 	} else {
 		// PSQL 模式：Handler 层用 repository 接口（过渡期）
 		h = handler.NewHandlerWithNilStore(am, nil)
+		if psqlDB != nil {
+			h.SetSaveAgentFunc(func(agent handler.AgentInfo) error {
+				return psqlDB.SaveAgent(context.Background(), &model.Agent{
+					ID:               agent.ID,
+					Hostname:         agent.Hostname,
+					IPAddr:           agent.IPAddr,
+					Version:          agent.Version,
+					CapabilityLevel:  "ebpf",
+					BaselineState:    "learning",
+					FirstSeen:        time.Unix(agent.FirstSeen, 0),
+					LastSeen:         time.Unix(agent.LastSeen, 0),
+					LearningDuration: "1 minute",
+				})
+			})
+			h.SetSaveEventFunc(func(evt handler.ProbeEvent) error {
+				return psqlDB.SaveEvent(context.Background(), &model.Event{
+					AgentID:    evt.AgentID,
+					ProbeName:  evt.ProbeName,
+					EventType:  evt.EventType,
+					PID:        int32(evt.PID),
+					Comm:       evt.Comm,
+					Filename:   evt.Filename,
+					Details:    evt.Details,
+					CorrelationID: evt.CorrelationID,
+					SourceChannel: "grpc",
+					Timestamp:  time.Unix(evt.Timestamp, 0),
+				})
+			})
+		}
 	}
 
 	agentAuth := middleware.NewAgentAuthInterceptor()

@@ -8,13 +8,27 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/model"
 )
 
+// toJSON 确保 details 是合法 JSON
+func toJSON(s string) json.RawMessage {
+	if s == "" {
+		return json.RawMessage("null")
+	}
+	// 尝试解析，失败则作为 JSON 字符串
+	if json.Valid([]byte(s)) {
+		return json.RawMessage(s)
+	}
+	// 包装为 JSON 字符串
+	encoded, _ := json.Marshal(s)
+	return encoded
+}
+
 // SaveEvent 保存事件
 func (p *PSQL) SaveEvent(ctx context.Context, event *model.Event) error {
 	_, err := p.pool.Exec(ctx,
 		`INSERT INTO events (agent_id, probe_name, event_type, pid, ppid, uid, comm, parent_comm, filename, details, source_channel, correlation_id, event_hash, timestamp)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		event.AgentID, event.ProbeName, event.EventType, event.PID, event.PPID, event.UID,
-		event.Comm, event.ParentComm, event.Filename, json.RawMessage(event.Details),
+		event.Comm, event.ParentComm, event.Filename, toJSON(event.Details),
 		event.SourceChannel, event.CorrelationID, event.EventHash, event.Timestamp,
 	)
 	if err != nil {

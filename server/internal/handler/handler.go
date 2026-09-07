@@ -21,6 +21,8 @@ type Handler struct {
 	Mu     sync.RWMutex
 	EventMu sync.RWMutex
 	sendCmd func(agentID string, cmd *pb.ProbeCommand) error
+	SaveEventFunc func(evt ProbeEvent) error // PSQL 模式注入
+	SaveAgentFunc func(agent AgentInfo) error // PSQL 模式注入
 }
 
 type AgentInfo struct {
@@ -53,6 +55,16 @@ type ProbeEvent struct {
 	Details        string `json:"details,omitempty"`
 	CorrelationID  string `json:"correlation_id,omitempty"`
 	CorrelationKey uint64 `json:"correlation_key,omitempty"`
+}
+
+// SetSaveEventFunc 设置事件保存回调（PSQL 模式）
+func (h *Handler) SetSaveEventFunc(fn func(ProbeEvent) error) {
+	h.SaveEventFunc = fn
+}
+
+// SetSaveAgentFunc 设置 Agent 保存回调（PSQL 模式）
+func (h *Handler) SetSaveAgentFunc(fn func(AgentInfo) error) {
+	h.SaveAgentFunc = fn
 }
 
 func NewHandler(st *store.Store, am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {
