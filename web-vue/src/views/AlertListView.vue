@@ -15,7 +15,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
-import { NTag, NButton } from 'naive-ui'
+import { NTag, NButton, NCard, NSpace, NDataTable } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { getAlerts, type AlertItem } from '../api/alert'
 
