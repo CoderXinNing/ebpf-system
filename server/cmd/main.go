@@ -273,6 +273,10 @@ func main() {
 			corrID := grpcSvc.StarService().HandleMutation(a.AgentID, a.PID)
 			log.Printf("⭐ 告警触发星轨: corrID=%s", corrID)
 
+			// 回写 correlation_id 到告警（通过更新数据库）
+			if psqlDB != nil {
+				psqlDB.UpdateAlertCorrelationID(context.Background(), a.AgentID, a.RuleName, corrID)
+			}
 			// 塞入 Agent 命令队列（下次心跳时下发）
 			if h != nil {
 				h.Mu.Lock()

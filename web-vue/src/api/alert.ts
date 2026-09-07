@@ -17,5 +17,5 @@ export interface AlertItem {
 
 export async function getAlerts(limit = 50): Promise<AlertItem[]> {
   const { data } = await http.get('/alerts', { params: { limit } })
-  return data
+  return data.alerts || []
 }

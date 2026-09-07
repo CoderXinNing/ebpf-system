@@ -52,6 +52,22 @@ func (p *PSQL) ListAlerts(ctx context.Context, limit int) ([]*model.Alert, error
 	return alerts, nil
 }
 
+// UpdateAlertCorrelationID 回写 correlation_id 到告警
+func (p *PSQL) UpdateAlertCorrelationID(ctx context.Context, agentID string, ruleName string, corrID string) error {
+	_, err := p.pool.Exec(ctx,
+		`UPDATE alerts SET correlation_id = $3 
+		 WHERE agent_id = $1 AND rule_name = $2 AND correlation_id = ''
+		 AND detected_at = (
+		   SELECT MAX(detected_at) FROM alerts 
+		   WHERE agent_id = $1 AND rule_name = $2 AND correlation_id = ''
+		 )`,
+		agentID, ruleName, corrID)
+	if err != nil {
+		return fmt.Errorf("更新告警 correlation_id 失败: %w", err)
+	}
+	return nil
+}
+
 // SaveAlertFeedback 保存告警反馈
 func (p *PSQL) SaveAlertFeedback(ctx context.Context, alertID int64, feedback string, username string) error {
 	_, err := p.pool.Exec(ctx,
