@@ -207,6 +207,9 @@ func (a *Agent) Run(ctx context.Context) {
 	// TCP 突变检测循环
 	go a.tcpAnomalyLoop(ctx)
 
+	// MutationEnd 生命周期检查循环（每 60 秒检查一次）
+	go a.mutationEndLoop(ctx)
+
 	// 心跳循环（阻塞直到 ctx 被取消）
 	a.runHeartbeatLoopWithCtx(ctx)
 }
@@ -737,6 +740,52 @@ func calculateFileSHA256(path string) (string, error) {
 }
 
 // tcpAnomalyLoop 定期分析 TCP 连接突变
+// mutationEndLoop 定期检查并上报 MutationEnd
+func (a *Agent) mutationEndLoop(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if a.correlationManager == nil {
+				continue
+			}
+			expiredIDs := a.correlationManager.CleanupExpired()
+			for _, corrID := range expiredIDs {
+				a.reportMutationEnd(corrID)
+			}
+		}
+	}
+}
+
+// reportMutationEnd 上报 MutationEnd 给 Server
+func (a *Agent) reportMutationEnd(corrID string) {
+	if a.client == nil || a.token == "" {
+		log.Printf("⚠️ Server未连接，MutationEnd 跳过: %s", corrID)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	resp, err := a.client.ReportMutation(a.getAuthContext(ctx), &pb.MutationTrigger{
+		AgentId:     a.id,
+		Pid:         0, // MutationEnd 无特定 PID
+		TriggerType: "mutation_end",
+		Detail:      corrID,
+		Timestamp:   time.Now().Unix(),
+	})
+	if err != nil {
+		log.Printf("⚠️ MutationEnd 上报失败: %v", err)
+	} else if !resp.Success {
+		log.Printf("⚠️ MutationEnd 上报被拒绝")
+	} else {
+		log.Printf("✅ MutationEnd 已上报: %s", corrID)
+	}
+}
+
 func (a *Agent) tcpAnomalyLoop(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()

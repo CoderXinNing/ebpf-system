@@ -112,11 +112,31 @@ func (m *CorrelationManager) Has(correlationKey uint64) bool {
 }
 
 // End 标记关联结束（PID 退出触发）
-func (m *CorrelationManager) End(correlationKey uint64) {
+// 返回被结束的 correlation_id（用于上报 MutationEnd）
+func (m *CorrelationManager) End(correlationKey uint64) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if entry, ok := m.entries[correlationKey]; ok {
 		log.Printf("🏁 关联结束: key=%d id=%s", correlationKey, entry.LocalCorrelationID)
 		delete(m.entries, correlationKey)
+		return entry.LocalCorrelationID
 	}
+	return ""
+}
+
+// CleanupExpired 主动清理过期条目，返回过期的 correlation_id 列表
+func (m *CorrelationManager) CleanupExpired() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+	expiredIDs := make([]string, 0)
+	for key, entry := range m.entries {
+		if now.Sub(entry.LastSeen) > m.ttl {
+			log.Printf("🧹 关联 ID 过期: key=%d id=%s", key, entry.LocalCorrelationID)
+			expiredIDs = append(expiredIDs, entry.LocalCorrelationID)
+			delete(m.entries, key)
+		}
+	}
+	return expiredIDs
 }
