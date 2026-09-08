@@ -39,6 +39,9 @@ func (h *Handler) AddWhitelist(c *gin.Context) {
 
 	// 广播白名单更新给所有 Agent（通过心跳命令）
 	h.broadcastWhitelist()
+	if h.WhitelistUpdateFunc != nil {
+		h.WhitelistUpdateFunc(h.Whitelist)
+	}
 
 	c.JSON(200, gin.H{"success": true, "message": "白名单已添加并下发"})
 }
@@ -56,6 +59,9 @@ func (h *Handler) RemoveWhitelist(c *gin.Context) {
 	h.Whitelist = newList
 
 	h.broadcastWhitelist()
+	if h.WhitelistUpdateFunc != nil {
+		h.WhitelistUpdateFunc(h.Whitelist)
+	}
 	c.JSON(200, gin.H{"success": true, "message": "白名单已移除"})
 }
 

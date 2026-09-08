@@ -25,6 +25,7 @@ type Handler struct {
 	SaveAgentFunc func(agent AgentInfo) error // PSQL 模式注入
 	ListAlertsFunc func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
 	Whitelist     []string // 白名单（进程名列表）
+	WhitelistUpdateFunc func([]string) // 白名单更新回调
 }
 
 type AgentInfo struct {
@@ -68,6 +69,11 @@ func (h *Handler) SetSaveEventFunc(fn func(ProbeEvent) error) {
 // SetSaveAgentFunc 设置 Agent 保存回调（PSQL 模式）
 func (h *Handler) SetSaveAgentFunc(fn func(AgentInfo) error) {
 	h.SaveAgentFunc = fn
+}
+
+// SetWhitelistUpdateFunc 设置白名单更新回调
+func (h *Handler) SetWhitelistUpdateFunc(fn func([]string)) {
+	h.WhitelistUpdateFunc = fn
 }
 
 // SetListAlertsFunc 设置告警列表回调（PSQL 模式）

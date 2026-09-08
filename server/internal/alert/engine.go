@@ -51,6 +51,14 @@ type Engine struct {
 	rulesPath  string
 	freqCount  map[string][]time.Time // 频率统计
 	OnAlert    func(Alert)
+	whitelist  []string // 白名单
+}
+
+// SetWhitelist 设置白名单
+func (e *Engine) SetWhitelist(whitelist []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.whitelist = whitelist
 }
 
 func NewEngine(rulesPath string, callback func(Alert)) *Engine {
@@ -115,9 +123,16 @@ func (e *Engine) loadRules(path string) {
 
 // CheckEvent 检查事件是否触发告警
 func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, source string) {
+	// 白名单检查
 	e.mu.RLock()
+	whitelist := e.whitelist
 	rules := e.rules
 	e.mu.RUnlock()
+	for _, w := range whitelist {
+		if comm == w || strings.Contains(cmdline, w) {
+			return
+		}
+	}
 
 	for _, rule := range rules {
 		if !e.matchRule(rule, comm, cmdline, filename, source) {
