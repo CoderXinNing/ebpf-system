@@ -13,13 +13,13 @@ import (
 // TCPProbe 是 V3 TCP 探针的适配器
 type TCPProbe struct {
 	objPath   string
-	callback  func(pid uint32, comm string, count uint64)
+	callback  func(pid uint32, comm string, count uint64, dstIP uint32, dstPort uint16)
 	loaded    bool
 	probe     *v3_loader.TCPProbe
 	agentHash uint32
 }
 
-func NewTCPProbe(objPath string, agentHash uint32, callback func(pid uint32, comm string, count uint64)) *TCPProbe {
+func NewTCPProbe(objPath string, agentHash uint32, callback func(pid uint32, comm string, count uint64, dstIP uint32, dstPort uint16)) *TCPProbe {
 	return &TCPProbe{
 		objPath:   objPath,
 		callback:  callback,
@@ -35,7 +35,7 @@ func (p *TCPProbe) Attach() error {
 	p.probe = v3_loader.NewTCPProbe(p.objPath, p.agentHash, func(header *v3_loader.SentinelEventHeader, detail *v3_loader.TCPConnDetail) {
 		// V3 事件回调：默认计数模式，明细模式下触发
 		if p.callback != nil {
-			p.callback(header.PID, v3_loader.CString(header.Comm[:]), 1)
+			p.callback(header.PID, v3_loader.CString(header.Comm[:]), 1, detail.DstIP, detail.DstPort)
 		}
 	})
 

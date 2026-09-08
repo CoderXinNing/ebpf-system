@@ -512,7 +512,7 @@ func (a *Agent) registerProbePlugins() {
 	a.probeManager.Register(plugins.NewTCPProbe(
 		"v3_engine/probes/tcp_monitor.o",
 		agentHash,
-		func(pid uint32, comm string, count uint64) {
+		func(pid uint32, comm string, count uint64, dstIP uint32, dstPort uint16) {
 			a.handleTCPEvent(pid, comm, count)
 		},
 	))
