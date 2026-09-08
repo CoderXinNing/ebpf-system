@@ -513,7 +513,7 @@ func (a *Agent) registerProbePlugins() {
 		"v3_engine/probes/tcp_monitor.o",
 		agentHash,
 		func(pid uint32, comm string, count uint64, dstIP uint32, dstPort uint16) {
-			a.handleTCPEvent(pid, comm, count)
+			a.handleTCPEventV3(pid, comm, count, dstIP, dstPort)
 		},
 	))
 }
@@ -619,6 +619,37 @@ func (a *Agent) handleBashEventV3(pid uint32, comm string, line string, correlat
 		Comm:            comm,
 		Filename:        "bash_input",
 		Details:         line,
+		CorrelationKey:  correlationKey,
+		CorrelationId:   localCorrID,
+	}, PriorityNormal)
+}
+
+func (a *Agent) handleTCPEventV3(pid uint32, comm string, count uint64, dstIP uint32, dstPort uint16) {
+	a.probeStateActor.Send(msgIncrementBaseline{key: strings.TrimRight(comm, "") + ":tcp_count"})
+
+	var correlationKey uint64
+	var localCorrID string
+	pidMap := a.getPidPpidMap()
+	if pidMap != nil && a.correlationManager != nil {
+		parentKey := findParentCorrelationKey(pid, pidMap, a.correlationManager, 0)
+		if parentKey != 0 {
+			correlationKey = parentKey
+			localCorrID = a.correlationManager.GetOrCreate(correlationKey)
+		}
+	}
+
+	// 目标 IP:端口 写入 Filename
+	dstIPStr := fmt.Sprintf("%d.%d.%d.%d", (dstIP>>24)&0xFF, (dstIP>>16)&0xFF, (dstIP>>8)&0xFF, dstIP&0xFF)
+	target := fmt.Sprintf("%s:%d", dstIPStr, dstPort)
+
+	a.eventQueue.Push(&pb.ProbeEvent{
+		ProbeName:       "tcp_connect",
+		Timestamp:       time.Now().Unix(),
+		EventType:       "tcp_connect",
+		Pid:             int32(pid),
+		Comm:            strings.TrimRight(comm, ""),
+		Filename:        target,
+		Details:         fmt.Sprintf("外联x%d次 → %s", count, target),
 		CorrelationKey:  correlationKey,
 		CorrelationId:   localCorrID,
 	}, PriorityNormal)
