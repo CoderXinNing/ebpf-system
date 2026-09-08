@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
@@ -166,9 +167,18 @@ func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Re
 
 		// 全局闭合：TCP 事件合并
 		if evt.EventType == "tcp_connect" && evt.CorrelationId != "" {
-			// 从 Details 提取目标 IP:端口（格式：外联xN次）
-			// 简化：用 AgentID + PID 作为局部分组，后续从 TCP 明细提取
-			_ = s.starService.MergeGlobal(req.AgentId, uint16(evt.Pid), evt.CorrelationId)
+			// Filename 格式：目标IP:端口（如 172.16.2.144:8080）
+			target := evt.Filename
+			if strings.Contains(target, ":") {
+				parts := strings.Split(target, ":")
+				if len(parts) == 2 {
+					dstIP := parts[0]
+					dstPort := 0
+					fmt.Sscanf(parts[1], "%d", &dstPort)
+					globalID := s.starService.MergeGlobal(dstIP, uint16(dstPort), evt.CorrelationId)
+					log.Printf("🌐 全局闭合: %s → %s:%d → %s", evt.CorrelationId, dstIP, dstPort, globalID)
+				}
+			}
 		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
