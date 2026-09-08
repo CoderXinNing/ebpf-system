@@ -287,6 +287,7 @@ func (s *Service) GetProbeList(ctx context.Context, req *pb.ProbeListRequest) (*
 			{Name: "bash_monitor", Enabled: true, Path: "probes/templates/bash_monitor/bash_monitor.o"},
 			{Name: "tcp_monitor", Enabled: true, Path: "probes/templates/tcp_monitor/tcp_monitor.o"},
 			{Name: "file_access", Enabled: true, Path: "v3_engine/probes/file_access.o"},
+			{Name: "xdp_reporter", Enabled: true, Path: "v3_engine/probes/xdp_reporter.o"},
 		}
 	}
 

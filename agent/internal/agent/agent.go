@@ -18,6 +18,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/plugins"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 	"crypto/tls"
 	"crypto/x509"
@@ -486,6 +487,14 @@ func (a *Agent) registerProbePlugins() {
 		agentHash,
 		func(pid uint32, comm string, filename string, correlationKey uint64) {
 			a.handleFileEventV3(pid, comm, filename, correlationKey)
+		},
+	))
+
+	// V3 XDP 探针
+	a.probeManager.Register(plugins.NewXDPProbe(
+		v3_loader.XDPConfig{Iface: a.cfg.XDP.Iface, Mode: a.cfg.XDP.Mode},
+		func(pid uint32, comm string, details string) {
+			log.Printf("🔔 V3 XDP 事件: comm=%s details=%s", comm, details)
 		},
 	))
 
