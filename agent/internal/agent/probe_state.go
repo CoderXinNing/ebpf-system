@@ -160,7 +160,7 @@ func (s *ProbeState) flushBaselineWindowLocked(ipAddr string, baselineEngine *ba
 				EventType: "baseline_anomaly",
 				Comm:      user,
 				Filename:  metric,
-				Details:   fmt.Sprintf("%s 基线异常: %s=%d z=%.2f", user, metric, count, zScore),
+				Details:   fmt.Sprintf("[参考] %s 基线异常: %s=%d z=%.2f", user, metric, count, zScore),
 			})
 		}
 		delete(s.baselineCount, key)
