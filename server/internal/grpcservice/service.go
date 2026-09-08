@@ -163,6 +163,13 @@ func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Re
 		if s.alertEngine != nil {
 			s.alertEngine.CheckEvent(req.AgentId, evt.Pid, evt.Comm, evt.Details, evt.Filename, evt.ProbeName)
 		}
+
+		// 全局闭合：TCP 事件合并
+		if evt.EventType == "tcp_connect" && evt.CorrelationId != "" {
+			// 从 Details 提取目标 IP:端口（格式：外联xN次）
+			// 简化：用 AgentID + PID 作为局部分组，后续从 TCP 明细提取
+			_ = s.starService.MergeGlobal(req.AgentId, uint16(evt.Pid), evt.CorrelationId)
+		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
