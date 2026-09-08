@@ -24,6 +24,7 @@ type Handler struct {
 	SaveEventFunc func(evt ProbeEvent) error // PSQL 模式注入
 	SaveAgentFunc func(agent AgentInfo) error // PSQL 模式注入
 	ListAlertsFunc func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
+	Whitelist     []string // 白名单（进程名列表）
 }
 
 type AgentInfo struct {
