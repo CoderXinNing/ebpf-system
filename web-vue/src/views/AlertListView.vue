@@ -27,6 +27,21 @@
               </n-button>
             </n-descriptions-item>
           </n-descriptions>
+
+          <n-divider v-if="selectedAlert?.correlation_id" />
+
+          <div v-if="selectedAlert?.correlation_id" style="max-height: 300px; overflow-y: auto">
+            <n-timeline v-if="chainEvents.length > 0">
+              <n-timeline-item
+                v-for="evt in chainEvents"
+                :key="evt.id"
+                :type="getChainEventType(evt.event_type)"
+                :title="evt.event_type"
+              >
+                <n-text depth="3">PID: {{ evt.pid }} | {{ evt.comm }}</n-text>
+              </n-timeline-item>
+            </n-timeline>
+          </div>
         </n-modal>
       </n-space>
     </n-card>
@@ -35,7 +50,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
-import { NTag, NButton, NCard, NSpace, NDataTable, NModal, NDescriptions, NDescriptionsItem, NEmpty } from 'naive-ui'
+import { NTag, NButton, NCard, NSpace, NDataTable, NModal, NDescriptions, NDescriptionsItem, NEmpty, NTimeline, NTimelineItem, NDivider, NText } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { getAlerts, type AlertItem } from '../api/alert'
 import { onWSMessage } from '../api/ws'
@@ -45,6 +60,7 @@ const loading = ref(false)
 const router = useRouter()
 const showDetail = ref(false)
 const selectedAlert = ref<AlertItem | null>(null)
+const chainEvents = ref<any[]>([])
 
 const columns = [
   {
@@ -128,12 +144,36 @@ function handleRowClick(keys: any) {
   if (keys && keys.length > 0) {
     selectedAlert.value = alerts.value.find(a => a.id === keys[0]) || null
     showDetail.value = true
+    chainEvents.value = []
+    if (selectedAlert.value?.correlation_id) {
+      loadChainEvents(selectedAlert.value.correlation_id)
+    }
   }
 }
 
-function goToStarChain(corrId: string) {
+async function goToStarChain(corrId: string) {
   showDetail.value = false
   router.push(`/star?corr_id=${corrId}`)
+}
+
+async function loadChainEvents(corrId: string) {
+  try {
+    const { getStarChain } = await import('../api/star')
+    const data = await getStarChain(corrId)
+    chainEvents.value = data.events.filter((e: any) => e.event_type !== 'baseline_anomaly').slice(0, 10)
+  } catch (err) {
+    chainEvents.value = []
+  }
+}
+
+function getChainEventType(eventType: string): 'success' | 'warning' | 'error' | 'info' {
+  const map: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
+    execve: 'info',
+    file_access: 'warning',
+    tcp_connect: 'error',
+    bash_input: 'success',
+  }
+  return map[eventType] || 'info'
 }
 
 function formatTime(timeStr: string): string {
