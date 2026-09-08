@@ -79,6 +79,32 @@ func (p *PSQL) ListEvents(ctx context.Context, filter *model.AgentListFilter) ([
 	return events, nil
 }
 
+// ListEventsByCorrelationID 按 correlation_id 查询事件
+func (p *PSQL) ListEventsByCorrelationID(ctx context.Context, corrID string) ([]*model.Event, error) {
+	rows, err := p.pool.Query(ctx,
+		`SELECT id, agent_id, probe_name, event_type, pid, ppid, uid, comm, parent_comm, filename, details, source_channel, correlation_id, event_hash, timestamp
+		 FROM events WHERE correlation_id = $1 ORDER BY timestamp ASC`, corrID)
+	if err != nil {
+		return nil, fmt.Errorf("查询攻击链失败: %w", err)
+	}
+	defer rows.Close()
+
+	var events []*model.Event
+	for rows.Next() {
+		var event model.Event
+		var detailsRaw []byte
+		if err := rows.Scan(&event.ID, &event.AgentID, &event.ProbeName, &event.EventType,
+			&event.PID, &event.PPID, &event.UID, &event.Comm, &event.ParentComm,
+			&event.Filename, &detailsRaw, &event.SourceChannel, &event.CorrelationID,
+			&event.EventHash, &event.Timestamp); err != nil {
+			return nil, fmt.Errorf("扫描事件失败: %w", err)
+		}
+		event.Details = string(detailsRaw)
+		events = append(events, &event)
+	}
+	return events, nil
+}
+
 // CleanExpiredEvents 清理过期事件（通过 DROP 旧分区实现）
 func (p *PSQL) CleanExpiredEvents(ctx context.Context, beforeTimestamp int64) error {
 	// 分区表按月清理，不逐行删除

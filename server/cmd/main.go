@@ -103,7 +103,29 @@ func main() {
 		// PSQL 模式：Handler 层用 repository 接口（过渡期）
 		h = handler.NewHandlerWithNilStore(am, nil)
 		if psqlDB != nil {
-			h.SetListAlertsFunc(func(limit int) ([]map[string]interface{}, error) {
+			h.SetListStarEventsFunc(func(corrID string) ([]map[string]interface{}, error) {
+		events, err := psqlDB.ListEventsByCorrelationID(context.Background(), corrID)
+		if err != nil {
+			return nil, err
+		}
+		result := make([]map[string]interface{}, 0, len(events))
+		for _, evt := range events {
+			result = append(result, map[string]interface{}{
+				"id":             evt.ID,
+				"agent_id":       evt.AgentID,
+				"probe_name":     evt.ProbeName,
+				"event_type":     evt.EventType,
+				"pid":            evt.PID,
+				"comm":           evt.Comm,
+				"filename":       evt.Filename,
+				"details":        evt.Details,
+				"correlation_id": evt.CorrelationID,
+				"timestamp":      evt.Timestamp.Unix(),
+			})
+		}
+		return result, nil
+	})
+	h.SetListAlertsFunc(func(limit int) ([]map[string]interface{}, error) {
 				alerts, err := psqlDB.ListAlerts(context.Background(), limit)
 				if err != nil {
 					return nil, err
