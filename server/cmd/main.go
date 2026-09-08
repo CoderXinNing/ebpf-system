@@ -266,13 +266,14 @@ func main() {
 
 	// 告警引擎（保存引用，供事件检查使用）
 	alertEngine := alert.NewEngine("server/configs/rules.toml", func(a alert.Alert) {
-		log.Printf("🚨 告警: %s", a.RuleName)
+		log.Printf("🚨 告警: %s corrID=%s", a.RuleName, a.CorrelationID)
 
 		// 保存告警到 PSQL
 		if psqlDB != nil {
 			detectedAt := a.Time
 			log.Printf("📝 保存告警到 PSQL: %s", a.RuleName)
 			if err := psqlDB.SaveAlert(context.Background(), &model.Alert{
+				CorrelationID:  a.CorrelationID,
 				RuleName:       a.RuleName,
 				Severity:       a.Severity,
 				Description:    a.Description,
@@ -305,9 +306,13 @@ func main() {
 			corrID := grpcSvc.StarService().HandleMutation(a.AgentID, a.PID)
 			log.Printf("⭐ 告警触发星轨: corrID=%s", corrID)
 
-			// 回写 correlation_id 到告警（通过更新数据库）
+			// 回写 correlation_id 到告警（优先用事件自己的 correlationID）
+			alertCorrID := corrID
+			if a.CorrelationID != "" {
+				alertCorrID = a.CorrelationID
+			}
 			if psqlDB != nil {
-				psqlDB.UpdateAlertCorrelationID(context.Background(), a.AgentID, a.RuleName, corrID)
+				psqlDB.UpdateAlertCorrelationID(context.Background(), a.AgentID, a.RuleName, alertCorrID)
 			}
 			// 塞入 Agent 命令队列（下次心跳时下发）
 			if h != nil {

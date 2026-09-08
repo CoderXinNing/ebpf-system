@@ -162,7 +162,7 @@ func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Re
 
 		// 告警引擎检查
 		if s.alertEngine != nil {
-			s.alertEngine.CheckEvent(req.AgentId, evt.Pid, evt.Comm, evt.Details, evt.Filename, evt.ProbeName)
+			s.alertEngine.CheckEvent(req.AgentId, evt.Pid, evt.Comm, evt.Details, evt.Filename, evt.ProbeName, evt.CorrelationId)
 		}
 
 		// 全局闭合：TCP 事件合并

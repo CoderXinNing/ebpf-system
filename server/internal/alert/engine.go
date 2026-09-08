@@ -33,6 +33,7 @@ type Frequency struct {
 
 type Alert struct {
 	ID          string
+	CorrelationID string
 	RuleName    string
 	Severity    string
 	Description string
@@ -122,7 +123,7 @@ func (e *Engine) loadRules(path string) {
 }
 
 // CheckEvent 检查事件是否触发告警
-func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, source string) {
+func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, source string, correlationID string) {
 	// 白名单检查
 	e.mu.RLock()
 	whitelist := e.whitelist
@@ -172,7 +173,8 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 		}
 
 		alert := Alert{
-			ID:          time.Now().Format("20060102150405") + "-" + rule.Name,
+			ID:            time.Now().Format("20060102150405") + "-" + rule.Name,
+			CorrelationID: correlationID,
 			RuleName:    rule.Name,
 			Severity:    rule.Severity,
 			Description: rule.Description,
