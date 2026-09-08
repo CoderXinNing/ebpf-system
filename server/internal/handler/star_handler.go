@@ -25,6 +25,7 @@ func (h *Handler) GetStarChain(c *gin.Context) {
 		}
 		c.JSON(200, gin.H{
 			"correlation_id": corrID,
+			"global_id":      "",
 			"total":          len(events),
 			"events":         events,
 		})

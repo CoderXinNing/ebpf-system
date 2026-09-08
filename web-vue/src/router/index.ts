@@ -32,6 +32,16 @@ const router = createRouter({
       name: 'Whitelist',
       component: () => import('../views/WhitelistView.vue'),
     },
+    {
+      path: '/host/:id',
+      name: 'HostDetail',
+      component: () => import('../views/HostDetailView.vue'),
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'NotFound',
+      component: () => import('../views/NotFoundView.vue'),
+    },
   ],
 })
 

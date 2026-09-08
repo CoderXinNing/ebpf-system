@@ -150,6 +150,17 @@ func NewStarActivationService() *StarActivationService {
 	}
 }
 
+// GetGlobalID 查询全局 ID
+func (s *StarActivationService) GetGlobalID(dstIP string, dstPort uint16) (string, bool) {
+	key := fmt.Sprintf("%s:%d", dstIP, dstPort)
+	s.globalMap.mu.RLock()
+	defer s.globalMap.mu.RUnlock()
+	if entry, ok := s.globalMap.entries[key]; ok {
+		return entry.GlobalID, true
+	}
+	return "", false
+}
+
 // MergeGlobal 跨主机合并
 func (s *StarActivationService) MergeGlobal(dstIP string, dstPort uint16, localCorrID string) string {
 	return s.globalMap.Merge(dstIP, dstPort, localCorrID)

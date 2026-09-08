@@ -72,8 +72,11 @@ async function handleAdd() {
 }
 
 async function handleRemove(name: string) {
-  await removeWhitelist(name)
-  await loadWhitelist()
+  // 确认弹窗
+  if (confirm(`确认移除白名单: ${name}?`)) {
+    await removeWhitelist(name)
+    await loadWhitelist()
+  }
 }
 </script>
 

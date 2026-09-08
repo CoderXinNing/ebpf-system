@@ -534,9 +534,11 @@ func (a *Agent) getPidPpidMap() *ebpf.Map {
 }
 
 func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string, correlationKey uint64) {
-	// 生成或复用 local_correlation_id
+	// 星轨激活时统一用 starCorrelationID
 	var localCorrID string
-	if correlationKey != 0 && a.correlationManager != nil {
+	if a.starCorrelationID != "" {
+		localCorrID = a.starCorrelationID
+	} else if correlationKey != 0 && a.correlationManager != nil {
 		localCorrID = a.correlationManager.GetOrCreate(correlationKey)
 	}
 
@@ -571,9 +573,11 @@ func (a *Agent) handleFileEventV3(pid uint32, comm string, filename string, corr
 		}
 	}
 
-	// 生成或复用 local_correlation_id
+	// 星轨激活时统一用 starCorrelationID
 	var localCorrID string
-	if correlationKey != 0 && a.correlationManager != nil {
+	if a.starCorrelationID != "" {
+		localCorrID = a.starCorrelationID
+	} else if correlationKey != 0 && a.correlationManager != nil {
 		localCorrID = a.correlationManager.GetOrCreate(correlationKey)
 	}
 
@@ -607,7 +611,9 @@ func (a *Agent) handleBashEventV3(pid uint32, comm string, line string, correlat
 	log.Printf("🔔 V3 bash 事件: PID=%d COMM=%s CMD=%s", pid, comm, line)
 
 	var localCorrID string
-	if correlationKey != 0 && a.correlationManager != nil {
+	if a.starCorrelationID != "" {
+		localCorrID = a.starCorrelationID
+	} else if correlationKey != 0 && a.correlationManager != nil {
 		localCorrID = a.correlationManager.GetOrCreate(correlationKey)
 	}
 
