@@ -1,12 +1,13 @@
 <template>
   <div class="alert-container">
-    <n-card title="告警列表" bordered>
-      <n-space vertical>
+    <n-card title="告警列表" bordered hoverable>
+      <n-space vertical :size="16">
         <n-data-table
           :columns="columns"
           :data="alerts"
           :loading="loading"
           :pagination="{ pageSize: 20 }"
+          :bordered="false"
         />
       </n-space>
     </n-card>
@@ -34,7 +35,7 @@ const columns = [
     key: 'severity',
     render(row: AlertItem) {
       const type = row.severity === 'critical' ? 'error' : row.severity === 'high' ? 'warning' : 'info'
-      return h(NTag, { type }, { default: () => row.severity })
+      return h(NTag, { type, round: true }, { default: () => row.severity })
     },
   },
   {
@@ -62,6 +63,7 @@ const columns = [
           {
             size: 'small',
             type: 'primary',
+            round: true,
             onClick: () => router.push(`/star?corr_id=${row.correlation_id}`),
           },
           { default: () => '查看攻击链' }
@@ -74,10 +76,7 @@ const columns = [
 
 onMounted(async () => {
   await loadAlerts()
-  
-  // WebSocket 监听新告警
   onWSMessage('new_alert', async () => {
-    console.log('收到新告警，刷新列表')
     await loadAlerts()
   })
 })

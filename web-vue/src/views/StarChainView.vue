@@ -1,15 +1,16 @@
 <template>
   <div class="star-chain-container">
-    <n-card title="星轨攻击链查询" bordered>
-      <n-space vertical>
+    <n-card title="星轨攻击链查询" bordered hoverable>
+      <n-space vertical :size="16">
         <n-input-group>
           <n-input
             v-model:value="correlationId"
             placeholder="输入 correlation_id，例如：corr_1788767448273985676"
             clearable
+            size="large"
             @keyup.enter="handleQuery"
           />
-          <n-button type="primary" @click="handleQuery" :loading="loading">
+          <n-button type="primary" size="large" @click="handleQuery" :loading="loading">
             查询
           </n-button>
         </n-input-group>
