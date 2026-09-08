@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -46,6 +47,17 @@ func (p *ExecProbe) Attach() error {
 }
 
 func (p *ExecProbe) UpdateRules(rules []framework.Rule) error {
+	for _, rule := range rules {
+		if rule.Key == "whitelist" {
+			var processNames []string
+			if err := json.Unmarshal([]byte(rule.Value), &processNames); err != nil {
+				return err
+			}
+			if p.probe != nil {
+				return p.probe.UpdateWhitelist(processNames)
+			}
+		}
+	}
 	return nil
 }
 

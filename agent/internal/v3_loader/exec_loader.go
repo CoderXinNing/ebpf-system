@@ -120,6 +120,22 @@ func (p *ExecProbe) GetPidPpidMap() *ebpf.Map {
 	return nil
 }
 
+// UpdateWhitelist 更新白名单
+func (p *ExecProbe) UpdateWhitelist(processNames []string) error {
+	if p.objs == nil || p.objs.SentinelWhitelist == nil {
+		return nil
+	}
+	for _, name := range processNames {
+		var key [16]byte
+		copy(key[:], name)
+		var value uint8 = 1
+		if err := p.objs.SentinelWhitelist.Put(&key, &value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Close 清理资源
 func (p *ExecProbe) Close() {
 	if p.link != nil {
