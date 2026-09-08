@@ -47,6 +47,7 @@ const menuOptions = [
   { label: '仪表盘', key: '/dashboard' },
   { label: '攻击链', key: '/star' },
   { label: '告警', key: '/alerts' },
+  { label: '白名单', key: '/whitelist' },
 ]
 
 onMounted(() => {

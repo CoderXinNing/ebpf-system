@@ -27,6 +27,11 @@ const router = createRouter({
       name: 'AlertList',
       component: () => import('../views/AlertListView.vue'),
     },
+    {
+      path: '/whitelist',
+      name: 'Whitelist',
+      component: () => import('../views/WhitelistView.vue'),
+    },
   ],
 })
 
