@@ -171,6 +171,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"success": true})
 		})
 		api.GET("/assets/category", h.AssetsByCategory)
+		api.GET("/whitelist", h.rbacMiddleware("probes", "read"), h.ListWhitelist)
+		api.POST("/whitelist", h.rbacMiddleware("probes", "write"), h.AddWhitelist)
+		api.DELETE("/whitelist/:process_name", h.rbacMiddleware("probes", "write"), h.RemoveWhitelist)
+
 		api.GET("/alerts", func(c *gin.Context) {
 			log.Printf("DEBUG: ListAlertsFunc = %v", h.ListAlertsFunc != nil)
 			if h.ListAlertsFunc != nil {

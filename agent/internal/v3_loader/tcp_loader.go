@@ -204,6 +204,22 @@ func (p *TCPProbe) SetCollectMode(mode uint64) error {
 	return p.objs.ConfigMap.Put(&key, &mode)
 }
 
+// UpdateWhitelist 更新白名单
+func (p *TCPProbe) UpdateWhitelist(processNames []string) error {
+	if p.objs == nil || p.objs.SentinelWhitelist == nil {
+		return nil
+	}
+	for _, name := range processNames {
+		var key [16]byte
+		copy(key[:], name)
+		var value uint8 = 1
+		if err := p.objs.SentinelWhitelist.Put(&key, &value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Close 清理资源
 func (p *TCPProbe) Close() {
 	if p.link != nil {
