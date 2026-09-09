@@ -645,7 +645,7 @@ func (a *Agent) handleTCPEventV3(pid uint32, comm string, count uint64, dstIP ui
 	}
 
 	// 目标 IP:端口 写入 Filename
-	dstIPStr := fmt.Sprintf("%d.%d.%d.%d", (dstIP>>24)&0xFF, (dstIP>>16)&0xFF, (dstIP>>8)&0xFF, dstIP&0xFF)
+	dstIPStr := fmt.Sprintf("%d.%d.%d.%d", dstIP&0xFF, (dstIP>>8)&0xFF, (dstIP>>16)&0xFF, (dstIP>>24)&0xFF)
 	target := fmt.Sprintf("%s:%d", dstIPStr, dstPort)
 
 	a.eventQueue.Push(&pb.ProbeEvent{

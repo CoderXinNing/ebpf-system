@@ -4,10 +4,25 @@
     <div class="star-left">
       <div class="search-box">
         <n-input-group>
-          <n-input v-model:value="correlationId" placeholder="输入 correlation_id" clearable @keyup.enter="handleQuery" />
+          <n-input v-model:value="correlationId" placeholder="输入 correlation_id / IP / 主机名" clearable @keyup.enter="handleQuery" />
           <n-button type="primary" @click="handleQuery" :loading="loading">查询</n-button>
         </n-input-group>
         <n-alert v-if="error" type="error" style="margin-top: 8px">{{ error }}</n-alert>
+      </div>
+
+      <div class="event-list" v-if="searchAlerts.length > 0">
+        <div class="event-list-title">匹配告警（{{ searchAlerts.length }}）</div>
+        <div
+          v-for="alert in searchAlerts"
+          :key="alert.id"
+          class="event-item"
+          @click="loadAlertChain(alert.correlation_id)"
+        >
+          <n-tag :type="alert.severity === 'critical' ? 'error' : 'warning'" round size="small">
+            {{ alert.severity }}
+          </n-tag>
+          <span class="event-item-meta">{{ alert.rule_name }}</span>
+        </div>
       </div>
 
       <div class="event-list" v-if="chainData">
@@ -79,7 +94,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { NCard, NSpace, NInput, NButton, NInputGroup, NAlert, NTag, NModal, NDescriptions, NDescriptionsItem, NEmpty } from 'naive-ui'
-import { getStarChain, type StarChainResponse, type ChainNode } from '../api/star'
+import { getStarChain, searchStarChain, type StarChainResponse, type ChainNode } from '../api/star'
 
 const route = useRoute()
 const correlationId = ref('')
@@ -130,18 +145,67 @@ onMounted(() => {
 })
 
 async function handleQuery() {
-  if (!correlationId.value.trim()) { error.value = '请输入 correlation_id'; return }
+  const q = correlationId.value.trim()
+  if (!q) { error.value = '请输入查询内容'; return }
   loading.value = true
   error.value = ''
-  chainData.value = null
   showAll.value = false
+
   try {
-    chainData.value = await getStarChain(correlationId.value.trim())
+    // 先按 correlation_id 查
+    if (q.startsWith('corr_') || q.startsWith('agent-') || q.startsWith('global_')) {
+      chainData.value = await getStarChain(q)
+      return
+    }
+
+    // 按 IP/主机名搜索
+    const { searchStarChain } = await import('../api/star')
+    const searchResult = await searchStarChain(q)
+
+    if (searchResult.match_type === 'correlation_id' && searchResult.tree) {
+      chainData.value = {
+        correlation_id: searchResult.correlation_id || q,
+        total: searchResult.total || 0,
+        tree: searchResult.tree,
+      }
+    } else if (searchResult.alerts && searchResult.alerts.length > 0) {
+      // 显示匹配的告警列表，点击后查攻击链
+      searchAlerts.value = searchResult.alerts
+      chainData.value = null
+    } else {
+      error.value = '未找到匹配结果'
+    }
   } catch (err: any) {
     error.value = err.response?.data?.error || '查询失败'
   } finally {
     loading.value = false
   }
+}
+
+const searchAlerts = ref<any[]>([])
+
+function loadAlertChain(corrId: string) {
+  if (!corrId) return
+  loading.value = true
+  error.value = ''
+  // 不修改 correlationId（搜索框保留原值）
+  // 直接用 corrId 查询攻击链
+  getStarChain(corrId)
+    .then((data) => {
+      chainData.value = data
+    })
+    .catch((err: any) => {
+      error.value = err.response?.data?.error || '查询失败'
+    })
+    .finally(() => {
+      loading.value = false
+    })
+}
+
+function clearSearch() {
+  searchAlerts.value = []
+  correlationId.value = ''
+  chainData.value = null
 }
 
 function showEventDetail(evt: any) { selectedEvent.value = evt; showEventModal.value = true }

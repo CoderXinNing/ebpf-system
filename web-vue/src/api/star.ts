@@ -36,3 +36,17 @@ export async function getStarChain(correlationId: string): Promise<StarChainResp
   const { data } = await http.get(`/star/${correlationId}`)
   return data
 }
+
+export interface StarSearchResponse {
+  query: string
+  match_type: 'correlation_id' | 'alerts'
+  correlation_id?: string
+  total?: number
+  tree?: ChainNode[]
+  alerts?: any[]
+}
+
+export async function searchStarChain(query: string): Promise<StarSearchResponse> {
+  const { data } = await http.get('/star/search', { params: { q: query } })
+  return data
+}

@@ -120,6 +120,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/agents", h.ListAgents)
 		api.GET("/events", h.ListEvents)
 		api.GET("/star/:correlation_id", h.rbacMiddleware("events", "read"), h.GetStarChain)
+		api.GET("/star/search", h.rbacMiddleware("events", "read"), h.SearchStarChain)
 		api.DELETE("/agents/:id", h.rbacMiddleware("agents", "delete"), func(c *gin.Context) {
 			agentID := c.Param("id")
 			h.Store.DeleteAgentAll(agentID)
