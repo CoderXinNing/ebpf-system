@@ -13,10 +13,23 @@ export interface StarEvent {
   timestamp: number
 }
 
+export interface ChainNode {
+  id: string
+  event_type: string
+  pid: number
+  comm: string
+  filename: string
+  details: string
+  timestamp: number
+  count?: number
+  children?: ChainNode[]
+}
+
 export interface StarChainResponse {
   correlation_id: string
   total: number
-  events: StarEvent[]
+  events?: StarEvent[]
+  tree?: ChainNode[]
 }
 
 export async function getStarChain(correlationId: string): Promise<StarChainResponse> {

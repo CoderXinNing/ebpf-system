@@ -1,103 +1,125 @@
 <template>
-  <div class="star-chain-container">
-    <n-card title="星轨攻击链查询" bordered hoverable>
-      <n-space vertical :size="16">
+  <div class="star-page">
+    <!-- 左列 -->
+    <div class="star-left">
+      <div class="search-box">
         <n-input-group>
-          <n-input
-            v-model:value="correlationId"
-            placeholder="输入 correlation_id，例如：corr_1788767448273985676"
-            clearable
-            size="large"
-            @keyup.enter="handleQuery"
-          />
-          <n-button type="primary" size="large" @click="handleQuery" :loading="loading">
-            查询
-          </n-button>
+          <n-input v-model:value="correlationId" placeholder="输入 correlation_id" clearable @keyup.enter="handleQuery" />
+          <n-button type="primary" @click="handleQuery" :loading="loading">查询</n-button>
         </n-input-group>
+        <n-alert v-if="error" type="error" style="margin-top: 8px">{{ error }}</n-alert>
+      </div>
 
-        <n-alert v-if="error" type="error" :show-icon="true">
-          {{ error }}
-        </n-alert>
+      <div class="event-list" v-if="chainData">
+        <div class="event-list-title">事件列表（{{ displayEvents.length }}）</div>
+        <div
+          v-for="(evt, idx) in displayEvents"
+          :key="evt.id + '-' + idx"
+          class="event-item"
+          @click="showEventDetail(evt)"
+        >
+          <n-tag :type="getEventType(evt.event_type)" round size="small">
+            {{ getEventTitle(evt) }}{{ evt.count > 1 ? ` x${evt.count}` : '' }}
+          </n-tag>
+          <span class="event-item-meta">PID:{{ evt.pid }} {{ truncate(evt.comm, 10) }}</span>
+        </div>
+        <n-button v-if="hasMore" text type="primary" size="small" @click="showAll = true">
+          展开全部
+        </n-button>
+      </div>
+    </div>
 
-        <template v-if="chainData">
-          <!-- 流程图暂缓（节点聚合逻辑需重新设计） -->
+    <!-- 右列：拓扑图 -->
+    <div class="star-right" v-if="chainData">
+      <div class="zoom-hint">🖱️ 滚轮缩放 · 拖拽平移</div>
+      <div class="topology-container" ref="topologyContainer"
+        @wheel.prevent="onWheel"
+        @mousedown="onMouseDown"
+        @mousemove="onMouseMove"
+        @mouseup="onMouseUp"
+        @mouseleave="onMouseUp"
+        :style="{ cursor: isDragging ? 'grabbing' : 'grab' }">
+        <div class="topology-canvas" :style="{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`, transformOrigin: 'center center' }">
+          <template v-for="(evt, idx) in displayEvents" :key="idx">
+            <div class="topo-node-wrapper">
+              <div
+                class="topo-node"
+                :class="`topo-node-${evt.event_type}`"
+                @click="showEventDetail(evt)"
+              >
+                <span class="topo-icon">{{ getEventIcon(evt.event_type) }}</span>
+                <span class="topo-text">{{ getEventTitle(evt) }}{{ evt.count > 1 ? ` x${evt.count}` : '' }}</span>
+                <span class="topo-pid">PID:{{ evt.pid }}</span>
+              </div>
+              <div v-if="idx < displayEvents.length - 1" class="topo-arrow">→</div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+    <div class="star-right" v-else>
+      <n-empty description="输入 correlation_id 查询攻击链" style="margin: auto" />
+    </div>
 
-          <div v-if="viewMode === 'graph' && chainData" ref="graphContainer" style="width: 100%; height: 500px; border: 1px solid #e2e8f0; border-radius: 8px"></div>
-
-          <n-alert v-if="viewMode === 'timeline'" type="success" :show-icon="true">
-            <n-space justify="space-between" align="center">
-              <span>共找到 {{ chainData.total }} 个关联事件</span>
-              <n-button size="tiny" @click="copyCorrelationId">复制 ID</n-button>
-            </n-space>
-          </n-alert>
-
-          <n-timeline>
-            <n-timeline-item
-              v-for="evt in filteredEvents"
-              :key="evt.id"
-              :type="getEventType(evt.event_type)"
-              :title="getEventTitle(evt)"
-              :time="formatTime(evt.timestamp)"
-            >
-              <n-space vertical>
-                <n-text depth="2">PID: {{ evt.pid }} | 进程: {{ evt.comm }}</n-text>
-                <n-text v-if="evt.filename && evt.event_type === 'tcp_connect'" depth="2">🌐 网络连接</n-text>
-                  <n-text v-else-if="evt.filename" depth="2">📁 {{ evt.filename }}</n-text>
-                <n-text v-if="evt.details && evt.details !== 'null'" depth="3">📝 {{ evt.details }}</n-text>
-              </n-space>
-            </n-timeline-item>
-          </n-timeline>
-        </template>
-      </n-space>
-    </n-card>
+    <!-- 事件详情弹窗 -->
+    <n-modal v-model:show="showEventModal" preset="card" title="事件详情" style="max-width: 500px">
+      <n-descriptions v-if="selectedEvent" :column="1" bordered>
+        <n-descriptions-item label="类型">{{ getEventTitle(selectedEvent) }}</n-descriptions-item>
+        <n-descriptions-item label="PID">{{ selectedEvent.pid }}</n-descriptions-item>
+        <n-descriptions-item label="进程">{{ selectedEvent.comm }}</n-descriptions-item>
+        <n-descriptions-item v-if="selectedEvent.filename" label="文件">{{ selectedEvent.filename }}</n-descriptions-item>
+        <n-descriptions-item v-if="selectedEvent.details && selectedEvent.details !== 'null'" label="详情">{{ selectedEvent.details }}</n-descriptions-item>
+        <n-descriptions-item label="时间">{{ formatTime(selectedEvent.timestamp) }}</n-descriptions-item>
+      </n-descriptions>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { NCard, NSpace, NInput, NButton, NInputGroup, NAlert, NTimeline, NTimelineItem, NText, NRadioGroup, NRadioButton } from 'naive-ui'
-import { getStarChain, type StarChainResponse } from '../api/star'
-import * as echarts from 'echarts'
+import { NCard, NSpace, NInput, NButton, NInputGroup, NAlert, NTag, NModal, NDescriptions, NDescriptionsItem, NEmpty } from 'naive-ui'
+import { getStarChain, type StarChainResponse, type ChainNode } from '../api/star'
 
 const route = useRoute()
 const correlationId = ref('')
 const chainData = ref<StarChainResponse | null>(null)
 const loading = ref(false)
 const error = ref('')
-const viewMode = ref('timeline')
-const graphContainer = ref<HTMLElement | null>(null)
-const filteredEvents = computed(() => {
+const showEventModal = ref(false)
+const selectedEvent = ref<ChainNode | null>(null)
+const showAll = ref(false)
+const maxDisplay = 20
+const topologyContainer = ref<HTMLElement | null>(null)
+const zoomLevel = ref(1)
+
+const displayEvents = computed(() => {
   if (!chainData.value) return []
-  const events = chainData.value.events.filter(evt => evt.event_type !== 'baseline_anomaly')
-  
-  // 只聚合 TCP 事件（相同 PID 的重复连接）
-  const result: any[] = []
-  const seenTCP = new Set<string>()
-  
+  const allEvents = chainData.value.tree || chainData.value.events || []
+  const aggregated = aggregateData(allEvents)
+  if (showAll.value) return aggregated
+  return aggregated.slice(0, maxDisplay)
+})
+
+const hasMore = computed(() => {
+  if (!chainData.value) return false
+  const allEvents = chainData.value.tree || chainData.value.events || []
+  return aggregateData(allEvents).length > maxDisplay && !showAll.value
+})
+
+function aggregateData(events: any[]): ChainNode[] {
+  const seen = new Map<string, ChainNode>()
   events.forEach(evt => {
-    if (evt.event_type === 'tcp_connect') {
-      const key = `${evt.pid}-${evt.event_type}`
-      if (!seenTCP.has(key)) {
-        seenTCP.add(key)
-        result.push(evt)
-      }
+    if (evt.event_type === 'baseline_anomaly') return
+    const key = `${evt.pid}-${evt.event_type}-${evt.filename || ''}`
+    if (seen.has(key)) {
+      seen.get(key)!.count = (seen.get(key)!.count || 1) + 1
     } else {
-      // 非 TCP 事件全部保留
-      result.push(evt)
+      seen.set(key, { ...evt, count: 1 })
     }
   })
-  
-  return result
-})
-
-import { watch } from 'vue'
-
-watch(viewMode, (mode) => {
-  if (mode === 'graph' && chainData.value) {
-    setTimeout(() => initGraph(), 100)
-  }
-})
+  return [...seen.values()].sort((a, b) => a.timestamp - b.timestamp)
+}
 
 onMounted(() => {
   const corrId = route.query.corr_id as string
@@ -108,20 +130,13 @@ onMounted(() => {
 })
 
 async function handleQuery() {
-  if (!correlationId.value.trim()) {
-    error.value = '请输入 correlation_id'
-    return
-  }
-
+  if (!correlationId.value.trim()) { error.value = '请输入 correlation_id'; return }
   loading.value = true
   error.value = ''
   chainData.value = null
-
+  showAll.value = false
   try {
     chainData.value = await getStarChain(correlationId.value.trim())
-    if (viewMode.value === 'graph') {
-      setTimeout(() => initGraph(), 100)
-    }
   } catch (err: any) {
     error.value = err.response?.data?.error || '查询失败'
   } finally {
@@ -129,150 +144,180 @@ async function handleQuery() {
   }
 }
 
-function initGraph() {
-  if (!graphContainer.value || !chainData.value) return
+function showEventDetail(evt: any) { selectedEvent.value = evt; showEventModal.value = true }
 
-  const events = chainData.value.events.filter(e => e.event_type !== 'baseline_anomaly')
-
-  // 按时间排序
-  events.sort((a, b) => a.timestamp - b.timestamp)
-
-  const nodes: any[] = []
-  const links: any[] = []
-  const nodeMap = new Map<string, number>()
-
-  // 节点定义
-  const addNode = (id: string, name: string, type: string, color: string, shape: string) => {
-    if (!nodeMap.has(id)) {
-      nodeMap.set(id, nodes.length)
-      nodes.push({
-        id,
-        name: name.substring(0, 30),
-        symbolSize: type === 'process' ? 50 : 35,
-        itemStyle: { color },
-        symbol: shape,
-        label: { show: true, position: 'bottom', fontSize: 9 },
-      })
-    }
-  }
-
-  // 遍历事件构建节点
-  events.forEach((evt, idx) => {
-    const pid = evt.pid
-    const comm = evt.comm
-    const shortName = comm.length > 15 ? comm.substring(0, 12) + '...' : comm
-
-    if (evt.event_type === 'execve') {
-      addNode(`proc-${pid}`, `${shortName}(PID:${pid})`, 'process', '#4299e1', 'circle')
-    } else if (evt.event_type === 'file_access') {
-      const filename = evt.filename || 'unknown'
-      const shortFile = filename.length > 25 ? filename.substring(0, 22) + '...' : filename
-      addNode(`file-${idx}`, shortFile, 'file', '#ed8936', 'diamond')
-      addNode(`proc-${pid}`, `${shortName}(PID:${pid})`, 'process', '#4299e1', 'circle')
-      links.push({ source: `proc-${pid}`, target: `file-${idx}` })
-    } else if (evt.event_type === 'tcp_connect') {
-      const target = evt.filename || '网络连接'
-      const shortTarget = target.length > 25 ? target.substring(0, 22) + '...' : target
-      addNode(`net-${idx}`, shortTarget, 'network', '#f56565', 'roundRect')
-      addNode(`proc-${pid}`, `${shortName}(PID:${pid})`, 'process', '#4299e1', 'circle')
-      links.push({ source: `proc-${pid}`, target: `net-${idx}` })
-    } else if (evt.event_type === 'bash_input') {
-      addNode(`proc-${pid}`, `${shortName}(PID:${pid})`, 'process', '#48bb78', 'circle')
-    }
-  })
-
-  // 父子进程连线（同 PID 的事件按时间顺序连接）
-  const pidNodes = new Map<number, string[]>()
-  events.forEach((evt, idx) => {
-    if (!pidNodes.has(evt.pid)) pidNodes.set(evt.pid, [])
-    pidNodes.get(evt.pid)!.push(`proc-${evt.pid}`)
-  })
-
-  const chart = echarts.init(graphContainer.value)
-  chart.setOption({
-    tooltip: { trigger: 'item' },
-    series: [{
-      type: 'graph',
-      layout: 'force',
-      data: nodes,
-      links: links,
-      roam: true,
-      force: {
-        repulsion: 300,
-        edgeLength: [80, 150],
-      },
-      label: { show: true, fontSize: 9 },
-      emphasis: {
-        focus: 'adjacency',
-      },
-    }],
-  })
-
-  window.addEventListener('resize', () => chart.resize())
-}
-
-function getEventIcon(eventType: string): string {
-  const icons: Record<string, string> = {
-    execve: '▶️',
-    file_access: '📁',
-    tcp_connect: '🌐',
-    bash_input: '💻',
-  }
-  return icons[eventType] || '📌'
-}
-
-function getEventType(eventType: string): 'success' | 'warning' | 'error' | 'info' {
-  const map: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
-    execve: 'info',
-    file_access: 'warning',
-    tcp_connect: 'error',
-    bash_input: 'success',
-  }
-  return map[eventType] || 'info'
+function getEventType(t: string): 'success' | 'warning' | 'error' | 'info' {
+  const m: Record<string, 'success' | 'warning' | 'error' | 'info'> = { execve: 'info', file_access: 'warning', tcp_connect: 'error', bash_input: 'success' }
+  return m[t] || 'info'
 }
 
 function getEventTitle(evt: any): string {
-  const titles: Record<string, string> = {
-    execve: '进程启动',
-    file_access: '文件访问',
-    tcp_connect: '网络连接',
-    bash_input: 'Shell 命令',
-  }
-  return titles[evt.event_type] || evt.event_type
+  const m: Record<string, string> = { execve: '进程执行', file_access: '文件访问', tcp_connect: '网络连接', bash_input: 'Shell命令' }
+  return m[evt.event_type] || evt.event_type
 }
 
-function copyCorrelationId() {
-  if (!chainData.value) return
-  const text = chainData.value.correlation_id
-  
-  // 降级方案：使用 textarea
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.select()
-  document.execCommand('copy')
-  document.body.removeChild(textarea)
+function getEventIcon(t: string): string {
+  const m: Record<string, string> = { execve: '▶', file_access: '📁', tcp_connect: '🌐', bash_input: '💻' }
+  return m[t] || '•'
 }
 
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
+function truncate(s: string, n: number): string { return s.length > n ? s.substring(0, n) + '..' : s }
+
+const isDragging = ref(false)
+const dragStart = ref({ x: 0, y: 0 })
+const panOffset = ref({ x: 0, y: 0 })
+
+function onWheel(e: WheelEvent) {
+  e.preventDefault()
+  const delta = e.deltaY > 0 ? -0.1 : 0.1
+  zoomLevel.value = Math.max(0.3, Math.min(3, zoomLevel.value + delta))
 }
+
+function onMouseDown(e: MouseEvent) {
+  isDragging.value = true
+  dragStart.value = { x: e.clientX - panOffset.value.x, y: e.clientY - panOffset.value.y }
+}
+
+function onMouseMove(e: MouseEvent) {
+  if (!isDragging.value) return
+  panOffset.value = { x: e.clientX - dragStart.value.x, y: e.clientY - dragStart.value.y }
+}
+
+function onMouseUp() {
+  isDragging.value = false
+}
+
+function formatTime(ts: number): string { return new Date(ts * 1000).toLocaleString('zh-CN') }
 </script>
 
 <style scoped>
-.star-chain-container {
-  padding: 24px;
-  max-width: 900px;
-  margin: 0 auto;
+.star-page {
+  display: flex;
+  height: calc(100vh - 60px);
+  padding: 12px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.star-left {
+  flex: 0 0 320px;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.search-box {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.event-list {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.event-list-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.event-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.event-item:hover { background: #f0f4f8; }
+
+.event-item-meta {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.star-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.zoom-hint {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #94a3b8;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+
+.topology-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  user-select: none;
+}
+
+.topology-canvas {
+  position: relative;
+  min-width: max-content;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.topo-node-wrapper {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.topo-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 200px;
+  min-height: 44px;
+  max-height: 44px;
+  padding: 0 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: all 0.2s;
+}
+
+.topo-node:hover { transform: translateX(4px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+.topo-node-execve { background: #dbeafe; border-left: 4px solid #3b82f6; }
+.topo-node-file_access { background: #fef3c7; border-left: 4px solid #f59e0b; }
+.topo-node-tcp_connect { background: #fee2e2; border-left: 4px solid #ef4444; }
+.topo-node-bash_input { background: #d1fae5; border-left: 4px solid #10b981; }
+
+.topo-icon { font-size: 16px; flex-shrink: 0; }
+.topo-text { flex: 1; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topo-pid { font-size: 11px; color: #64748b; flex-shrink: 0; }
+
+.topo-arrow {
+  font-size: 20px;
+  color: #94a3b8;
+  margin: 0 8px;
+  flex-shrink: 0;
 }
 </style>
