@@ -1,20 +1,20 @@
 <template>
   <div class="host-detail-container">
     <n-card :title="`主机详情: ${hostname}`" bordered hoverable>
-      <n-space vertical :size="20">
-        <!-- 基本信息 -->
-        <n-descriptions :column="2" bordered>
-          <n-descriptions-item label="Agent ID">{{ agentId }}</n-descriptions-item>
-          <n-descriptions-item label="主机名">{{ hostname }}</n-descriptions-item>
-          <n-descriptions-item label="IP 地址">{{ ipAddr }}</n-descriptions-item>
-          <n-descriptions-item label="版本">{{ version }}</n-descriptions-item>
-          <n-descriptions-item label="能力层级">{{ capabilityLevel }}</n-descriptions-item>
-          <n-descriptions-item label="探针数">{{ activeProbes }}</n-descriptions-item>
-          <n-descriptions-item label="最后心跳">{{ lastSeen }}</n-descriptions-item>
-        </n-descriptions>
+      <n-tabs type="line" animated>
+        <n-tab-pane name="overview" tab="概览">
+          <n-descriptions :column="2" bordered>
+            <n-descriptions-item label="Agent ID">{{ agentId }}</n-descriptions-item>
+            <n-descriptions-item label="主机名">{{ hostname }}</n-descriptions-item>
+            <n-descriptions-item label="IP 地址">{{ ipAddr }}</n-descriptions-item>
+            <n-descriptions-item label="版本">{{ version }}</n-descriptions-item>
+            <n-descriptions-item label="能力层级">{{ capabilityLevel }}</n-descriptions-item>
+            <n-descriptions-item label="探针数">{{ activeProbes }}</n-descriptions-item>
+            <n-descriptions-item label="最后心跳">{{ lastSeen }}</n-descriptions-item>
+          </n-descriptions>
+        </n-tab-pane>
 
-        <!-- 探针状态 -->
-        <n-card title="探针状态" size="small" bordered>
+        <n-tab-pane name="probes" tab="探针状态">
           <n-space vertical :size="8">
             <div v-for="probe in probes" :key="probe.name" class="probe-row">
               <n-space justify="space-between" align="center">
@@ -25,34 +25,35 @@
               </n-space>
             </div>
           </n-space>
-        </n-card>
+        </n-tab-pane>
 
-        <!-- 最近告警 -->
-        <n-card title="最近告警" size="small" bordered>
+        <n-tab-pane name="alerts" tab="最近告警">
           <n-data-table
             :columns="alertColumns"
             :data="recentAlerts"
             :loading="loading"
-            :pagination="{ pageSize: 5 }"
+            :pagination="{ pageSize: 10 }"
             :bordered="false"
           />
-        </n-card>
+        </n-tab-pane>
 
-        <!-- 攻击链 -->
-        <n-card title="攻击链" size="small" bordered>
+        <n-tab-pane name="assets" tab="资产">
+          <n-empty description="资产数据采集中，即将上线" />
+        </n-tab-pane>
+
+        <n-tab-pane name="chains" tab="攻击链">
           <n-empty v-if="starChains.length === 0" description="暂无攻击链" />
           <n-list v-else>
             <n-list-item v-for="corrId in starChains" :key="corrId">
               <n-space justify="space-between" align="center">
-                <n-text code>{{ corrId }}</n-text>
-                <n-button size="small" type="primary" @click="goToStarChain(corrId)">
-                  查看
-                </n-button>
+                <n-text code style="font-size: 12px">{{ corrId }}</n-text>
+                <n-button size="small" type="primary" @click="goToStarChain(corrId)">查看</n-button>
               </n-space>
             </n-list-item>
           </n-list>
-        </n-card>
-      </n-space>
+        </n-tab-pane>
+      </n-tabs>
+
     </n-card>
   </div>
 </template>
@@ -60,7 +61,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NCard, NSpace, NDescriptions, NDescriptionsItem, NDataTable, NButton, NEmpty, NList, NListItem, NText, NTag } from 'naive-ui'
+import { NCard, NSpace, NDescriptions, NDescriptionsItem, NDataTable, NButton, NEmpty, NList, NListItem, NText, NTag, NTabs, NTabPane } from 'naive-ui'
 import { getAgents, type AgentInfo } from '../api/agent'
 import { getAlerts, type AlertItem } from '../api/alert'
 

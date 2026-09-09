@@ -186,20 +186,28 @@ func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Re
 
 // 资产上报方法（11 个）
 func (s *Service) ReportProcesses(ctx context.Context, req *pb.ProcessReport) (*pb.ReportResponse, error) {
+	log.Printf("DEBUG: ReportProcesses 收到 %d 个进程", len(req.Processes))
+	if len(req.Processes) > 0 {
+		log.Printf("DEBUG: 第一个进程: PID=%d Name=%s Cmdline=%s", req.Processes[0].Pid, req.Processes[0].Name, req.Processes[0].Cmdline)
+	}
 	procJSON, _ := json.Marshal(req.Processes)
+	log.Printf("DEBUG: ReportProcesses Marshal 后 %d bytes", len(procJSON))
 	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, procJSON, nil, nil) }
+	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, procJSON, nil, nil) }
 	return &pb.ReportResponse{Success: true}, nil
 }
 
 func (s *Service) ReportUsers(ctx context.Context, req *pb.UserReport) (*pb.ReportResponse, error) {
 	userJSON, _ := json.Marshal(req.Users)
 	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, userJSON, nil) }
+	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, userJSON, nil) }
 	return &pb.ReportResponse{Success: true}, nil
 }
 
 func (s *Service) ReportSystemInfo(ctx context.Context, req *pb.SystemReport) (*pb.ReportResponse, error) {
 	sysJSON, _ := json.Marshal(req.System)
 	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
 	return &pb.ReportResponse{Success: true}, nil
 }
 
@@ -212,6 +220,7 @@ func (s *Service) ReportPackages(ctx context.Context, req *pb.PackageReport) (*p
 	}
 	sysJSON, _ := json.Marshal(sysData)
 	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
 	return &pb.ReportResponse{Success: true}, nil
 }
 
@@ -219,6 +228,7 @@ func (s *Service) ReportCronJobs(ctx context.Context, req *pb.CronReport) (*pb.R
 	sysData := map[string]interface{}{"crons": req.Crons}
 	sysJSON, _ := json.Marshal(sysData)
 	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
 	return &pb.ReportResponse{Success: true}, nil
 }
 
@@ -229,6 +239,7 @@ func (s *Service) ReportServices(ctx context.Context, req *pb.ServiceReport) (*p
 	}
 	sysJSON, _ := json.Marshal(sysData)
 	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
 	return &pb.ReportResponse{Success: true}, nil
 }
 

@@ -81,11 +81,34 @@ func (h *Handler) AssetsOverview(c *gin.Context) {
 
 // AssetDetail 资产详情
 func (h *Handler) AssetDetail(c *gin.Context) {
-	agentID := c.Param("id")
+	agentID := c.Param("agent_id")
 	if agentID == "" {
 		c.JSON(400, gin.H{"error": "缺少agent_id"})
 		return
 	}
+	if h.GetLatestAssetFunc != nil {
+		processes, users, system, err := h.GetLatestAssetFunc(agentID)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{
+			"processes": processes,
+			"users":     users,
+			"system":    system,
+		})
+		return
+	}
+
+	if h.Store == nil {
+		c.JSON(200, gin.H{
+			"processes": json.RawMessage("[]"),
+			"users":     json.RawMessage("[]"),
+			"system":    json.RawMessage("{}"),
+		})
+		return
+	}
+
 	processes, users, sysJSON, err := h.Store.GetLatestAsset(agentID)
 	if err != nil {
 		c.JSON(404, gin.H{"error": "资产不存在"})

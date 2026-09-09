@@ -27,6 +27,8 @@ type Handler struct {
 	Whitelist     []string // 白名单（进程名列表）
 	WhitelistUpdateFunc func([]string) // 白名单更新回调
 	ListStarEventsFunc func(corrID string) ([]map[string]interface{}, error) // PSQL 攻击链查询
+	GetLatestAssetFunc func(agentID string) (interface{}, interface{}, interface{}, error) // PSQL 资产查询
+	SaveAssetFunc func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
 }
 
 type AgentInfo struct {
@@ -70,6 +72,16 @@ func (h *Handler) SetSaveEventFunc(fn func(ProbeEvent) error) {
 // SetSaveAgentFunc 设置 Agent 保存回调（PSQL 模式）
 func (h *Handler) SetSaveAgentFunc(fn func(AgentInfo) error) {
 	h.SaveAgentFunc = fn
+}
+
+// SetSaveAssetFunc 设置资产保存回调
+func (h *Handler) SetSaveAssetFunc(fn func(string, []byte, []byte, []byte) error) {
+	h.SaveAssetFunc = fn
+}
+
+// SetGetLatestAssetFunc 设置资产查询回调
+func (h *Handler) SetGetLatestAssetFunc(fn func(string) (interface{}, interface{}, interface{}, error)) {
+	h.GetLatestAssetFunc = fn
 }
 
 // SetListStarEventsFunc 设置攻击链查询回调

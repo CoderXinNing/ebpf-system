@@ -103,7 +103,18 @@ func main() {
 		// PSQL 模式：Handler 层用 repository 接口（过渡期）
 		h = handler.NewHandlerWithNilStore(am, nil)
 		if psqlDB != nil {
-			h.SetListStarEventsFunc(func(corrID string) ([]map[string]interface{}, error) {
+			h.SetSaveAssetFunc(func(agentID string, processesJSON, usersJSON, systemJSON []byte) error {
+		log.Printf("DEBUG: SaveAssetFunc processes=%d bytes users=%d bytes system=%d bytes", len(processesJSON), len(usersJSON), len(systemJSON))
+		return psqlDB.SaveAsset(context.Background(), agentID, processesJSON, usersJSON, systemJSON)
+	})
+	h.SetGetLatestAssetFunc(func(agentID string) (interface{}, interface{}, interface{}, error) {
+		processes, users, system, err := psqlDB.GetLatestAsset(context.Background(), agentID)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return processes, users, system, nil
+	})
+	h.SetListStarEventsFunc(func(corrID string) ([]map[string]interface{}, error) {
 		events, err := psqlDB.ListEventsByCorrelationID(context.Background(), corrID)
 		if err != nil {
 			return nil, err
