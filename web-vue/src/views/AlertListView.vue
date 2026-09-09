@@ -2,9 +2,28 @@
   <div class="alert-container">
     <n-card title="告警列表" bordered hoverable>
       <n-space vertical :size="16">
+        <n-space justify="space-between" align="center">
+          <n-space>
+            <n-select
+            v-model:value="severityFilter"
+            :options="severityOptions"
+            placeholder="严重度"
+            clearable
+            style="width: 140px"
+          />
+            <n-select
+              v-model:value="sourceFilter"
+              :options="sourceOptions"
+              placeholder="来源"
+              clearable
+              style="width: 140px"
+            />
+          </n-space>
+          <n-button size="small" type="success" @click="batchResolve">批量解决</n-button>
+        </n-space>
         <n-data-table
           :columns="columns"
-          :data="alerts"
+          :data="filteredAlerts"
           :loading="loading"
           :pagination="{ pageSize: 20 }"
           :bordered="false"
@@ -49,8 +68,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
-import { NTag, NButton, NCard, NSpace, NDataTable, NModal, NDescriptions, NDescriptionsItem, NEmpty, NTimeline, NTimelineItem, NDivider, NText, NSkeleton } from 'naive-ui'
+import { ref, onMounted, h, computed } from 'vue'
+import { NTag, NButton, NCard, NSpace, NDataTable, NModal, NDescriptions, NDescriptionsItem, NEmpty, NTimeline, NTimelineItem, NDivider, NText, NSkeleton, NSelect } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { getAlerts, type AlertItem } from '../api/alert'
 import { onWSMessage } from '../api/ws'
@@ -61,6 +80,20 @@ const router = useRouter()
 const showDetail = ref(false)
 const selectedAlert = ref<AlertItem | null>(null)
 const chainEvents = ref<any[]>([])
+const severityFilter = ref<string | null>(null)
+const sourceFilter = ref<string | null>(null)
+
+const severityOptions = [
+  { label: '严重', value: 'critical' },
+  { label: '高危', value: 'high' },
+  { label: '中危', value: 'medium' },
+  { label: '低危', value: 'low' },
+]
+
+const sourceOptions = [
+  { label: '硬规则', value: 'hard_rule' },
+  { label: '软基线参考', value: 'baseline' },
+]
 
 const columns = [
   {
@@ -82,6 +115,20 @@ const columns = [
   {
     title: 'PID',
     key: 'pid',
+  },
+  {
+    title: '状态',
+    key: 'status',
+    render(row: AlertItem) {
+      const statusMap: Record<string, { type: 'default' | 'success' | 'warning' | 'error' | 'info', label: string }> = {
+        open: { type: 'error', label: '未处理' },
+        acknowledged: { type: 'warning', label: '已确认' },
+        resolved: { type: 'success', label: '已解决' },
+        false_positive: { type: 'info', label: '误报' },
+      }
+      const s = statusMap[row.status] || { type: 'default' as const, label: row.status }
+      return h(NTag, { type: s.type, round: true }, { default: () => s.label })
+    },
   },
   {
     title: '来源',
@@ -178,6 +225,25 @@ function getChainEventType(eventType: string): 'success' | 'warning' | 'error' |
 
 function formatTime(timeStr: string): string {
   return new Date(timeStr).toLocaleString('zh-CN')
+}
+
+const filteredAlerts = computed(() => {
+  let result = alerts.value
+  if (severityFilter.value) {
+    result = result.filter(a => a.severity === severityFilter.value)
+  }
+  if (sourceFilter.value === 'hard_rule') {
+    result = result.filter(a => !a.details?.includes('[参考]'))
+  }
+  if (sourceFilter.value === 'baseline') {
+    result = result.filter(a => a.details?.includes('[参考]'))
+  }
+  return result
+})
+
+function batchResolve() {
+  // 简化版：只提示，后续对接 API
+  alert('批量解决功能开发中')
 }
 
 async function loadAlerts() {

@@ -1,14 +1,16 @@
 <template>
-  <n-config-provider :theme="isDark ? darkTheme : null">
+  <n-config-provider :theme="isDark ? darkTheme : lightTheme">
     <n-message-provider>
       <router-view v-if="isLoginPage" />
       <n-layout v-else :style="{ minHeight: '100vh', background: isDark ? '#18181c' : '#f5f5f5' }">
-        <n-layout-header bordered style="padding: 12px 24px; background: isDark ? '#242428' : '#fff'">
+        <n-layout-header bordered style="padding: 12px 24px !important; background: #fff !important">
           <n-space align="center" justify="space-between">
             <n-space align="center">
-              <n-h3 style="margin: 0; white-space: nowrap">AsterTrack</n-h3>
-              <n-menu mode="horizontal" :options="menuOptions" :value="currentPath" @update:value="handleMenu"
-                style="overflow-x: auto; max-width: 50vw" />
+              <n-h3 style="margin: 0; white-space: nowrap; color: #1e3a5f !important">AsterTrack</n-h3>
+              <div style="color: #fff">
+                <n-menu mode="horizontal" :options="menuOptions" :value="currentPath" @update:value="handleMenu"
+                  style="overflow-x: auto; max-width: 50vw" />
+              </div>
             </n-space>
             <n-space align="center">
               <n-button size="small" @click="isDark = !isDark">
@@ -35,7 +37,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { connectWS } from './api/ws'
 import { useRoute, useRouter } from 'vue-router'
-import { NConfigProvider, NMessageProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme, lightTheme } from 'naive-ui'
 
 const route = useRoute()
 const router = useRouter()
@@ -77,6 +79,31 @@ function handleLogout() {
 </script>
 
 <style>
+/* 导航栏菜单强制白色 */
+.n-layout-header :deep(.n-menu-item) {
+  color: #fff !important;
+}
+
+.n-layout-header :deep(.n-menu-item:hover) {
+  color: #fff !important;
+}
+
+.n-layout-header :deep(.n-menu-item.n-menu-item--active) {
+  color: #fff !important;
+}
+
+:root {
+  --brand-primary: #1e3a5f;
+  --brand-secondary: #2d5a8e;
+  --brand-accent: #38bdf8;
+  --brand-success: #10b981;
+  --brand-warning: #f59e0b;
+  --brand-danger: #ef4444;
+  --radius-md: 8px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+}
+
 @media (max-width: 768px) {
   .n-layout-header {
     padding: 8px 12px !important;

@@ -79,6 +79,21 @@
         <div ref="trendContainer" style="width: 100%; height: 300px"></div>
       </n-card>
 
+      <!-- 最近攻击链 -->
+      <n-card title="最近攻击链" bordered hoverable>
+        <n-empty v-if="recentStarChains.length === 0" description="暂无攻击链" />
+        <n-list v-else>
+          <n-list-item v-for="corrId in recentStarChains" :key="corrId">
+            <n-space justify="space-between" align="center">
+              <n-text code style="font-size: 12px">{{ corrId }}</n-text>
+              <n-button size="tiny" type="primary" @click="router.push(`/star?corr_id=${corrId}`)">
+                查看
+              </n-button>
+            </n-space>
+          </n-list-item>
+        </n-list>
+      </n-card>
+
       <!-- 主机列表 -->
       <n-card title="主机列表" bordered hoverable>
         <n-skeleton v-if="loading" text :repeat="3" />
@@ -91,7 +106,7 @@
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
-import { NGrid, NGridItem, NDataTable, NCard, NSpace, NButton, NSkeleton } from 'naive-ui'
+import { NGrid, NGridItem, NDataTable, NCard, NSpace, NButton, NSkeleton, NList, NListItem, NEmpty, NText } from 'naive-ui'
 import * as echarts from 'echarts'
 import { getAgents, type AgentInfo } from '../api/agent'
 import { getAlerts, type AlertItem } from '../api/alert'
@@ -105,6 +120,7 @@ const hardRuleCount = ref(0)
 const baselineCount = ref(0)
 const loading = ref(false)
 const trendContainer = ref<HTMLElement | null>(null)
+const recentStarChains = ref<string[]>([])
 
 const columns = [
   {
@@ -142,6 +158,7 @@ async function loadDashboard() {
     starCount.value = new Set(alertList.filter(a => a.correlation_id).map(a => a.correlation_id)).size
     hardRuleCount.value = alertList.filter(a => !a.details?.includes('[参考]')).length
     baselineCount.value = alertList.filter(a => a.details?.includes('[参考]')).length
+    recentStarChains.value = [...new Set(alertList.filter(a => a.correlation_id).map(a => a.correlation_id))].slice(0, 5)
     initTrendChart(alertList)
   } catch (err: any) {
     console.error('加载仪表盘失败:', err)
