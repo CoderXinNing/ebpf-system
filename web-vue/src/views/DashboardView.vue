@@ -81,7 +81,8 @@
 
       <!-- 主机列表 -->
       <n-card title="主机列表" bordered hoverable>
-        <n-data-table :columns="columns" :data="agents" :loading="loading" :bordered="false" />
+        <n-skeleton v-if="loading" text :repeat="3" />
+        <n-data-table v-else :columns="columns" :data="agents" :bordered="false" />
       </n-card>
     </n-space>
   </div>
@@ -90,7 +91,7 @@
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
-import { NGrid, NGridItem, NDataTable, NCard, NSpace, NButton } from 'naive-ui'
+import { NGrid, NGridItem, NDataTable, NCard, NSpace, NButton, NSkeleton } from 'naive-ui'
 import * as echarts from 'echarts'
 import { getAgents, type AgentInfo } from '../api/agent'
 import { getAlerts, type AlertItem } from '../api/alert'

@@ -20,7 +20,11 @@
         </n-alert>
 
         <template v-if="chainData">
-          <n-alert type="success" :show-icon="true">
+          <!-- 流程图暂缓（节点聚合逻辑需重新设计） -->
+
+          <div v-if="viewMode === 'graph' && chainData" ref="graphContainer" style="width: 100%; height: 500px; border: 1px solid #e2e8f0; border-radius: 8px"></div>
+
+          <n-alert v-if="viewMode === 'timeline'" type="success" :show-icon="true">
             <n-space justify="space-between" align="center">
               <span>共找到 {{ chainData.total }} 个关联事件</span>
               <n-button size="tiny" @click="copyCorrelationId">复制 ID</n-button>
@@ -50,18 +54,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { NCard, NSpace, NInput, NButton, NInputGroup, NAlert, NTimeline, NTimelineItem, NText } from 'naive-ui'
+import { NCard, NSpace, NInput, NButton, NInputGroup, NAlert, NTimeline, NTimelineItem, NText, NRadioGroup, NRadioButton } from 'naive-ui'
 import { getStarChain, type StarChainResponse } from '../api/star'
+import * as echarts from 'echarts'
 
 const route = useRoute()
 const correlationId = ref('')
 const chainData = ref<StarChainResponse | null>(null)
 const loading = ref(false)
 const error = ref('')
-import { computed } from 'vue'
-
+const viewMode = ref('timeline')
+const graphContainer = ref<HTMLElement | null>(null)
 const filteredEvents = computed(() => {
   if (!chainData.value) return []
   const events = chainData.value.events.filter(evt => evt.event_type !== 'baseline_anomaly')
@@ -86,6 +91,14 @@ const filteredEvents = computed(() => {
   return result
 })
 
+import { watch } from 'vue'
+
+watch(viewMode, (mode) => {
+  if (mode === 'graph' && chainData.value) {
+    setTimeout(() => initGraph(), 100)
+  }
+})
+
 onMounted(() => {
   const corrId = route.query.corr_id as string
   if (corrId) {
@@ -106,11 +119,96 @@ async function handleQuery() {
 
   try {
     chainData.value = await getStarChain(correlationId.value.trim())
+    if (viewMode.value === 'graph') {
+      setTimeout(() => initGraph(), 100)
+    }
   } catch (err: any) {
     error.value = err.response?.data?.error || '查询失败'
   } finally {
     loading.value = false
   }
+}
+
+function initGraph() {
+  if (!graphContainer.value || !chainData.value) return
+
+  const events = chainData.value.events.filter(e => e.event_type !== 'baseline_anomaly')
+
+  // 按时间排序
+  events.sort((a, b) => a.timestamp - b.timestamp)
+
+  const nodes: any[] = []
+  const links: any[] = []
+  const nodeMap = new Map<string, number>()
+
+  // 节点定义
+  const addNode = (id: string, name: string, type: string, color: string, shape: string) => {
+    if (!nodeMap.has(id)) {
+      nodeMap.set(id, nodes.length)
+      nodes.push({
+        id,
+        name: name.substring(0, 30),
+        symbolSize: type === 'process' ? 50 : 35,
+        itemStyle: { color },
+        symbol: shape,
+        label: { show: true, position: 'bottom', fontSize: 9 },
+      })
+    }
+  }
+
+  // 遍历事件构建节点
+  events.forEach((evt, idx) => {
+    const pid = evt.pid
+    const comm = evt.comm
+    const shortName = comm.length > 15 ? comm.substring(0, 12) + '...' : comm
+
+    if (evt.event_type === 'execve') {
+      addNode(`proc-${pid}`, `${shortName}(PID:${pid})`, 'process', '#4299e1', 'circle')
+    } else if (evt.event_type === 'file_access') {
+      const filename = evt.filename || 'unknown'
+      const shortFile = filename.length > 25 ? filename.substring(0, 22) + '...' : filename
+      addNode(`file-${idx}`, shortFile, 'file', '#ed8936', 'diamond')
+      addNode(`proc-${pid}`, `${shortName}(PID:${pid})`, 'process', '#4299e1', 'circle')
+      links.push({ source: `proc-${pid}`, target: `file-${idx}` })
+    } else if (evt.event_type === 'tcp_connect') {
+      const target = evt.filename || '网络连接'
+      const shortTarget = target.length > 25 ? target.substring(0, 22) + '...' : target
+      addNode(`net-${idx}`, shortTarget, 'network', '#f56565', 'roundRect')
+      addNode(`proc-${pid}`, `${shortName}(PID:${pid})`, 'process', '#4299e1', 'circle')
+      links.push({ source: `proc-${pid}`, target: `net-${idx}` })
+    } else if (evt.event_type === 'bash_input') {
+      addNode(`proc-${pid}`, `${shortName}(PID:${pid})`, 'process', '#48bb78', 'circle')
+    }
+  })
+
+  // 父子进程连线（同 PID 的事件按时间顺序连接）
+  const pidNodes = new Map<number, string[]>()
+  events.forEach((evt, idx) => {
+    if (!pidNodes.has(evt.pid)) pidNodes.set(evt.pid, [])
+    pidNodes.get(evt.pid)!.push(`proc-${evt.pid}`)
+  })
+
+  const chart = echarts.init(graphContainer.value)
+  chart.setOption({
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'graph',
+      layout: 'force',
+      data: nodes,
+      links: links,
+      roam: true,
+      force: {
+        repulsion: 300,
+        edgeLength: [80, 150],
+      },
+      label: { show: true, fontSize: 9 },
+      emphasis: {
+        focus: 'adjacency',
+      },
+    }],
+  })
+
+  window.addEventListener('resize', () => chart.resize())
 }
 
 function getEventIcon(eventType: string): string {

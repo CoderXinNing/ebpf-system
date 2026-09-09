@@ -59,12 +59,46 @@ type Feature struct {
 	Value  float64
 }
 
+// BaselineState 基线生命周期状态
+type BaselineState int
+
+const (
+	Unknown BaselineState = iota // 首次发现
+	Observed                     // 观察中
+	Candidate                    // 候选基线
+	Stable                       // 稳定基线
+	Expired                      // 已过期
+)
+
+func (s BaselineState) String() string {
+	switch s {
+	case Unknown:
+		return "unknown"
+	case Observed:
+		return "observed"
+	case Candidate:
+		return "candidate"
+	case Stable:
+		return "stable"
+	case Expired:
+		return "expired"
+	}
+	return "unknown"
+}
+
 // Baseline 单特征基线
 type Baseline struct {
-	EWMA    float64
-	StdDev  float64
-	Count   int
-	Updated time.Time
+	EWMA       float64
+	StdDev     float64
+	Count      int
+	Updated    time.Time
+	State      BaselineState // 生命周期状态
+	Confidence float64       // 置信度 0.0-1.0
+	Source     string        // 来源：ewma/user/system
+	Scope      string        // 范围：process/user/host
+	Decay      float64       // 衰减系数
+	CreatedAt  time.Time
+	LastSeen   time.Time
 }
 
 // BaselineEngine 软基线引擎
@@ -226,10 +260,17 @@ func (b *BaselineEngine) Update(feature Feature) (bool, float64) {
 			}
 		}
 		baseline = &Baseline{
-			EWMA:    feature.Value,
-			StdDev:  1.0,
-			Count:   0,
-			Updated: time.Now(),
+			EWMA:       feature.Value,
+			StdDev:     1.0,
+			Count:      0,
+			Updated:    time.Now(),
+			State:      Unknown,
+			Confidence: 0.1,
+			Source:     "ewma",
+			Scope:      "process",
+			Decay:      0.01,
+			CreatedAt:  time.Now(),
+			LastSeen:   time.Now(),
 		}
 		b.baselines[key] = baseline
 		return false, 0
@@ -251,6 +292,8 @@ func (b *BaselineEngine) Update(feature Feature) (bool, float64) {
 		baseline.StdDev = math.Sqrt(alpha*math.Pow(feature.Value-baseline.EWMA, 2) + (1-alpha)*math.Pow(oldStdDev, 2))
 		baseline.Count++
 		baseline.Updated = time.Now()
+		baseline.LastSeen = time.Now()
+		baseline.updateLifecycle()
 		return false, 0
 	}
 
@@ -275,7 +318,46 @@ func (b *BaselineEngine) Update(feature Feature) (bool, float64) {
 	baseline.StdDev = math.Sqrt(alpha*math.Pow(feature.Value-baseline.EWMA, 2) + (1-alpha)*math.Pow(oldStdDev, 2))
 	baseline.Count++
 	baseline.Updated = time.Now()
+	baseline.LastSeen = time.Now()
+
+	// 生命周期迁移
+	baseline.updateLifecycle()
+
 	return false, zScore
+}
+
+// updateLifecycle 更新生命周期状态和置信度
+func (b *Baseline) updateLifecycle() {
+	now := time.Now()
+
+	// 置信度：样本数越多越高，最近越活跃越高
+	baseConfidence := math.Min(1.0, float64(b.Count)/50.0)
+	timeDecay := math.Exp(-now.Sub(b.LastSeen).Hours() / (7 * 24))
+	b.Confidence = baseConfidence * timeDecay
+
+	// 状态迁移
+	switch b.State {
+	case Unknown:
+		if b.Count >= 10 {
+			b.State = Observed
+		}
+	case Observed:
+		if b.Count >= 50 && b.Confidence >= 0.6 {
+			b.State = Candidate
+		}
+	case Candidate:
+		if b.Count >= 200 && b.Confidence >= 0.8 {
+			b.State = Stable
+		}
+	case Stable:
+		if timeDecay < 0.3 {
+			b.State = Expired
+		}
+	case Expired:
+		if b.Confidence >= 0.5 {
+			b.State = Candidate
+		}
+	}
 }
 
 // IsProbeOnline 探针健康检查
@@ -360,6 +442,35 @@ func (b *BaselineEngine) Restore() {
 		// 新格式
 		b.baselines = snapshot.Baselines
 		b.startTime = snapshot.StartTime
+		// 初始化生命周期字段（旧数据兼容）
+		now := time.Now()
+		for _, baseline := range b.baselines {
+			if baseline.State == Unknown && baseline.Count > 200 {
+				baseline.State = Stable
+				baseline.Confidence = 0.9
+			} else if baseline.State == Unknown && baseline.Count > 50 {
+				baseline.State = Candidate
+				baseline.Confidence = 0.7
+			} else if baseline.State == Unknown {
+				baseline.State = Observed
+				baseline.Confidence = 0.4
+			}
+			if baseline.Source == "" {
+				baseline.Source = "ewma"
+			}
+			if baseline.Scope == "" {
+				baseline.Scope = "process"
+			}
+			if baseline.Decay == 0 {
+				baseline.Decay = 0.01
+			}
+			if baseline.CreatedAt.IsZero() {
+				baseline.CreatedAt = now
+			}
+			if baseline.LastSeen.IsZero() {
+				baseline.LastSeen = now
+			}
+		}
 		switch snapshot.State {
 		case "observe":
 			b.state = StateObserve
@@ -369,6 +480,11 @@ func (b *BaselineEngine) Restore() {
 			b.state = StateLearning
 		}
 		log.Printf("📥 基线已恢复: %d 个特征, 状态=%s", len(b.baselines), b.state.String())
+		// 立即持久化，确保新字段写入
+		go func() {
+			time.Sleep(2 * time.Second)
+			b.Persist()
+		}()
 		return
 	}
 
