@@ -13,6 +13,20 @@
           <n-descriptions-item label="最后心跳">{{ lastSeen }}</n-descriptions-item>
         </n-descriptions>
 
+        <!-- 探针状态 -->
+        <n-card title="探针状态" size="small" bordered>
+          <n-space vertical :size="8">
+            <div v-for="probe in probes" :key="probe.name" class="probe-row">
+              <n-space justify="space-between" align="center">
+                <n-text>{{ probe.name }}</n-text>
+                <n-tag :type="probe.loaded ? 'success' : 'error'" round size="small">
+                  {{ probe.loaded ? '运行中' : '未加载' }}
+                </n-tag>
+              </n-space>
+            </div>
+          </n-space>
+        </n-card>
+
         <!-- 最近告警 -->
         <n-card title="最近告警" size="small" bordered>
           <n-data-table
@@ -46,7 +60,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NCard, NSpace, NDescriptions, NDescriptionsItem, NDataTable, NButton, NEmpty, NList, NListItem, NText } from 'naive-ui'
+import { NCard, NSpace, NDescriptions, NDescriptionsItem, NDataTable, NButton, NEmpty, NList, NListItem, NText, NTag } from 'naive-ui'
 import { getAgents, type AgentInfo } from '../api/agent'
 import { getAlerts, type AlertItem } from '../api/alert'
 
@@ -63,6 +77,13 @@ const lastSeen = ref('')
 const recentAlerts = ref<AlertItem[]>([])
 const starChains = ref<string[]>([])
 const loading = ref(false)
+const probes = ref([
+  { name: 'exec_monitor', loaded: true },
+  { name: 'bash_monitor', loaded: true },
+  { name: 'tcp_monitor', loaded: true },
+  { name: 'file_access', loaded: true },
+  { name: 'xdp_reporter', loaded: true },
+])
 
 const alertColumns = [
   { title: '规则', key: 'rule_name' },
@@ -100,6 +121,15 @@ function goToStarChain(corrId: string) {
 </script>
 
 <style scoped>
+.probe-row {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.probe-row:last-child {
+  border-bottom: none;
+}
+
 .host-detail-container {
   padding: 24px;
   max-width: 1000px;
