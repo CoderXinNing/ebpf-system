@@ -204,6 +204,16 @@ func (p *TCPProbe) SetCollectMode(mode uint64) error {
 	return p.objs.ConfigMap.Put(&key, &mode)
 }
 
+// SetObservationLevel 设置观察等级
+// 0=PASSIVE, 1=REDUCED, 2=FULL
+func (p *TCPProbe) SetObservationLevel(level uint64) error {
+	if p.objs == nil || p.objs.ConfigMap == nil {
+		return fmt.Errorf("探针未加载")
+	}
+	var key uint32 = 4 // CONFIG_OBSERVATION_LEVEL
+	return p.objs.ConfigMap.Put(&key, &level)
+}
+
 // UpdateWhitelist 更新白名单
 func (p *TCPProbe) UpdateWhitelist(processNames []string) error {
 	if p.objs == nil || p.objs.SentinelWhitelist == nil {

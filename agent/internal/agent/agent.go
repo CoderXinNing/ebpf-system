@@ -60,6 +60,9 @@ type Agent struct {
 
 	// V3 星轨关联管理器
 	correlationManager *CorrelationManager
+
+	// 观察等级管理器
+	observationMgr *ObservationManager
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -101,6 +104,9 @@ func New(cfg *config.AgentConfig) *Agent {
 
 	// 初始化星轨关联管理器（10 分钟 TTL）
 	agent.correlationManager = NewCorrelationManager(agent.id, 10*time.Minute)
+
+	// 初始化观察等级管理器
+	agent.observationMgr = NewObservationManager()
 
 	// 初始化 TCP 突变检测器（默认配置，后续从配置文件读取）
 	agent.tcpAnomaly = NewTCPAnomalyDetector(
@@ -210,6 +216,9 @@ func (a *Agent) Run(ctx context.Context) {
 
 	// MutationEnd 生命周期检查循环（每 60 秒检查一次）
 	go a.mutationEndLoop(ctx)
+
+	// 观察等级降级循环（每 2 分钟检查一次）
+	go a.observationDowngradeLoop(ctx)
 
 	// 心跳循环（阻塞直到 ctx 被取消）
 	a.runHeartbeatLoopWithCtx(ctx)
@@ -788,6 +797,27 @@ func calculateFileSHA256(path string) (string, error) {
 }
 
 // tcpAnomalyLoop 定期分析 TCP 连接突变
+// observationDowngradeLoop 定期检查并降级观察等级
+func (a *Agent) observationDowngradeLoop(ctx context.Context) {
+	ticker := time.NewTicker(2 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if a.observationMgr == nil {
+				continue
+			}
+			// 如果没有活跃星轨，降级到 REDUCED
+			if a.starCorrelationID == "" {
+				a.observationMgr.Downgrade()
+			}
+		}
+	}
+}
+
 // mutationEndLoop 定期检查并上报 MutationEnd
 func (a *Agent) mutationEndLoop(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Second)
@@ -804,6 +834,11 @@ func (a *Agent) mutationEndLoop(ctx context.Context) {
 			expiredIDs := a.correlationManager.CleanupExpired()
 			for _, corrID := range expiredIDs {
 				a.reportMutationEnd(corrID)
+				// 如果过期的是当前星轨 ID，清空并降级
+				if corrID == a.starCorrelationID {
+					log.Printf("⭐ 星轨结束: %s", corrID)
+					a.starCorrelationID = ""
+				}
 			}
 		}
 	}

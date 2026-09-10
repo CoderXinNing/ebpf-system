@@ -38,7 +38,13 @@ enum config_key {
     CONFIG_WHITELIST_ENABLED = 1, // 白名单开关
     CONFIG_MAX_ENTRIES = 2,       // 最大连接数阈值
     CONFIG_AGENT_HASH = 3,        // Agent 哈希值
+    CONFIG_OBSERVATION_LEVEL = 4, // 观察等级：0=PASSIVE, 1=REDUCED, 2=FULL
 };
+
+// 观察等级
+#define OBS_PASSIVE  0
+#define OBS_REDUCED  1
+#define OBS_FULL     2
 
 // ============================================
 // Config Map 定义（所有探针统一使用）

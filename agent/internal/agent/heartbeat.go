@@ -98,6 +98,10 @@ func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 	case pb.ProbeCommand_ACTIVATE_STAR:
 		log.Printf("⭐ 收到星轨激活命令: corrID=%s", cmd.ProbeConfig)
 		a.starCorrelationID = cmd.ProbeConfig
+		// 升级观察等级到 FULL
+		if a.observationMgr != nil {
+			a.observationMgr.Upgrade("星轨激活")
+		}
 		if tcpProbe, exists := a.probeManager.Get("tcp_monitor"); exists {
 			if tp, ok := tcpProbe.(*plugins.TCPProbe); ok {
 				if err := tp.SetCollectMode(1); err != nil {
