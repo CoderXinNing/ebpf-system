@@ -107,6 +107,12 @@ func main() {
 		log.Printf("DEBUG: SaveAssetFunc processes=%d bytes users=%d bytes system=%d bytes", len(processesJSON), len(usersJSON), len(systemJSON))
 		return psqlDB.SaveAsset(context.Background(), agentID, processesJSON, usersJSON, systemJSON)
 	})
+	h.SetSaveTypedAssetFunc(func(agentID, assetType string, data interface{}) error {
+		return psqlDB.SaveTypedAsset(context.Background(), agentID, assetType, data)
+	})
+	h.SetGetAllAssetsFunc(func(agentID string) (map[string]interface{}, error) {
+		return psqlDB.GetAllAssets(context.Background(), agentID)
+	})
 	h.SetGetLatestAssetFunc(func(agentID string) (interface{}, interface{}, interface{}, error) {
 		processes, users, system, err := psqlDB.GetLatestAsset(context.Background(), agentID)
 		if err != nil {

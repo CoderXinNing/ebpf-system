@@ -86,6 +86,14 @@ func (h *Handler) AssetDetail(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "缺少agent_id"})
 		return
 	}
+	if h.GetAllAssetsFunc != nil {
+		assets, err := h.GetAllAssetsFunc(agentID)
+		if err == nil && len(assets) > 0 {
+			c.JSON(200, assets)
+			return
+		}
+	}
+
 	if h.GetLatestAssetFunc != nil {
 		processes, users, system, err := h.GetLatestAssetFunc(agentID)
 		if err != nil {

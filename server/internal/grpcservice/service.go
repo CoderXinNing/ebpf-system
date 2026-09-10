@@ -218,17 +218,17 @@ func (s *Service) ReportPackages(ctx context.Context, req *pb.PackageReport) (*p
 		"python_packages": req.PythonPackages,
 		"npm_packages":    req.NpmPackages,
 	}
-	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
-	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.SaveTypedAssetFunc != nil {
+		s.handler.SaveTypedAssetFunc(req.AgentId, "package", sysData)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
 func (s *Service) ReportCronJobs(ctx context.Context, req *pb.CronReport) (*pb.ReportResponse, error) {
 	sysData := map[string]interface{}{"crons": req.Crons}
-	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
-	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.SaveTypedAssetFunc != nil {
+		s.handler.SaveTypedAssetFunc(req.AgentId, "service", sysData)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
@@ -237,9 +237,9 @@ func (s *Service) ReportServices(ctx context.Context, req *pb.ServiceReport) (*p
 		"services":       req.Services,
 		"service_status": req.ServiceStatus,
 	}
-	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
-	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.SaveTypedAssetFunc != nil {
+		s.handler.SaveTypedAssetFunc(req.AgentId, "service", sysData)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 

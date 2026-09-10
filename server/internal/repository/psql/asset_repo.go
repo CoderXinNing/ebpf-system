@@ -81,6 +81,42 @@ func (p *PSQL) SaveAsset(ctx context.Context, agentID string, processesJSON, use
 	return nil
 }
 
+// SaveTypedAsset 保存指定类型资产
+func (p *PSQL) SaveTypedAsset(ctx context.Context, agentID, assetType string, data interface{}) error {
+	info, _ := json.Marshal(data)
+	_, err := p.pool.Exec(ctx,
+		`INSERT INTO cmdb_assets (agent_id, asset_type, asset_name, asset_info, updated_at)
+		 VALUES ($1, $2, 'all', $3, NOW())
+		 ON CONFLICT (agent_id, asset_type, asset_name) DO UPDATE SET asset_info = EXCLUDED.asset_info, updated_at = NOW()`,
+		agentID, assetType, info)
+	return err
+}
+
+// GetAllAssets 获取所有资产类型
+func (p *PSQL) GetAllAssets(ctx context.Context, agentID string) (map[string]interface{}, error) {
+	rows, err := p.pool.Query(ctx,
+		`SELECT asset_type, asset_info FROM cmdb_assets WHERE agent_id = $1`, agentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]interface{})
+	for rows.Next() {
+		var assetType string
+		var info []byte
+		if err := rows.Scan(&assetType, &info); err != nil {
+			continue
+		}
+		var data interface{}
+		if err := json.Unmarshal(info, &data); err == nil {
+			result[assetType] = data
+		}
+	}
+	return result, nil
+}
+
+
 // GetLatestAsset 获取最新资产快照
 func (p *PSQL) GetLatestAsset(ctx context.Context, agentID string) (json.RawMessage, json.RawMessage, json.RawMessage, error) {
 	// 查询进程资产

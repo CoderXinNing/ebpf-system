@@ -29,6 +29,8 @@ type Handler struct {
 	ListStarEventsFunc func(corrID string) ([]map[string]interface{}, error) // PSQL 攻击链查询
 	GetLatestAssetFunc func(agentID string) (interface{}, interface{}, interface{}, error) // PSQL 资产查询
 	SaveAssetFunc func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
+	GetAllAssetsFunc func(agentID string) (map[string]interface{}, error) // 所有资产类型
+	SaveTypedAssetFunc func(agentID, assetType string, data interface{}) error // 保存指定类型资产
 }
 
 type AgentInfo struct {
@@ -77,6 +79,16 @@ func (h *Handler) SetSaveAgentFunc(fn func(AgentInfo) error) {
 // SetSaveAssetFunc 设置资产保存回调
 func (h *Handler) SetSaveAssetFunc(fn func(string, []byte, []byte, []byte) error) {
 	h.SaveAssetFunc = fn
+}
+
+// SetSaveTypedAssetFunc 设置指定类型资产保存回调
+func (h *Handler) SetSaveTypedAssetFunc(fn func(string, string, interface{}) error) {
+	h.SaveTypedAssetFunc = fn
+}
+
+// SetGetAllAssetsFunc 设置所有资产查询回调
+func (h *Handler) SetGetAllAssetsFunc(fn func(string) (map[string]interface{}, error)) {
+	h.GetAllAssetsFunc = fn
 }
 
 // SetGetLatestAssetFunc 设置资产查询回调
