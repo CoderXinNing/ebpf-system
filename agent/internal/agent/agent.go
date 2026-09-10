@@ -686,9 +686,15 @@ func (a *Agent) handleTCPEvent(pid uint32, comm string, count uint64) {
 func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
 	for _, p := range probes {
 		if !p.Enabled {
-			log.Printf("🚫 %s 名单中未启用，跳过", p.Name)
-			a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "disabled"})
-			continue
+			// 强制观测探针不允许关闭
+			if IsMandatoryProbe(p.Name) {
+				log.Printf("🔒 %s 是强制观测探针，忽略关闭请求，强制启用", p.Name)
+				// 继续加载
+			} else {
+				log.Printf("🚫 %s 名单中未启用，跳过", p.Name)
+				a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "disabled"})
+				continue
+			}
 		}
 
 		// SHA256 完整性校验
