@@ -69,7 +69,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, h, computed } from 'vue'
-import { NTag, NButton, NCard, NSpace, NDataTable, NModal, NDescriptions, NDescriptionsItem, NEmpty, NTimeline, NTimelineItem, NDivider, NText, NSkeleton, NSelect } from 'naive-ui'
+import { NTag, NButton, NCard, NSpace, NDataTable, NModal, NDescriptions, NDescriptionsItem, NEmpty, NTimeline, NTimelineItem, NDivider, NText, NSkeleton, NSelect, useMessage } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { getAlerts, type AlertItem } from '../api/alert'
 import { onWSMessage } from '../api/ws'
@@ -241,9 +241,10 @@ const filteredAlerts = computed(() => {
   return result
 })
 
+const message = useMessage()
+
 function batchResolve() {
-  // 简化版：只提示，后续对接 API
-  alert('批量解决功能开发中')
+  message.info('批量解决功能开发中')
 }
 
 async function loadAlerts() {

@@ -28,7 +28,7 @@ function goHome() {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background: #f5f5f5;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
 }
 
 .not-found-card {

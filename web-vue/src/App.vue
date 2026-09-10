@@ -13,8 +13,35 @@
               </div>
             </n-space>
             <n-space align="center">
+              <n-input
+                v-model:value="globalSearch"
+                placeholder="搜索主机/IP/告警..."
+                size="small"
+                style="width: 220px"
+                clearable
+                @keyup.enter="handleGlobalSearch"
+              />
+              <n-popover trigger="click" placement="bottom-end" style="width: 320px">
+                <template #trigger>
+                  <n-badge :value="notifications.length" :max="99" :show="notifications.length > 0">
+                    <n-button size="small" quaternary>🔔</n-button>
+                  </n-badge>
+                </template>
+                <div class="notify-panel">
+                  <div class="notify-title">通知</div>
+                  <n-empty v-if="notifications.length === 0" description="暂无通知" size="small" />
+                  <n-list v-else>
+                    <n-list-item v-for="(n, idx) in notifications.slice(0, 10)" :key="idx">
+                      <n-space vertical :size="2">
+                        <n-text strong style="font-size: 13px">🚨 {{ n.rule_name }}</n-text>
+                        <n-text depth="3" style="font-size: 12px">{{ n.comm }} (PID: {{ n.pid }})</n-text>
+                      </n-space>
+                    </n-list-item>
+                  </n-list>
+                </div>
+              </n-popover>
               <n-button size="small" @click="isDark = !isDark">
-                {{ isDark ? '🌞 浅色' : '🌙 深色' }}
+                {{ isDark ? '🌞' : '🌙' }}
               </n-button>
               <n-text>{{ username }}</n-text>
               <n-button size="small" @click="handleLogout">退出</n-button>
@@ -35,13 +62,20 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { connectWS } from './api/ws'
+import { connectWS, onWSMessage } from './api/ws'
 import { useRoute, useRouter } from 'vue-router'
-import { NConfigProvider, NMessageProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme, lightTheme } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme, lightTheme, NBadge, NPopover, NList, NListItem, NEmpty, NInput } from 'naive-ui'
 
 const route = useRoute()
 const router = useRouter()
 const isDark = ref(false)
+const notifications = ref<any[]>([])
+const globalSearch = ref('')
+
+function handleGlobalSearch() {
+  if (!globalSearch.value.trim()) return
+  router.push(`/star?corr_id=${globalSearch.value.trim()}`)
+}
 
 const isLoginPage = computed(() => route.path === '/login')
 const username = computed(() => {
@@ -63,6 +97,12 @@ const menuOptions = [
 
 onMounted(() => {
   connectWS()
+  onWSMessage('new_alert', (data) => {
+    notifications.value.unshift(data)
+    if (notifications.value.length > 50) {
+      notifications.value = notifications.value.slice(0, 50)
+    }
+  })
 })
 
 const currentPath = computed(() => route.path)

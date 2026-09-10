@@ -73,7 +73,13 @@
       </div>
     </div>
     <div class="star-right" v-else>
-      <n-empty description="输入 correlation_id 查询攻击链" style="margin: auto" />
+      <n-empty description="输入 correlation_id / IP / 主机名 查询攻击链" style="margin: auto">
+        <template #extra>
+          <n-text depth="3" style="font-size: 12px">
+            试试搜索 172.16.2.145 或 server-system
+          </n-text>
+        </template>
+      </n-empty>
     </div>
 
     <!-- 事件详情弹窗 -->

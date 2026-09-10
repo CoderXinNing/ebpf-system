@@ -44,6 +44,25 @@
         </n-grid-item>
       </n-grid>
 
+      <!-- 系统健康度 -->
+      <n-card title="系统健康度" bordered hoverable>
+        <n-space align="center" :size="24">
+          <n-progress
+            type="circle"
+            :percentage="healthScore"
+            :color="healthColor"
+            :stroke-width="10"
+            style="width: 120px"
+          />
+          <n-space vertical :size="8">
+            <n-text>{{ healthLabel }}</n-text>
+            <n-text depth="3" style="font-size: 13px">
+              基于主机在线率、告警数量、探针状态综合评估
+            </n-text>
+          </n-space>
+        </n-space>
+      </n-card>
+
       <!-- 第二行：2 个统计卡片 -->
       <n-grid :cols="2" :x-gap="16">
         <n-grid-item>
@@ -106,7 +125,7 @@
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
-import { NGrid, NGridItem, NDataTable, NCard, NSpace, NButton, NSkeleton, NList, NListItem, NEmpty, NText } from 'naive-ui'
+import { NGrid, NGridItem, NDataTable, NCard, NSpace, NButton, NSkeleton, NList, NListItem, NEmpty, NText, NProgress } from 'naive-ui'
 import * as echarts from 'echarts'
 import { getAgents, type AgentInfo } from '../api/agent'
 import { getAlerts, type AlertItem } from '../api/alert'
@@ -121,6 +140,28 @@ const baselineCount = ref(0)
 const loading = ref(false)
 const trendContainer = ref<HTMLElement | null>(null)
 const recentStarChains = ref<string[]>([])
+const healthScore = ref(100)
+const healthColor = ref('#10b981')
+const healthLabel = ref('系统健康')
+
+function calcHealth() {
+  // 简化版：根据告警数量扣分
+  let score = 100
+  score -= Math.min(30, alertCount.value * 1)
+  score -= Math.min(20, hardRuleCount.value * 2)
+
+  healthScore.value = Math.max(0, score)
+  if (score >= 80) {
+    healthColor.value = '#10b981'
+    healthLabel.value = '系统健康'
+  } else if (score >= 60) {
+    healthColor.value = '#f59e0b'
+    healthLabel.value = '需要关注'
+  } else {
+    healthColor.value = '#ef4444'
+    healthLabel.value = '存在风险'
+  }
+}
 
 const columns = [
   {
@@ -160,6 +201,7 @@ async function loadDashboard() {
     baselineCount.value = alertList.filter(a => a.details?.includes('[参考]')).length
     recentStarChains.value = [...new Set(alertList.filter(a => a.correlation_id).map(a => a.correlation_id))].slice(0, 5)
     initTrendChart(alertList)
+    calcHealth()
   } catch (err: any) {
     console.error('加载仪表盘失败:', err)
   } finally {

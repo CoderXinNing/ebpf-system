@@ -38,7 +38,51 @@
         </n-tab-pane>
 
         <n-tab-pane name="assets" tab="资产">
-          <n-empty description="资产数据采集中，即将上线" />
+          <n-tabs type="segment" animated>
+            <n-tab-pane name="process" tab="进程">
+              <n-data-table
+                :columns="processColumns"
+                :data="assets.process || []"
+                :pagination="{ pageSize: 10 }"
+                :bordered="false"
+                size="small"
+              />
+            </n-tab-pane>
+            <n-tab-pane name="user" tab="用户">
+              <n-data-table
+                :columns="userColumns"
+                :data="assets.user || []"
+                :pagination="{ pageSize: 10 }"
+                :bordered="false"
+                size="small"
+              />
+            </n-tab-pane>
+            <n-tab-pane name="package" tab="软件包">
+              <n-tabs type="line" animated size="small">
+                <n-tab-pane name="pkg" tab="系统包">
+                  <n-data-table :columns="pkgColumns" :data="assets.package?.packages || []" :pagination="{ pageSize: 10 }" size="small" :bordered="false" />
+                </n-tab-pane>
+                <n-tab-pane name="jar" tab="JAR">
+                  <n-data-table :columns="pkgColumns" :data="assets.package?.jar_packages || []" :pagination="{ pageSize: 10 }" size="small" :bordered="false" />
+                </n-tab-pane>
+                <n-tab-pane name="python" tab="Python">
+                  <n-data-table :columns="pkgColumns" :data="assets.package?.python_packages || []" :pagination="{ pageSize: 10 }" size="small" :bordered="false" />
+                </n-tab-pane>
+                <n-tab-pane name="npm" tab="NPM">
+                  <n-data-table :columns="pkgColumns" :data="assets.package?.npm_packages || []" :pagination="{ pageSize: 10 }" size="small" :bordered="false" />
+                </n-tab-pane>
+              </n-tabs>
+            </n-tab-pane>
+            <n-tab-pane name="service" tab="服务">
+              <n-data-table
+                :columns="serviceColumns"
+                :data="assets.service?.services || []"
+                :pagination="{ pageSize: 10 }"
+                :bordered="false"
+                size="small"
+              />
+            </n-tab-pane>
+          </n-tabs>
         </n-tab-pane>
 
         <n-tab-pane name="chains" tab="攻击链">
@@ -78,6 +122,33 @@ const lastSeen = ref('')
 const recentAlerts = ref<AlertItem[]>([])
 const starChains = ref<string[]>([])
 const loading = ref(false)
+const assets = ref<any>({})
+
+const processColumns = [
+  { title: 'PID', key: 'pid', width: 80 },
+  { title: '进程名', key: 'name' },
+  { title: '用户', key: 'user', width: 100 },
+  { title: '状态', key: 'state', width: 80 },
+]
+
+const userColumns = [
+  { title: '用户名', key: 'username' },
+  { title: 'UID', key: 'uid', width: 80 },
+  { title: 'Shell', key: 'shell' },
+  { title: 'Home', key: 'home' },
+]
+
+const pkgColumns = [
+  { title: '包名', key: 'name' },
+  { title: '版本', key: 'version', width: 120 },
+]
+
+const serviceColumns = [
+  { title: '服务名', key: 'name' },
+  { title: '状态', key: 'status', width: 100 },
+  { title: '运行用户', key: 'user', width: 120 },
+]
+
 const probes = ref([
   { name: 'exec_monitor', loaded: true },
   { name: 'bash_monitor', loaded: true },
@@ -104,6 +175,15 @@ onMounted(async () => {
       capabilityLevel.value = agent.capability_level
       activeProbes.value = agent.active_probes
       lastSeen.value = new Date(agent.last_seen * 1000).toLocaleString('zh-CN')
+    }
+
+    // 加载资产
+    try {
+      const { default: http } = await import('../api/http')
+      const { data } = await http.get(`/assets/${agentId.value}`)
+      assets.value = data || {}
+    } catch (err) {
+      console.error('加载资产失败:', err)
     }
 
     const alerts = await getAlerts()
