@@ -58,6 +58,8 @@ func (p *PSQL) SaveAsset(ctx context.Context, agentID string, processesJSON, use
 		"services":        "service",
 		"service_status":  "service",
 		"web_components":  "web_component",
+		"perf":            "service",
+		"agent_self":      "service",
 	}
 	var sysData map[string]interface{}
 	if err := json.Unmarshal(systemJSON, &sysData); err == nil {
@@ -67,13 +69,14 @@ func (p *PSQL) SaveAsset(ctx context.Context, agentID string, processesJSON, use
 				continue
 			}
 			info, _ := json.Marshal(assetData)
+			// 用原始 assetType 作为 asset_name，避免同类型互相覆盖
 			_, err = p.pool.Exec(ctx,
 				`INSERT INTO cmdb_assets (agent_id, asset_type, asset_name, asset_info, updated_at)
-				 VALUES ($1, $2, 'all', $3::jsonb, NOW())
+				 VALUES ($1, $2, $3, $4::jsonb, NOW())
 				 ON CONFLICT (agent_id, asset_type, asset_name) DO UPDATE SET asset_info = EXCLUDED.asset_info, updated_at = NOW()`,
-				agentID, mappedType, info)
+				agentID, mappedType, assetType, info)
 			if err != nil {
-				log.Printf("保存 %s 资产失败: %v", mappedType, err)
+				log.Printf("保存 %s/%s 资产失败: %v", mappedType, assetType, err)
 			}
 		}
 	}
@@ -95,7 +98,7 @@ func (p *PSQL) SaveTypedAsset(ctx context.Context, agentID, assetType string, da
 // GetAllAssets 获取所有资产类型
 func (p *PSQL) GetAllAssets(ctx context.Context, agentID string) (map[string]interface{}, error) {
 	rows, err := p.pool.Query(ctx,
-		`SELECT asset_type, asset_info FROM cmdb_assets WHERE agent_id = $1`, agentID)
+		`SELECT asset_type, asset_name, asset_info FROM cmdb_assets WHERE agent_id = $1`, agentID)
 	if err != nil {
 		return nil, err
 	}
@@ -103,14 +106,28 @@ func (p *PSQL) GetAllAssets(ctx context.Context, agentID string) (map[string]int
 
 	result := make(map[string]interface{})
 	for rows.Next() {
-		var assetType string
+		var assetType, assetName string
 		var info []byte
-		if err := rows.Scan(&assetType, &info); err != nil {
+		if err := rows.Scan(&assetType, &assetName, &info); err != nil {
 			continue
 		}
 		var data interface{}
-		if err := json.Unmarshal(info, &data); err == nil {
+		if err := json.Unmarshal(info, &data); err != nil {
+			continue
+		}
+
+		// 同名（all）直接存；其他按 asset_name 作为子 key
+		if assetName == "all" {
 			result[assetType] = data
+		} else {
+			// 建立嵌套：result[assetType] 是 map，子 key 是 asset_name
+			if existing, ok := result[assetType].(map[string]interface{}); ok {
+				existing[assetName] = data
+			} else {
+				result[assetType] = map[string]interface{}{
+					assetName: data,
+				}
+			}
 		}
 	}
 	return result, nil

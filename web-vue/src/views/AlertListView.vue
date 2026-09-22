@@ -5,6 +5,10 @@
       <div class="toolbar-left">
         <n-tag type="info" round size="small">日志检索</n-tag>
         <n-text depth="3" style="font-size: 12px">共 {{ filteredAlerts.length }} 条告警</n-text>
+        <span class="live-dot"></span>
+        <n-text depth="3" style="font-size: 12px">
+          活跃主机 {{ onlineHostCount }} 台 · 待处理 {{ pendingCount }} 条
+        </n-text>
       </div>
       <div class="toolbar-right">
         <n-select v-model:value="severityFilter" :options="severityOptions" placeholder="严重度" clearable size="small" style="width: 110px" />
@@ -84,6 +88,7 @@ const showDetail = ref(false)
 const selectedAlert = ref<AlertItem | null>(null)
 const chainEvents = ref<any[]>([])
 const severityFilter = ref<string | null>(null)
+const onlineHostCount = ref(0)
 const sourceFilter = ref<string | null>(null)
 const keyword = ref('')
 const checkedIds = ref<number[]>([])
@@ -235,6 +240,8 @@ const columns = [
   },
 ]
 
+const pendingCount = computed(() => alerts.value.filter(a => a.status === 'open').length)
+
 const filteredAlerts = computed(() => {
   let result = alerts.value
   if (severityFilter.value) result = result.filter(a => a.severity === severityFilter.value)
@@ -328,6 +335,15 @@ async function loadAlerts() {
   loading.value = true
   try {
     alerts.value = await getAlerts()
+    // 加载在线主机数
+    try {
+      const { data } = await http.get('/agents')
+      const agents = data.agents || []
+      const now = Date.now() / 1000
+      onlineHostCount.value = agents.filter((a: any) => now - a.last_seen < 120).length
+    } catch {
+      onlineHostCount.value = 0
+    }
   } catch (err: any) {
     console.error('加载告警失败:', err)
   } finally {
@@ -360,6 +376,21 @@ async function loadAlerts() {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  animation: pulse 2s infinite;
+  margin-left: 8px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .toolbar-right {

@@ -276,6 +276,7 @@ func (s *Service) ReportPerformance(ctx context.Context, req *pb.PerfReport) (*p
 	sysData := map[string]interface{}{"perf": req.Perf}
 	sysJSON, _ := json.Marshal(sysData)
 	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
 	return &pb.ReportResponse{Success: true}, nil
 }
 
@@ -283,6 +284,7 @@ func (s *Service) ReportAgentSelf(ctx context.Context, req *pb.AgentSelfReport) 
 	sysData := map[string]interface{}{"agent_self": req.AgentSelf}
 	sysJSON, _ := json.Marshal(sysData)
 	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
 	return &pb.ReportResponse{Success: true}, nil
 }
 
