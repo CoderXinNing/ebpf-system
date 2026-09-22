@@ -1,5 +1,6 @@
 <template>
   <n-config-provider :theme="isDark ? darkTheme : lightTheme">
+    <n-dialog-provider>
     <n-message-provider>
       <router-view v-if="isLoginPage" />
       <n-layout v-else :style="{ minHeight: '100vh', background: isDark ? '#18181c' : '#f5f5f5' }">
@@ -57,6 +58,7 @@
         </n-layout-content>
       </n-layout>
     </n-message-provider>
+    </n-dialog-provider>
   </n-config-provider>
 </template>
 
@@ -64,7 +66,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { connectWS, onWSMessage } from './api/ws'
 import { useRoute, useRouter } from 'vue-router'
-import { NConfigProvider, NMessageProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme, lightTheme, NBadge, NPopover, NList, NListItem, NEmpty, NInput } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NDialogProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme, lightTheme, NBadge, NPopover, NList, NListItem, NEmpty, NInput } from 'naive-ui'
 
 const route = useRoute()
 const router = useRouter()
@@ -94,6 +96,7 @@ const menuOptions = [
   { label: '告警', key: '/alerts' },
   { label: '资产', key: '/assets' },
   { label: '白名单', key: '/whitelist' },
+  { label: '设置', key: '/settings' },
 ]
 
 onMounted(() => {

@@ -35,6 +35,9 @@ type Handler struct {
 	SaveAssetFunc func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
 	GetAllAssetsFunc func(agentID string) (map[string]interface{}, error) // 所有资产类型
 	SaveTypedAssetFunc func(agentID, assetType, assetName string, data interface{}) error // 保存指定类型资产
+	GetSettingFunc func(key string) (string, error)
+	SetSettingFunc func(key, value string) error
+	ListSettingsFunc func() (map[string]string, error)
 }
 
 type AgentInfo struct {
@@ -83,6 +86,13 @@ func (h *Handler) SetSaveAgentFunc(fn func(AgentInfo) error) {
 // SetSaveAssetFunc 设置资产保存回调
 func (h *Handler) SetSaveAssetFunc(fn func(string, []byte, []byte, []byte) error) {
 	h.SaveAssetFunc = fn
+}
+
+// SetSettingCallbacks 设置配置读写回调（PSQL 模式）
+func (h *Handler) SetSettingCallbacks(get func(string) (string, error), set func(string, string) error, list func() (map[string]string, error)) {
+	h.GetSettingFunc = get
+	h.SetSettingFunc = set
+	h.ListSettingsFunc = list
 }
 
 // SetSaveTypedAssetFunc 设置指定类型资产保存回调
@@ -331,6 +341,9 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"success": true})
 		})
 		api.GET("/users", h.rbacMiddleware("users", "read"), h.ListUsers)
+		api.POST("/users", h.rbacMiddleware("users", "write"), h.CreateUser)
+		api.PUT("/users", h.rbacMiddleware("users", "write"), h.UpdateUser)
+		api.DELETE("/users", h.rbacMiddleware("users", "write"), h.DeleteUser)
 
 		// 审计日志
 		api.POST("/logout", h.authMiddleware, func(c *gin.Context) {
@@ -425,13 +438,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		})
 
 		api.GET("/log-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
-			eventDays, _ := h.Store.GetLogSetting("event_days")
-			alertDays, _ := h.Store.GetLogSetting("alert_days")
-			auditDays, _ := h.Store.GetLogSetting("audit_days")
 			c.JSON(200, gin.H{
-				"event_days": eventDays,
-				"alert_days": alertDays,
-				"audit_days": auditDays,
+				"event_days": h.GetStringSetting("event_days", "30"),
+				"alert_days": h.GetStringSetting("alert_days", "90"),
+				"audit_days": h.GetStringSetting("audit_days", "180"),
 			})
 		})
 		api.POST("/log-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
@@ -441,10 +451,35 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				AuditDays string `json:"audit_days"`
 			}
 			c.BindJSON(&req)
-			if req.EventDays != "" { h.Store.SetLogSetting("event_days", req.EventDays) }
-			if req.AlertDays != "" { h.Store.SetLogSetting("alert_days", req.AlertDays) }
-			if req.AuditDays != "" { h.Store.SetLogSetting("audit_days", req.AuditDays) }
+			if req.EventDays != "" { h.SetStringSetting("event_days", req.EventDays) }
+			if req.AlertDays != "" { h.SetStringSetting("alert_days", req.AlertDays) }
+			if req.AuditDays != "" { h.SetStringSetting("audit_days", req.AuditDays) }
 			c.JSON(200, gin.H{"success": true})
+		})
+
+		// 通用设置接口
+		api.GET("/settings", h.roleMiddleware("admin"), func(c *gin.Context) {
+			if h.ListSettingsFunc != nil {
+				settings, err := h.ListSettingsFunc()
+				if err != nil {
+					c.JSON(500, gin.H{"error": err.Error()})
+					return
+				}
+				c.JSON(200, gin.H{"settings": settings})
+				return
+			}
+			c.JSON(200, gin.H{"settings": map[string]string{}})
+		})
+		api.POST("/settings", h.roleMiddleware("admin"), func(c *gin.Context) {
+			var req map[string]string
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(400, gin.H{"error": "请求格式错误"})
+				return
+			}
+			for k, v := range req {
+				h.SetStringSetting(k, v)
+			}
+			c.JSON(200, gin.H{"success": true, "message": fmt.Sprintf("已保存 %d 项设置", len(req))})
 		})
 	}
 }

@@ -107,6 +107,17 @@ func main() {
 		log.Printf("DEBUG: SaveAssetFunc processes=%d bytes users=%d bytes system=%d bytes", len(processesJSON), len(usersJSON), len(systemJSON))
 		return psqlDB.SaveAsset(context.Background(), agentID, processesJSON, usersJSON, systemJSON)
 	})
+	h.SetSettingCallbacks(
+		func(key string) (string, error) {
+			return psqlDB.GetLogSetting(context.Background(), key)
+		},
+		func(key, value string) error {
+			return psqlDB.SetLogSetting(context.Background(), key, value)
+		},
+		func() (map[string]string, error) {
+			return psqlDB.ListSettings(context.Background())
+		},
+	)
 	h.SetSaveTypedAssetFunc(func(agentID, assetType, assetName string, data interface{}) error {
 		return psqlDB.SaveTypedAsset(context.Background(), agentID, assetType, assetName, data)
 	})

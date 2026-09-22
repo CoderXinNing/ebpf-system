@@ -157,3 +157,34 @@ func (am *AuthManager) HasPermission(ctx context.Context, role string, resource 
 	}
 	return count > 0, nil
 }
+
+// UpdateUserRole 修改用户角色
+func (am *AuthManager) UpdateUserRole(ctx context.Context, userID int, role string) error {
+	_, err := am.pool.Exec(ctx, `UPDATE users SET role = $1 WHERE id = $2`, role, userID)
+	if err != nil {
+		return fmt.Errorf("修改角色失败: %w", err)
+	}
+	return nil
+}
+
+// DeleteUser 删除用户
+func (am *AuthManager) DeleteUser(ctx context.Context, userID int) error {
+	_, err := am.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
+	if err != nil {
+		return fmt.Errorf("删除用户失败: %w", err)
+	}
+	return nil
+}
+
+// ChangePassword 修改密码
+func (am *AuthManager) ChangePassword(ctx context.Context, userID int, newPassword string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("密码哈希失败: %w", err)
+	}
+	_, err = am.pool.Exec(ctx, `UPDATE users SET password_hash = $1 WHERE id = $2`, string(hash), userID)
+	if err != nil {
+		return fmt.Errorf("修改密码失败: %w", err)
+	}
+	return nil
+}

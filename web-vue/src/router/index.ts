@@ -38,6 +38,12 @@ const router = createRouter({
       component: () => import('../views/WhitelistView.vue'),
     },
     {
+      path: '/settings',
+      name: 'Settings',
+      component: () => import('../views/SettingsView.vue'),
+    },
+
+    {
       path: '/host/:id',
       name: 'HostDetail',
       component: () => import('../views/HostDetailView.vue'),
