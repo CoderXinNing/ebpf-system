@@ -503,7 +503,16 @@ func (a *Agent) registerProbePlugins() {
 	a.probeManager.Register(plugins.NewXDPProbe(
 		v3_loader.XDPConfig{Iface: a.cfg.XDP.Iface, Mode: a.cfg.XDP.Mode},
 		func(pid uint32, comm string, details string) {
-			log.Printf("🔔 V3 XDP 事件: comm=%s details=%s", comm, details)
+			// XDP 是无进程事件（PID=0），只上报摘要
+			a.eventQueue.Push(&pb.ProbeEvent{
+				ProbeName: "xdp",
+				Timestamp: time.Now().Unix(),
+				EventType: "xdp_alert",
+				Pid:       0,
+				Comm:      "xdp",
+				Filename:  "xdp_packet",
+				Details:   details,
+			}, PriorityNormal)
 		},
 	))
 

@@ -1,6 +1,7 @@
 package v3_loader
 
 import (
+	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
@@ -11,8 +12,17 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
+// XDPPacketSummary XDP 包摘要（与 C 层 pkt_summary 对应）
+type XDPPacketSummary struct {
+	SrcIP    uint32
+	DstIP    uint32
+	SrcPort  uint16
+	DstPort  uint16
+	Protocol uint8
+}
+
 // XDPEventCallback XDP 事件回调
-type XDPEventCallback func(header *SentinelEventHeader)
+type XDPEventCallback func(header *SentinelEventHeader, summary *XDPPacketSummary)
 
 // XDPConfig XDP 配置
 type XDPConfig struct {
@@ -102,11 +112,25 @@ func (p *XDPProbe) Load(objPath string, cfg XDPConfig) error {
 			if err != nil {
 				continue
 			}
-			p.callback(header)
+
+			// 解析五元组摘要
+			summary := parseXDPPacket(header.Data)
+			p.callback(header, summary)
 		}
 	}()
 
 	return nil
+}
+
+// parseXDPPacket 解析 XDP 五元组
+func parseXDPPacket(data [256]byte) *XDPPacketSummary {
+	return &XDPPacketSummary{
+		SrcIP:    binary.BigEndian.Uint32(data[0:4]),
+		DstIP:    binary.BigEndian.Uint32(data[4:8]),
+		SrcPort:  binary.BigEndian.Uint16(data[8:10]),
+		DstPort:  binary.BigEndian.Uint16(data[10:12]),
+		Protocol: data[12],
+	}
 }
 
 // Close 清理资源
