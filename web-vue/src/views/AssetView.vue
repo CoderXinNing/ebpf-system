@@ -59,6 +59,25 @@
               <n-descriptions-item label="最后心跳" :span="2">{{ formatTime(selectedHost.last_seen) }}</n-descriptions-item>
             </n-descriptions>
 
+            <n-divider style="margin: 16px 0">系统性能</n-divider>
+            <div class="perf-grid">
+              <div class="perf-card">
+                <div class="perf-label">CPU 使用率</div>
+                <n-progress type="line" :percentage="perfData.cpu" :color="perfColor(perfData.cpu)" :height="8" :show-indicator="false" />
+                <div class="perf-value">{{ perfData.cpu.toFixed(1) }}%</div>
+              </div>
+              <div class="perf-card">
+                <div class="perf-label">内存使用率</div>
+                <n-progress type="line" :percentage="perfData.mem" :color="perfColor(perfData.mem)" :height="8" :show-indicator="false" />
+                <div class="perf-value">{{ perfData.mem.toFixed(1) }}%</div>
+              </div>
+              <div class="perf-card">
+                <div class="perf-label">磁盘使用率</div>
+                <n-progress type="line" :percentage="perfData.disk" :color="perfColor(perfData.disk)" :height="8" :show-indicator="false" />
+                <div class="perf-value">{{ perfData.disk.toFixed(1) }}%</div>
+              </div>
+            </div>
+
             <n-divider style="margin: 16px 0">探针状态</n-divider>
             <n-space vertical :size="8">
               <div v-for="probe in probes" :key="probe.name" class="probe-row">
@@ -145,7 +164,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NInput, NTag, NButton, NDataTable, NEmpty, NText, NTabs, NTabPane, NDescriptions, NDescriptionsItem, NDivider, NSpace, NList, NListItem } from 'naive-ui'
+import { NInput, NTag, NButton, NDataTable, NEmpty, NText, NTabs, NTabPane, NDescriptions, NDescriptionsItem, NDivider, NSpace, NList, NListItem, NProgress } from 'naive-ui'
 import http from '../api/http'
 import { getAlerts, type AlertItem } from '../api/alert'
 
@@ -199,11 +218,39 @@ const filteredHosts = computed(() => {
 
 const isOnline = (host: Host) => (Date.now() / 1000 - host.last_seen) < 120
 
+const perfData = computed(() => {
+  const svc = assets.value.service
+  if (!svc || Array.isArray(svc)) return { cpu: 0, mem: 0, disk: 0 }
+  const perf = svc.perf
+  if (!perf) return { cpu: 0, mem: 0, disk: 0 }
+  let disk = 0
+  if (Array.isArray(perf.disk_usage) && perf.disk_usage.length > 0) {
+    const p = perf.disk_usage[0].percent || '0'
+    disk = parseFloat(p.replace('%', '')) || 0
+  }
+  return {
+    cpu: perf.cpu_percent || 0,
+    mem: perf.mem_percent || 0,
+    disk,
+  }
+})
+
+function perfColor(v: number): string {
+  if (v >= 90) return '#dc2626'
+  if (v >= 70) return '#f59e0b'
+  return '#10b981'
+}
+
 const assetCounts = computed(() => ({
   process: Array.isArray(assets.value.process) ? assets.value.process.length : 0,
   user: Array.isArray(assets.value.user) ? assets.value.user.length : 0,
   package: assets.value.package ? Object.values(assets.value.package).reduce((s: number, v: any) => s + (Array.isArray(v) ? v.length : 0), 0) : 0,
-  service: assets.value.service?.services?.length || 0,
+  service: (() => {
+    const svc = assets.value.service
+    if (Array.isArray(svc)) return svc.length
+    if (svc && Array.isArray(svc.services)) return svc.services.length
+    return 0
+  })(),
 }))
 
 const tabLabel = computed(() => {
@@ -214,7 +261,13 @@ const tabLabel = computed(() => {
 const currentList = computed(() => {
   if (assetTab.value === 'process') return assets.value.process || []
   if (assetTab.value === 'user') return assets.value.user || []
-  if (assetTab.value === 'service') return assets.value.service?.services || []
+  if (assetTab.value === 'service') {
+    // 新结构：service 是 map，取 services 字段
+    const svc = assets.value.service
+    if (Array.isArray(svc)) return svc
+    if (svc && Array.isArray(svc.services)) return svc.services
+    return []
+  }
   if (assetTab.value === 'package') {
     const pkgs = assets.value.package || {}
     const all: any[] = []
@@ -463,6 +516,32 @@ function goToStarChain(corrId: string) {
 .tabs-wrapper :deep(.n-tabs-pane-wrapper) {
   height: calc(100% - 40px);
   overflow: hidden;
+}
+
+.perf-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.perf-card {
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.perf-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.perf-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-top: 6px;
 }
 
 .chain-row {
