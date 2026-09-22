@@ -68,6 +68,20 @@ func (p *PSQL) UpdateAlertCorrelationID(ctx context.Context, agentID string, rul
 	return nil
 }
 
+// UpdateAlertStatus 更新告警状态（支持批量）
+func (p *PSQL) UpdateAlertStatus(ctx context.Context, ids []int64, status string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := p.pool.Exec(ctx,
+		`UPDATE alerts SET status = $1 WHERE id = ANY($2)`,
+		status, ids)
+	if err != nil {
+		return fmt.Errorf("更新告警状态失败: %w", err)
+	}
+	return nil
+}
+
 // SaveAlertFeedback 保存告警反馈
 func (p *PSQL) SaveAlertFeedback(ctx context.Context, alertID int64, feedback string, username string) error {
 	_, err := p.pool.Exec(ctx,

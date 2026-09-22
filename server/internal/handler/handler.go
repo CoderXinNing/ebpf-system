@@ -24,6 +24,7 @@ type Handler struct {
 	SaveEventFunc func(evt ProbeEvent) error // PSQL 模式注入
 	SaveAgentFunc func(agent AgentInfo) error // PSQL 模式注入
 	ListAlertsFunc func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
+	UpdateAlertStatusFunc func(ids []int64, status string) error // 告警状态更新
 	Whitelist     []string // 白名单（进程名列表）
 	WhitelistUpdateFunc func([]string) // 白名单更新回调
 	ListStarEventsFunc func(corrID string) ([]map[string]interface{}, error) // PSQL 攻击链查询
@@ -104,6 +105,11 @@ func (h *Handler) SetListStarEventsFunc(fn func(string) ([]map[string]interface{
 // SetWhitelistUpdateFunc 设置白名单更新回调
 func (h *Handler) SetWhitelistUpdateFunc(fn func([]string)) {
 	h.WhitelistUpdateFunc = fn
+}
+
+// SetUpdateAlertStatusFunc 设置告警状态更新回调
+func (h *Handler) SetUpdateAlertStatusFunc(fn func([]int64, string) error) {
+	h.UpdateAlertStatusFunc = fn
 }
 
 // SetListAlertsFunc 设置告警列表回调（PSQL 模式）
@@ -234,6 +240,27 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			}
 			c.JSON(200, gin.H{"alerts": []interface{}{}})
 		})
+		api.POST("/alerts/batch-resolve", h.rbacMiddleware("alerts", "write"), func(c *gin.Context) {
+			var req struct {
+				IDs    []int64 `json:"ids"`
+				Status string  `json:"status"`
+			}
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(400, gin.H{"error": "请求格式错误"})
+				return
+			}
+			if req.Status == "" {
+				req.Status = "resolved"
+			}
+			if h.UpdateAlertStatusFunc != nil {
+				if err := h.UpdateAlertStatusFunc(req.IDs, req.Status); err != nil {
+					c.JSON(500, gin.H{"error": err.Error()})
+					return
+				}
+			}
+			c.JSON(200, gin.H{"success": true, "message": fmt.Sprintf("已更新 %d 条告警", len(req.IDs))})
+		})
+
 		api.GET("/baseline/stats", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
 			h.Mu.RLock()
 			defer h.Mu.RUnlock()

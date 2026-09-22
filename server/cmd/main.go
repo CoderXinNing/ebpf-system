@@ -142,6 +142,9 @@ func main() {
 		}
 		return result, nil
 	})
+	h.SetUpdateAlertStatusFunc(func(ids []int64, status string) error {
+		return psqlDB.UpdateAlertStatus(context.Background(), ids, status)
+	})
 	h.SetListAlertsFunc(func(limit int) ([]map[string]interface{}, error) {
 				alerts, err := psqlDB.ListAlerts(context.Background(), limit)
 				if err != nil {

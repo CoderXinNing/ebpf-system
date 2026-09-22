@@ -27,7 +27,9 @@
           :loading="loading"
           :pagination="{ pageSize: 20 }"
           :bordered="false"
-          @update:checked-row-keys="handleRowClick"
+          :row-key="(row: AlertItem) => row.id"
+          :row-props="rowProps"
+          @update:checked-row-keys="handleCheck"
         />
 
         <!-- 详情弹窗 -->
@@ -72,6 +74,7 @@ import { ref, onMounted, h, computed } from 'vue'
 import { NTag, NButton, NCard, NSpace, NDataTable, NModal, NDescriptions, NDescriptionsItem, NEmpty, NTimeline, NTimelineItem, NDivider, NText, NSkeleton, NSelect, useMessage } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { getAlerts, type AlertItem } from '../api/alert'
+import http from '../api/http'
 import { onWSMessage } from '../api/ws'
 
 const alerts = ref<AlertItem[]>([])
@@ -96,6 +99,7 @@ const sourceOptions = [
 ]
 
 const columns = [
+  { type: 'selection' },
   {
     title: '规则',
     key: 'rule_name',
@@ -187,14 +191,28 @@ onMounted(async () => {
   })
 })
 
-function handleRowClick(keys: any) {
-  if (keys && keys.length > 0) {
-    selectedAlert.value = alerts.value.find(a => a.id === keys[0]) || null
-    showDetail.value = true
-    chainEvents.value = []
-    if (selectedAlert.value?.correlation_id) {
-      loadChainEvents(selectedAlert.value.correlation_id)
-    }
+const checkedIds = ref<number[]>([])
+
+function handleCheck(keys: any) {
+  checkedIds.value = keys || []
+}
+
+function rowProps(row: AlertItem) {
+  return {
+    style: 'cursor: pointer;',
+    onClick: (e: MouseEvent) => {
+      // 点击勾选框或按钮时不弹详情
+      const target = e.target as HTMLElement
+      if (target.closest('.n-checkbox') || target.closest('.n-button')) {
+        return
+      }
+      selectedAlert.value = row
+      showDetail.value = true
+      chainEvents.value = []
+      if (row.correlation_id) {
+        loadChainEvents(row.correlation_id)
+      }
+    },
   }
 }
 
@@ -243,8 +261,22 @@ const filteredAlerts = computed(() => {
 
 const message = useMessage()
 
-function batchResolve() {
-  message.info('批量解决功能开发中')
+async function batchResolve() {
+  if (checkedIds.value.length === 0) {
+    message.warning('请先勾选要解决的告警')
+    return
+  }
+  try {
+    await http.post('/alerts/batch-resolve', {
+      ids: checkedIds.value,
+      status: 'resolved',
+    })
+    message.success(`已解决 ${checkedIds.value.length} 条告警`)
+    checkedIds.value = []
+    await loadAlerts()
+  } catch (err: any) {
+    message.error(err.response?.data?.error || '操作失败')
+  }
 }
 
 async function loadAlerts() {
