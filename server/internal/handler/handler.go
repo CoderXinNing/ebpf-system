@@ -34,7 +34,7 @@ type Handler struct {
 	GetLatestAssetFunc func(agentID string) (interface{}, interface{}, interface{}, error) // PSQL 资产查询
 	SaveAssetFunc func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
 	GetAllAssetsFunc func(agentID string) (map[string]interface{}, error) // 所有资产类型
-	SaveTypedAssetFunc func(agentID, assetType string, data interface{}) error // 保存指定类型资产
+	SaveTypedAssetFunc func(agentID, assetType, assetName string, data interface{}) error // 保存指定类型资产
 }
 
 type AgentInfo struct {
@@ -86,7 +86,7 @@ func (h *Handler) SetSaveAssetFunc(fn func(string, []byte, []byte, []byte) error
 }
 
 // SetSaveTypedAssetFunc 设置指定类型资产保存回调
-func (h *Handler) SetSaveTypedAssetFunc(fn func(string, string, interface{}) error) {
+func (h *Handler) SetSaveTypedAssetFunc(fn func(string, string, string, interface{}) error) {
 	h.SaveTypedAssetFunc = fn
 }
 

@@ -85,13 +85,13 @@ func (p *PSQL) SaveAsset(ctx context.Context, agentID string, processesJSON, use
 }
 
 // SaveTypedAsset 保存指定类型资产
-func (p *PSQL) SaveTypedAsset(ctx context.Context, agentID, assetType string, data interface{}) error {
+func (p *PSQL) SaveTypedAsset(ctx context.Context, agentID, assetType, assetName string, data interface{}) error {
 	info, _ := json.Marshal(data)
 	_, err := p.pool.Exec(ctx,
 		`INSERT INTO cmdb_assets (agent_id, asset_type, asset_name, asset_info, updated_at)
-		 VALUES ($1, $2, 'all', $3, NOW())
+		 VALUES ($1, $2, $3, $4, NOW())
 		 ON CONFLICT (agent_id, asset_type, asset_name) DO UPDATE SET asset_info = EXCLUDED.asset_info, updated_at = NOW()`,
-		agentID, assetType, info)
+		agentID, assetType, assetName, info)
 	return err
 }
 
@@ -116,14 +116,17 @@ func (p *PSQL) GetAllAssets(ctx context.Context, agentID string) (map[string]int
 			continue
 		}
 
-		// 同名（all）直接存；其他按 asset_name 作为子 key
+		// all 类型：只在没有其他子 key 时存；其他按 asset_name 作为子 key
 		if assetName == "all" {
-			result[assetType] = data
+			// 如果已有嵌套 map，说明有其他命名数据，跳过 all
+			if _, ok := result[assetType].(map[string]interface{}); !ok {
+				result[assetType] = data
+			}
 		} else {
-			// 建立嵌套：result[assetType] 是 map，子 key 是 asset_name
 			if existing, ok := result[assetType].(map[string]interface{}); ok {
 				existing[assetName] = data
 			} else {
+				// 覆盖 all 类型（或者第一次创建）
 				result[assetType] = map[string]interface{}{
 					assetName: data,
 				}

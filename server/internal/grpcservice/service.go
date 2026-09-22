@@ -205,6 +205,10 @@ func (s *Service) ReportUsers(ctx context.Context, req *pb.UserReport) (*pb.Repo
 }
 
 func (s *Service) ReportSystemInfo(ctx context.Context, req *pb.SystemReport) (*pb.ReportResponse, error) {
+	// 清空 Services，避免与 ReportServices 冲突
+	if req.System != nil {
+		req.System.Services = nil
+	}
 	sysJSON, _ := json.Marshal(req.System)
 	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
 	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
@@ -212,33 +216,35 @@ func (s *Service) ReportSystemInfo(ctx context.Context, req *pb.SystemReport) (*
 }
 
 func (s *Service) ReportPackages(ctx context.Context, req *pb.PackageReport) (*pb.ReportResponse, error) {
-	sysData := map[string]interface{}{
-		"packages":        req.Packages,
-		"jar_packages":    req.JarPackages,
-		"python_packages": req.PythonPackages,
-		"npm_packages":    req.NpmPackages,
-	}
 	if s.handler.SaveTypedAssetFunc != nil {
-		s.handler.SaveTypedAssetFunc(req.AgentId, "package", sysData)
+		s.handler.SaveTypedAssetFunc(req.AgentId, "package", "packages", req.Packages)
+		s.handler.SaveTypedAssetFunc(req.AgentId, "package", "jar_packages", req.JarPackages)
+		s.handler.SaveTypedAssetFunc(req.AgentId, "package", "python_packages", req.PythonPackages)
+		s.handler.SaveTypedAssetFunc(req.AgentId, "package", "npm_packages", req.NpmPackages)
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
 func (s *Service) ReportCronJobs(ctx context.Context, req *pb.CronReport) (*pb.ReportResponse, error) {
-	sysData := map[string]interface{}{"crons": req.Crons}
 	if s.handler.SaveTypedAssetFunc != nil {
-		s.handler.SaveTypedAssetFunc(req.AgentId, "service", sysData)
+		s.handler.SaveTypedAssetFunc(req.AgentId, "service", "crons", req.Crons)
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
 func (s *Service) ReportServices(ctx context.Context, req *pb.ServiceReport) (*pb.ReportResponse, error) {
-	sysData := map[string]interface{}{
-		"services":       req.Services,
-		"service_status": req.ServiceStatus,
+	log.Printf("DEBUG: ReportServices services=%d status=%d", len(req.Services), len(req.ServiceStatus))
+	if len(req.Services) > 0 {
+		s0 := req.Services[0]
+		log.Printf("DEBUG: 第一个 service: name=%s version=%s type=%s pid=%d", s0.Name, s0.Version, s0.Type, s0.Pid)
+	}
+	if len(req.ServiceStatus) > 0 {
+		s0 := req.ServiceStatus[0]
+		log.Printf("DEBUG: 第一个 status: name=%s enabled=%v active=%s", s0.Name, s0.Enabled, s0.Active)
 	}
 	if s.handler.SaveTypedAssetFunc != nil {
-		s.handler.SaveTypedAssetFunc(req.AgentId, "service", sysData)
+		s.handler.SaveTypedAssetFunc(req.AgentId, "service", "services", req.Services)
+		s.handler.SaveTypedAssetFunc(req.AgentId, "service", "service_status", req.ServiceStatus)
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
