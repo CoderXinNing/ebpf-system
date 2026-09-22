@@ -312,8 +312,15 @@ const packageColumns = [
 
 const serviceColumns = [
   { title: '服务名', key: 'name', ellipsis: { tooltip: true } },
-  { title: '状态', key: 'status', width: 100 },
-  { title: '运行用户', key: 'user', width: 120 },
+  { title: '版本', key: 'version', width: 150, ellipsis: { tooltip: true } },
+  { title: '类型', key: 'type', width: 100 },
+  { title: 'PID', key: 'pid', width: 80 },
+  {
+    title: '监听端口', key: 'listen_port', width: 140,
+    render: (row: any) => Array.isArray(row.listen_port) && row.listen_port.length > 0
+      ? row.listen_port.join(', ')
+      : '-',
+  },
 ]
 
 const currentColumns = computed(() => {
