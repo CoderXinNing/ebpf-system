@@ -142,6 +142,15 @@ func main() {
 		}
 		return result, nil
 	})
+	h.SetListWhitelistFunc(func() ([]string, error) {
+		return psqlDB.ListWhitelist(context.Background())
+	})
+	h.SetAddWhitelistFunc(func(processName, reason string) error {
+		return psqlDB.AddWhitelist(context.Background(), processName, reason, "admin")
+	})
+	h.SetRemoveWhitelistFunc(func(processName string) error {
+		return psqlDB.RemoveWhitelist(context.Background(), processName)
+	})
 	h.SetUpdateAlertStatusFunc(func(ids []int64, status string) error {
 		return psqlDB.UpdateAlertStatus(context.Background(), ids, status)
 	})
@@ -350,6 +359,19 @@ func main() {
 		}
 	})
 	grpcSvc.SetAlertEngine(alertEngine)
+
+	// 启动时从 PSQL 加载白名单
+	go func() {
+		time.Sleep(2 * time.Second)
+		list, err := psqlDB.ListWhitelist(context.Background())
+		if err == nil && len(list) > 0 {
+			h.Mu.Lock()
+			h.Whitelist = list
+			h.Mu.Unlock()
+			alertEngine.SetWhitelist(list)
+			log.Printf("📥 白名单已加载: %d 条", len(list))
+		}
+	}()
 	_ = alert.NewCorrelationEngine("server/configs/correlation.toml")
 
 	// 启动 HTTP

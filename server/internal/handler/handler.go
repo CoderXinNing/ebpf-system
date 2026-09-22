@@ -25,6 +25,9 @@ type Handler struct {
 	SaveAgentFunc func(agent AgentInfo) error // PSQL 模式注入
 	ListAlertsFunc func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
 	UpdateAlertStatusFunc func(ids []int64, status string) error // 告警状态更新
+	ListWhitelistFunc func() ([]string, error)
+	AddWhitelistFunc func(processName, reason string) error
+	RemoveWhitelistFunc func(processName string) error
 	Whitelist     []string // 白名单（进程名列表）
 	WhitelistUpdateFunc func([]string) // 白名单更新回调
 	ListStarEventsFunc func(corrID string) ([]map[string]interface{}, error) // PSQL 攻击链查询
@@ -105,6 +108,21 @@ func (h *Handler) SetListStarEventsFunc(fn func(string) ([]map[string]interface{
 // SetWhitelistUpdateFunc 设置白名单更新回调
 func (h *Handler) SetWhitelistUpdateFunc(fn func([]string)) {
 	h.WhitelistUpdateFunc = fn
+}
+
+// SetListWhitelistFunc 设置白名单查询回调
+func (h *Handler) SetListWhitelistFunc(fn func() ([]string, error)) {
+	h.ListWhitelistFunc = fn
+}
+
+// SetAddWhitelistFunc 设置白名单添加回调
+func (h *Handler) SetAddWhitelistFunc(fn func(string, string) error) {
+	h.AddWhitelistFunc = fn
+}
+
+// SetRemoveWhitelistFunc 设置白名单移除回调
+func (h *Handler) SetRemoveWhitelistFunc(fn func(string) error) {
+	h.RemoveWhitelistFunc = fn
 }
 
 // SetUpdateAlertStatusFunc 设置告警状态更新回调

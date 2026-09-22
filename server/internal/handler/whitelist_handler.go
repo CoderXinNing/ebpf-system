@@ -16,6 +16,17 @@ type WhitelistItem struct {
 
 // ListWhitelist 查询白名单
 func (h *Handler) ListWhitelist(c *gin.Context) {
+	// 优先查 PSQL
+	if h.ListWhitelistFunc != nil {
+		list, err := h.ListWhitelistFunc()
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		h.Whitelist = list
+		c.JSON(200, gin.H{"whitelist": list})
+		return
+	}
 	c.JSON(200, gin.H{"whitelist": h.Whitelist})
 }
 
@@ -26,21 +37,37 @@ func (h *Handler) AddWhitelist(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "请求格式错误"})
 		return
 	}
+	if req.ProcessName == "" {
+		c.JSON(400, gin.H{"error": "进程名不能为空"})
+		return
+	}
 
-	// 去重
-	for _, name := range h.Whitelist {
-		if name == req.ProcessName {
-			c.JSON(200, gin.H{"success": true, "message": "已存在"})
+	// 写入 PSQL
+	if h.AddWhitelistFunc != nil {
+		if err := h.AddWhitelistFunc(req.ProcessName, req.Reason); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
 			return
 		}
 	}
 
-	h.Whitelist = append(h.Whitelist, req.ProcessName)
+	// 更新内存
+	h.Mu.Lock()
+	found := false
+	for _, name := range h.Whitelist {
+		if name == req.ProcessName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		h.Whitelist = append(h.Whitelist, req.ProcessName)
+	}
+	whitelistCopy := append([]string{}, h.Whitelist...)
+	h.Mu.Unlock()
 
-	// 广播白名单更新给所有 Agent（通过心跳命令）
-	h.broadcastWhitelist()
+	h.broadcastWhitelist(whitelistCopy)
 	if h.WhitelistUpdateFunc != nil {
-		h.WhitelistUpdateFunc(h.Whitelist)
+		h.WhitelistUpdateFunc(whitelistCopy)
 	}
 
 	c.JSON(200, gin.H{"success": true, "message": "白名单已添加并下发"})
@@ -49,7 +76,17 @@ func (h *Handler) AddWhitelist(c *gin.Context) {
 // RemoveWhitelist 移除白名单
 func (h *Handler) RemoveWhitelist(c *gin.Context) {
 	processName := c.Param("process_name")
-	
+
+	// 删除 PSQL
+	if h.RemoveWhitelistFunc != nil {
+		if err := h.RemoveWhitelistFunc(processName); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// 更新内存
+	h.Mu.Lock()
 	newList := make([]string, 0, len(h.Whitelist))
 	for _, name := range h.Whitelist {
 		if name != processName {
@@ -57,27 +94,29 @@ func (h *Handler) RemoveWhitelist(c *gin.Context) {
 		}
 	}
 	h.Whitelist = newList
+	whitelistCopy := append([]string{}, newList...)
+	h.Mu.Unlock()
 
-	h.broadcastWhitelist()
+	h.broadcastWhitelist(whitelistCopy)
 	if h.WhitelistUpdateFunc != nil {
-		h.WhitelistUpdateFunc(h.Whitelist)
+		h.WhitelistUpdateFunc(whitelistCopy)
 	}
 	c.JSON(200, gin.H{"success": true, "message": "白名单已移除"})
 }
 
 // broadcastWhitelist 将白名单塞入所有 Agent 的命令队列
-func (h *Handler) broadcastWhitelist() {
-	jsonData, _ := json.Marshal(h.Whitelist)
-	
+func (h *Handler) broadcastWhitelist(whitelist []string) {
+	jsonData, _ := json.Marshal(whitelist)
+
 	h.Mu.Lock()
 	defer h.Mu.Unlock()
-	
+
 	for agentID, agent := range h.Agents {
 		agent.Commands = append(agent.Commands, &pb.ProbeCommand{
-			Type:        pb.ProbeCommand_UNLOAD, // 复用 UNLOAD 类型传白名单
+			Type:        pb.ProbeCommand_UNLOAD,
 			ProbeName:   "whitelist",
 			ProbeConfig: string(jsonData),
 		})
-		log.Printf("📤 白名单已塞入 Agent %s 队列: %v", agentID, h.Whitelist)
+		log.Printf("📤 白名单已塞入 Agent %s 队列: %v", agentID, whitelist)
 	}
 }
