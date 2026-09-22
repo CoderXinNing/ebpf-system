@@ -71,7 +71,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, h, computed } from 'vue'
-import { NTag, NButton, NCard, NSpace, NDataTable, NModal, NDescriptions, NDescriptionsItem, NEmpty, NTimeline, NTimelineItem, NDivider, NText, NSkeleton, NSelect, useMessage } from 'naive-ui'
+import { NTag, NButton, NCard, NSpace, NDataTable, NModal, NDescriptions, NDescriptionsItem, NEmpty, NTimeline, NTimelineItem, NDivider, NText, NSkeleton, NSelect, useMessage, NPopselect } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { getAlerts, type AlertItem } from '../api/alert'
 import http from '../api/http'
@@ -178,11 +178,38 @@ const columns = [
             },
             { default: () => '攻击链' }
           ) : null,
+          h(
+            NPopselect,
+            {
+              size: 'small',
+              options: statusOptions,
+              value: row.status,
+              onUpdateValue: (v: string) => updateStatus(row, v),
+            },
+            { default: () => h(NButton, { size: 'small', round: true }, { default: () => '状态' }) }
+          ),
         ],
       })
     },
   },
 ]
+
+const statusOptions = [
+  { label: '未处理', value: 'open' },
+  { label: '已确认', value: 'acknowledged' },
+  { label: '已解决', value: 'resolved' },
+  { label: '误报', value: 'false_positive' },
+]
+
+async function updateStatus(row: AlertItem, status: string) {
+  try {
+    await http.post('/alerts/batch-resolve', { ids: [row.id], status })
+    message.success('状态已更新')
+    await loadAlerts()
+  } catch (err: any) {
+    message.error(err.response?.data?.error || '更新失败')
+  }
+}
 
 onMounted(async () => {
   await loadAlerts()
