@@ -59,7 +59,16 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 
 		updateHeartbeatMap()
 
-		if resp.Success && len(resp.Commands) > 0 {
+		// Server 不认识了（比如 Server 重启），触发重新注册
+		if !resp.Success {
+			log.Printf("⚠️ 心跳被拒绝（Server 内存中无此 Agent），尝试重新注册...")
+			if err := a.connectAndRegister(); err != nil {
+				log.Printf("⚠️ 重新注册失败: %v", err)
+			}
+			continue
+		}
+
+		if len(resp.Commands) > 0 {
 			for _, cmd := range resp.Commands {
 				a.handleCommand(cmd)
 			}

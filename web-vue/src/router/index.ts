@@ -38,6 +38,11 @@ const router = createRouter({
       component: () => import('../views/WhitelistView.vue'),
     },
     {
+      path: '/deploy',
+      name: 'Deploy',
+      component: () => import('../views/DeployView.vue'),
+    },
+    {
       path: '/settings',
       name: 'Settings',
       component: () => import('../views/SettingsView.vue'),

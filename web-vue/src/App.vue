@@ -96,6 +96,7 @@ const menuOptions = [
   { label: '告警', key: '/alerts' },
   { label: '资产', key: '/assets' },
   { label: '白名单', key: '/whitelist' },
+  { label: '部署', key: '/deploy' },
   { label: '设置', key: '/settings' },
 ]
 

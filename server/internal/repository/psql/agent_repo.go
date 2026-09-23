@@ -73,7 +73,22 @@ func (p *PSQL) DeleteAgent(ctx context.Context, agentID string) error {
 
 // ListAgents 查询 Agent 列表
 func (p *PSQL) ListAgents(ctx context.Context, filter *model.AgentListFilter) ([]*model.Agent, error) {
-	query := `SELECT agent_id, hostname, display_name, ip_addr, location, owner, version, group_id, token_hash, capability_level, active_probes, baseline_state, first_seen, last_seen FROM agents`
+	query := `SELECT 
+		agent_id, 
+		COALESCE(hostname, '') as hostname, 
+		COALESCE(display_name, '') as display_name, 
+		COALESCE(ip_addr, '') as ip_addr, 
+		COALESCE(location, '') as location, 
+		COALESCE(owner, '') as owner, 
+		COALESCE(version, '') as version, 
+		group_id, 
+		COALESCE(token_hash, '') as token_hash, 
+		COALESCE(capability_level, 'cmdb') as capability_level, 
+		COALESCE(active_probes, 0) as active_probes, 
+		COALESCE(baseline_state, 'learning') as baseline_state, 
+		first_seen, 
+		COALESCE(last_seen, first_seen) as last_seen 
+	FROM agents`
 	args := []interface{}{}
 	argIdx := 1
 

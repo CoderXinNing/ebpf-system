@@ -176,6 +176,9 @@ func main() {
 			return psqlDB.GetAgentPublicKeyHash(context.Background(), agentID)
 		}
 		h.RenewCertFunc = h.RenewCertHandler
+		h.RevokeAgentFunc = func(agentID string) error {
+			return psqlDB.RevokeAgent(context.Background(), agentID)
+		}
 		h.GenerateTokenFunc = func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error) {
 			return psqlDB.GenerateToken(context.Background(), name, groupID, maxUses, time.Duration(ttlHours)*time.Hour, createdBy)
 		}
@@ -314,6 +317,9 @@ func main() {
 
 	// gRPC Service
 	grpcSvc := grpcservice.NewService(h, agentAuth)
+
+	// 从 DB 加载已有 Agent（Server 重启后恢复内存状态）
+	loadAgentsFromDB(h, psqlDB)
 
 	// TLS
 	tlsCert := "certs/server.crt"
@@ -530,4 +536,41 @@ func loadConfig(path string) *ServerConfig {
 		return nil
 	}
 	return &cfg
+}
+
+
+// loadAgentsFromDB 启动时从数据库加载 Agent 到内存
+// 目的：Server 重启后前端能看到已注册的主机
+// 说明：不恢复 token（DB 只存 hash），Agent 会通过重新注册获取新 token
+func loadAgentsFromDB(h *handler.Handler, db *psql.PSQL) {
+	if h == nil || db == nil {
+		return
+	}
+
+	agents, err := db.ListAgents(context.Background(), nil)
+	if err != nil {
+		log.Printf("⚠️ 从 DB 加载 Agent 失败: %v", err)
+		return
+	}
+
+	h.Mu.Lock()
+	defer h.Mu.Unlock()
+
+	loaded := 0
+	for _, a := range agents {
+		h.Agents[a.ID] = &handler.AgentInfo{
+			ID:              a.ID,
+			Hostname:        a.Hostname,
+			IPAddr:          a.IPAddr,
+			Version:         a.Version,
+			CapabilityLevel: a.CapabilityLevel,
+			ActiveProbes:    a.ActiveProbes,
+			BaselineState:   a.BaselineState,
+			FirstSeen:       a.FirstSeen.Unix(),
+			LastSeen:        a.LastSeen.Unix(),
+			Commands:        make([]*pb.ProbeCommand, 0),
+		}
+		loaded++
+	}
+	log.Printf("📥 已从 DB 加载 %d 个 Agent 到内存", loaded)
 }
