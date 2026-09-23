@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os/exec"
 
-	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 )
 
 // ExecProbe 是 V3 exec 探针的适配器
@@ -78,3 +79,13 @@ func (p *ExecProbe) Stop() error {
 // 确保实现 framework.Probe 接口
 var _ framework.Probe = (*ExecProbe)(nil)
 var _ = fmt.Sprintf
+
+func (p *ExecProbe) SelfTestAction(opts framework.SelfTestOptions) error {
+	cmd := exec.Command("bash", "-c", "exec -a agent-selftest true")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%w: %v", framework.ErrSelfTestActionFailed, err)
+	}
+	return nil
+}
+
+var _ framework.SelfTester = (*ExecProbe)(nil)

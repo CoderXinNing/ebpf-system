@@ -1,10 +1,12 @@
 package plugins
 
 import (
+	"fmt"
 	"log"
+	"os/exec"
 
-	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 )
 
 // FileProbe 是 V3 file_access 探针的适配器
@@ -58,3 +60,17 @@ func (p *FileProbe) Stop() error {
 }
 
 var _ framework.Probe = (*FileProbe)(nil)
+
+func (p *FileProbe) SelfTestAction(opts framework.SelfTestOptions) error {
+	target := opts.FileTarget
+	if target == "" {
+		target = "/etc/hostname"
+	}
+	cmd := exec.Command("bash", "-c", "exec -a agent-selftest cat "+target)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%w: %v", framework.ErrSelfTestActionFailed, err)
+	}
+	return nil
+}
+
+var _ framework.SelfTester = (*FileProbe)(nil)
