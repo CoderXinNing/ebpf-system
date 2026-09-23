@@ -79,8 +79,12 @@ func EnsureAgentBinary(cfg Config) error {
 
 	log.Printf("🔨 检测到 Agent 源码变化或二进制缺失，开始编译（go=%s）...", goPath)
 
-	// 4. 编译
+	// 4. 编译（CGO_ENABLED=0 → 静态二进制，兼容老 GLIBC）
 	cmd := exec.Command(goPath, "build", "-o", agentOutPath, "./agent/cmd/")
+	cmd.Env = append(os.Environ(),
+		"CGO_ENABLED=0",
+		"GOOS=linux",
+	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
