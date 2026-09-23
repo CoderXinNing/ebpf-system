@@ -45,9 +45,11 @@ type ServerConfig struct {
 		DBName   string `toml:"dbname"`
 	} `toml:"database"`
 	TLS struct {
-		CertFile string `toml:"cert_file"`
-		KeyFile  string `toml:"key_file"`
-		CAFile   string `toml:"ca_file"`
+		CertFile            string `toml:"cert_file"`
+		KeyFile             string `toml:"key_file"`
+		CAFile              string `toml:"ca_file"`
+		StrictMTLS          bool   `toml:"strict_mtls"`
+		CertificateTTLHours int    `toml:"certificate_ttl_hours"`
 	} `toml:"tls"`
 }
 
@@ -127,6 +129,12 @@ func main() {
 		h.CACertPEM = caInstance.CertPEM()
 		h.ComputeAgentIDFunc = ca.ComputeAgentID
 		h.SignCSRFunc = func(csrPEM []byte, agentID string, ttlHours int) ([]byte, string, time.Time, error) {
+			if ttlHours <= 0 {
+				ttlHours = cfg.TLS.CertificateTTLHours
+				if ttlHours <= 0 {
+					ttlHours = 8760
+				}
+			}
 			return caInstance.SignCSR(csrPEM, agentID, time.Duration(ttlHours)*time.Hour)
 		}
 		h.EnrollAgentFunc = func(req handler.EnrollRequest) (*handler.EnrollResult, error) {
@@ -327,9 +335,24 @@ func main() {
 	}
 	tlsCreds := credentials.NewTLS(tlsConfig)
 
+	// 拦截器链
+	var unaryInterceptors []grpc.UnaryServerInterceptor
+
+	// MTLS 4 层校验（Day 2-3，过渡期可关闭）
+	enableStrictMTLS := cfg.TLS.StrictMTLS
+	if enableStrictMTLS && psqlDB != nil {
+		mtlsInterceptor := middleware.NewMTLSIdentityInterceptor(psqlDB)
+		unaryInterceptors = append(unaryInterceptors, mtlsInterceptor.UnaryInterceptor)
+		log.Println("🔐 [L1-L4] mTLS 四层校验已启用（跳过 Token 校验）")
+	} else {
+		// 过渡期：使用 Token 校验
+		unaryInterceptors = append(unaryInterceptors, agentAuth.UnaryInterceptor)
+		log.Println("⚠️ mTLS 四层校验未启用（过渡期，使用 Token 校验）")
+	}
+
 	grpcServer := grpc.NewServer(
 		grpc.Creds(tlsCreds),
-		grpc.UnaryInterceptor(agentAuth.UnaryInterceptor),
+		grpc.ChainUnaryInterceptor(unaryInterceptors...),
 	)
 	pb.RegisterSentinelServer(grpcServer, grpcSvc)
 	go func() {
@@ -476,6 +499,8 @@ func defaultConfig() *ServerConfig {
 	cfg.TLS.CertFile = "certs/server.crt"
 	cfg.TLS.KeyFile = "certs/server.key"
 	cfg.TLS.CAFile = "certs/ca.crt"
+	cfg.TLS.StrictMTLS = false
+	cfg.TLS.CertificateTTLHours = 8760
 	return cfg
 }
 

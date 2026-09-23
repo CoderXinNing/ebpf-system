@@ -29,6 +29,15 @@ type TLSConfig struct {
 	CertFile string `toml:"cert_file"`
 	KeyFile  string `toml:"key_file"`
 	CAFile   string `toml:"ca_file"`
+
+	// StrictMTLS 是否启用 4 层强校验（L1-L4）
+	// false = 过渡期，Token 认证
+	// true  = Agent Identity Model v1 强校验
+	StrictMTLS bool `toml:"strict_mtls"`
+
+	// CertificateTTLHours Agent 证书有效期（小时）
+	// 默认 8760 = 1 年
+	CertificateTTLHours int `toml:"certificate_ttl_hours"`
 }
 
 type LogConfig struct {
@@ -47,9 +56,11 @@ func Load(path string) *Config {
 			Path: "sentinel.db",
 		},
 		TLS: TLSConfig{
-			CertFile: "certs/server.crt",
-			KeyFile:  "certs/server.key",
-			CAFile:   "certs/ca.crt",
+			CertFile:            "certs/server.crt",
+			KeyFile:             "certs/server.key",
+			CAFile:              "certs/ca.crt",
+			StrictMTLS:          false,
+			CertificateTTLHours: 8760,
 		},
 		Log: LogConfig{
 			Level:  "info",
