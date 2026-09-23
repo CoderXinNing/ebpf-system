@@ -72,9 +72,12 @@ func New(cfg *config.AgentConfig) *Agent {
 	}
 	baselineEngine := baseline.NewBaselineEngine("agent/configs/baseline.toml")
 
+	// 优先从 agent.id 文件读（enrollment 生成），fallback 到 hostname
+	agentID := loadAgentID(cfg.Agent.IDFile, hostname)
+
 	probeState := newProbeState(baselineEngine)
 	agent := &Agent{
-		id:         generateAgentID(hostname),
+		id:         agentID,
 		hostname:   hostname,
 		ipAddr:     getIPAddress(),
 		cfg:        cfg,
@@ -229,7 +232,7 @@ func (a *Agent) connectAndRegister() error {
 	defer cancel()
 
 	// mTLS 配置：加载 CA + 客户端证书
-	caCert, err := os.ReadFile("certs/ca.crt")
+	caCert, err := os.ReadFile(a.cfg.Certs.CA)
 	if err != nil {
 		log.Printf("⚠️ 读取 CA 证书失败: %v", err)
 		return err
@@ -240,7 +243,7 @@ func (a *Agent) connectAndRegister() error {
 		return fmt.Errorf("解析 CA 证书失败")
 	}
 
-	clientCert, err := tls.LoadX509KeyPair("certs/agent.crt", "certs/agent.key")
+	clientCert, err := tls.LoadX509KeyPair(a.cfg.Certs.Cert, a.cfg.Certs.Key)
 	if err != nil {
 		log.Printf("⚠️ 加载客户端证书失败: %v", err)
 		return err

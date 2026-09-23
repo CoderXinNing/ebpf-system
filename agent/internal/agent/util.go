@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func getHostname() string {
@@ -36,4 +37,17 @@ func generateAgentHash(agentID string) uint32 {
         hash = hash*31 + uint32(c)
     }
     return hash
+}
+
+// loadAgentID 优先从文件读 agent_id，失败则从 hostname 生成
+func loadAgentID(idFile, hostname string) string {
+	if idFile != "" {
+		if data, err := os.ReadFile(idFile); err == nil {
+			id := strings.TrimSpace(string(data))
+			if id != "" {
+				return id
+			}
+		}
+	}
+	return generateAgentID(hostname)
 }

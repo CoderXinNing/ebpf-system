@@ -18,7 +18,7 @@ ca_file = "certs/ca.crt"
 # Agent Identity Model v1 强校验
 # false = 过渡期（Token 认证）
 # true  = 4 层强校验（L1 CA + L2 SAN + L3 公钥 + L4 撤销）
-strict_mtls = false
+strict_mtls = true
 
 # Agent 证书有效期（小时）
 # 默认 8760 = 1 年

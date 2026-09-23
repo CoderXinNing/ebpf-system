@@ -10,9 +10,17 @@ import (
 
 // AgentConfig Agent完整配置
 type AgentConfig struct {
-	XDP              XDPConfig        `toml:"xdp"`
-	Agent    AgentSection    `toml:"agent"`
-	Autoload []ProbeConfig   `toml:"autoload"`
+	XDP      XDPConfig      `toml:"xdp"`
+	Agent    AgentSection   `toml:"agent"`
+	Certs    CertsSection   `toml:"certs"`
+	Autoload []ProbeConfig  `toml:"autoload"`
+}
+
+// CertsSection 证书路径配置
+type CertsSection struct {
+	CA   string `toml:"ca"`
+	Cert string `toml:"cert"`
+	Key  string `toml:"key"`
 }
 
 // AgentSection Agent基础配置
@@ -22,6 +30,7 @@ type AgentSection struct {
 	RetryDelay        time.Duration `toml:"retry_delay"`
 	HeartbeatInterval time.Duration `toml:"heartbeat_interval"`
 	CollectInterval   time.Duration `toml:"collect_interval"`
+	IDFile            string        `toml:"id_file"` // agent.id 文件路径
 }
 type ProbeConfig struct {
 	Name    string `toml:"name"`
@@ -39,7 +48,13 @@ func DefaultConfig() *AgentConfig {
 			Server:            "127.0.0.1:50051",
 			RetryDelay:        5 * time.Second,
 			HeartbeatInterval: 10 * time.Second,
-		CollectInterval:   300 * time.Second,
+			CollectInterval:   300 * time.Second,
+			IDFile:            "agent/data/agent.id",
+		},
+		Certs: CertsSection{
+			CA:   "certs/ca.crt",
+			Cert: "certs/agent.crt",
+			Key:  "certs/agent.key",
 		},
 	}
 }
