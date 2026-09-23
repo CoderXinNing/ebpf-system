@@ -2,6 +2,7 @@ package framework
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -84,3 +85,19 @@ func (m *Manager) Stop(name string) error {
 	}
 	return p.Stop()
 }
+
+// SelfTester 可选接口：探针实现一个"已知能被自己捕获的行为"。
+// 用于自检机制，检测 attach 成功但静默失败（loaded-silent）的探针。
+type SelfTester interface {
+	// SelfTestAction 执行一个应该被本探针捕获的动作。
+	// 返回 nil 或 ErrSelfTestExpected 表示动作已执行，进入事件对比流程；
+	// 返回 ErrSelfTestActionFailed 表示动作本身失败（命令未执行）。
+	SelfTestAction() error
+}
+
+var (
+	// ErrSelfTestExpected 预期失败：动作已执行，探针应捕获到事件
+	ErrSelfTestExpected = errors.New("selftest: 预期失败（动作已执行，探针应捕获）")
+	// ErrSelfTestActionFailed 动作本身失败：命令未执行
+	ErrSelfTestActionFailed = errors.New("selftest: 动作本身失败（命令未执行）")
+)

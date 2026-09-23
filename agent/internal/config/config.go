@@ -14,6 +14,17 @@ type AgentConfig struct {
 	Agent    AgentSection   `toml:"agent"`
 	Certs    CertsSection   `toml:"certs"`
 	Autoload []ProbeConfig  `toml:"autoload"`
+	Selftest SelftestConfig `toml:"selftest"`
+}
+
+// SelftestConfig 探针自检配置
+type SelftestConfig struct {
+	Enabled           bool   `toml:"enabled"`
+	IntervalMinutes   int    `toml:"interval_minutes"`
+	WaitSeconds       int    `toml:"wait_seconds"`
+	TCPTarget         string `toml:"tcp_target"`
+	XDPFallbackTarget string `toml:"xdp_fallback_target"`
+	FileTarget        string `toml:"file_target"`
 }
 
 // CertsSection 证书路径配置
@@ -55,6 +66,14 @@ func DefaultConfig() *AgentConfig {
 			CA:   "certs/ca.crt",
 			Cert: "certs/agent.crt",
 			Key:  "certs/agent.key",
+		},
+		Selftest: SelftestConfig{
+			Enabled:           true,
+			IntervalMinutes:   5,
+			WaitSeconds:       3,
+			TCPTarget:         "127.0.0.1:1",
+			XDPFallbackTarget: "8.8.8.8",
+			FileTarget:        "/etc/hostname",
 		},
 	}
 }
@@ -103,5 +122,5 @@ type XDPConfig struct {
 	ServerIP   string `toml:"server_ip"`
 	ServerPort int    `toml:"server_port"`
 	// Mode 挂载模式："driver"（驱动模式，需显式开启）或 "generic"（通用模式，默认）
-	Mode       string `toml:"mode"`
+	Mode string `toml:"mode"`
 }
