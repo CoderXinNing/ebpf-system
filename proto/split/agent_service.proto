@@ -141,6 +141,22 @@ message RenewCertResponse {
     string cert_expires = 6; // RFC3339
 }
 
+message ProbeStatusEntry {
+    string name = 1;
+    string status = 2;
+    string reason = 3;
+    int64 last_event_at = 4;
+    int64 last_check_at = 5;
+    bool selftest_ok = 6;
+    int32 consecutive_failures = 7;
+    int64 loaded_at = 8;
+}
+
+message ProbeStatusReport {
+    string agent_id = 1;
+    repeated ProbeStatusEntry entries = 2;
+}
+
 service Sentinel {
     rpc Register(RegisterRequest) returns (RegisterResponse);
     rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
@@ -163,4 +179,6 @@ service Sentinel {
     rpc ReportNetwork(NetworkReport) returns (ReportResponse);
     rpc ReportPerformance(PerfReport) returns (ReportResponse);
     rpc ReportAgentSelf(AgentSelfReport) returns (ReportResponse);
+
+    rpc ReportProbeStatus(ProbeStatusReport) returns (ReportResponse);
 }

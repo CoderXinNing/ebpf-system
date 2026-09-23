@@ -1270,6 +1270,158 @@ func (x *RenewCertResponse) GetCertExpires() string {
 	return ""
 }
 
+type ProbeStatusEntry struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Name                string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Status              string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Reason              string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	LastEventAt         int64                  `protobuf:"varint,4,opt,name=last_event_at,json=lastEventAt,proto3" json:"last_event_at,omitempty"`
+	LastCheckAt         int64                  `protobuf:"varint,5,opt,name=last_check_at,json=lastCheckAt,proto3" json:"last_check_at,omitempty"`
+	SelftestOk          bool                   `protobuf:"varint,6,opt,name=selftest_ok,json=selftestOk,proto3" json:"selftest_ok,omitempty"`
+	ConsecutiveFailures int32                  `protobuf:"varint,7,opt,name=consecutive_failures,json=consecutiveFailures,proto3" json:"consecutive_failures,omitempty"`
+	LoadedAt            int64                  `protobuf:"varint,8,opt,name=loaded_at,json=loadedAt,proto3" json:"loaded_at,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ProbeStatusEntry) Reset() {
+	*x = ProbeStatusEntry{}
+	mi := &file_agent_service_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeStatusEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeStatusEntry) ProtoMessage() {}
+
+func (x *ProbeStatusEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_service_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeStatusEntry.ProtoReflect.Descriptor instead.
+func (*ProbeStatusEntry) Descriptor() ([]byte, []int) {
+	return file_agent_service_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ProbeStatusEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ProbeStatusEntry) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ProbeStatusEntry) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *ProbeStatusEntry) GetLastEventAt() int64 {
+	if x != nil {
+		return x.LastEventAt
+	}
+	return 0
+}
+
+func (x *ProbeStatusEntry) GetLastCheckAt() int64 {
+	if x != nil {
+		return x.LastCheckAt
+	}
+	return 0
+}
+
+func (x *ProbeStatusEntry) GetSelftestOk() bool {
+	if x != nil {
+		return x.SelftestOk
+	}
+	return false
+}
+
+func (x *ProbeStatusEntry) GetConsecutiveFailures() int32 {
+	if x != nil {
+		return x.ConsecutiveFailures
+	}
+	return 0
+}
+
+func (x *ProbeStatusEntry) GetLoadedAt() int64 {
+	if x != nil {
+		return x.LoadedAt
+	}
+	return 0
+}
+
+type ProbeStatusReport struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	Entries       []*ProbeStatusEntry    `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeStatusReport) Reset() {
+	*x = ProbeStatusReport{}
+	mi := &file_agent_service_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeStatusReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeStatusReport) ProtoMessage() {}
+
+func (x *ProbeStatusReport) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_service_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeStatusReport.ProtoReflect.Descriptor instead.
+func (*ProbeStatusReport) Descriptor() ([]byte, []int) {
+	return file_agent_service_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ProbeStatusReport) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *ProbeStatusReport) GetEntries() []*ProbeStatusEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
 var File_agent_service_proto protoreflect.FileDescriptor
 
 const file_agent_service_proto_rawDesc = "" +
@@ -1380,8 +1532,20 @@ const file_agent_service_proto_rawDesc = "" +
 	"\x06ca_crt\x18\x04 \x01(\tR\x05caCrt\x12\x1f\n" +
 	"\vcert_serial\x18\x05 \x01(\tR\n" +
 	"certSerial\x12!\n" +
-	"\fcert_expires\x18\x06 \x01(\tR\vcertExpires2\xbb\n" +
-	"\n" +
+	"\fcert_expires\x18\x06 \x01(\tR\vcertExpires\"\x8f\x02\n" +
+	"\x10ProbeStatusEntry\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\"\n" +
+	"\rlast_event_at\x18\x04 \x01(\x03R\vlastEventAt\x12\"\n" +
+	"\rlast_check_at\x18\x05 \x01(\x03R\vlastCheckAt\x12\x1f\n" +
+	"\vselftest_ok\x18\x06 \x01(\bR\n" +
+	"selftestOk\x121\n" +
+	"\x14consecutive_failures\x18\a \x01(\x05R\x13consecutiveFailures\x12\x1b\n" +
+	"\tloaded_at\x18\b \x01(\x03R\bloadedAt\"d\n" +
+	"\x11ProbeStatusReport\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\x124\n" +
+	"\aentries\x18\x02 \x03(\v2\x1a.sentinel.ProbeStatusEntryR\aentries2\x87\v\n" +
 	"\bSentinel\x12A\n" +
 	"\bRegister\x12\x19.sentinel.RegisterRequest\x1a\x1a.sentinel.RegisterResponse\x12D\n" +
 	"\tHeartbeat\x12\x1a.sentinel.HeartbeatRequest\x1a\x1b.sentinel.HeartbeatResponse\x12?\n" +
@@ -1401,7 +1565,8 @@ const file_agent_service_proto_rawDesc = "" +
 	"\x0eReportHardware\x12\x18.sentinel.HardwareReport\x1a\x18.sentinel.ReportResponse\x12B\n" +
 	"\rReportNetwork\x12\x17.sentinel.NetworkReport\x1a\x18.sentinel.ReportResponse\x12C\n" +
 	"\x11ReportPerformance\x12\x14.sentinel.PerfReport\x1a\x18.sentinel.ReportResponse\x12F\n" +
-	"\x0fReportAgentSelf\x12\x19.sentinel.AgentSelfReport\x1a\x18.sentinel.ReportResponseB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
+	"\x0fReportAgentSelf\x12\x19.sentinel.AgentSelfReport\x1a\x18.sentinel.ReportResponse\x12J\n" +
+	"\x11ReportProbeStatus\x12\x1b.sentinel.ProbeStatusReport\x1a\x18.sentinel.ReportResponseB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
 
 var (
 	file_agent_service_proto_rawDescOnce sync.Once
@@ -1415,7 +1580,7 @@ func file_agent_service_proto_rawDescGZIP() []byte {
 	return file_agent_service_proto_rawDescData
 }
 
-var file_agent_service_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_agent_service_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_agent_service_proto_goTypes = []any{
 	(*RegisterRequest)(nil),    // 0: sentinel.RegisterRequest
 	(*RegisterResponse)(nil),   // 1: sentinel.RegisterResponse
@@ -1435,69 +1600,74 @@ var file_agent_service_proto_goTypes = []any{
 	(*StarActivationAck)(nil),  // 15: sentinel.StarActivationAck
 	(*RenewCertRequest)(nil),   // 16: sentinel.RenewCertRequest
 	(*RenewCertResponse)(nil),  // 17: sentinel.RenewCertResponse
-	(*ProbeCommand)(nil),       // 18: sentinel.ProbeCommand
-	(*ProcessReport)(nil),      // 19: sentinel.ProcessReport
-	(*UserReport)(nil),         // 20: sentinel.UserReport
-	(*SystemReport)(nil),       // 21: sentinel.SystemReport
-	(*PackageReport)(nil),      // 22: sentinel.PackageReport
-	(*CronReport)(nil),         // 23: sentinel.CronReport
-	(*ServiceReport)(nil),      // 24: sentinel.ServiceReport
-	(*WebComponentReport)(nil), // 25: sentinel.WebComponentReport
-	(*HardwareReport)(nil),     // 26: sentinel.HardwareReport
-	(*NetworkReport)(nil),      // 27: sentinel.NetworkReport
-	(*PerfReport)(nil),         // 28: sentinel.PerfReport
-	(*AgentSelfReport)(nil),    // 29: sentinel.AgentSelfReport
-	(*ReportResponse)(nil),     // 30: sentinel.ReportResponse
+	(*ProbeStatusEntry)(nil),   // 18: sentinel.ProbeStatusEntry
+	(*ProbeStatusReport)(nil),  // 19: sentinel.ProbeStatusReport
+	(*ProbeCommand)(nil),       // 20: sentinel.ProbeCommand
+	(*ProcessReport)(nil),      // 21: sentinel.ProcessReport
+	(*UserReport)(nil),         // 22: sentinel.UserReport
+	(*SystemReport)(nil),       // 23: sentinel.SystemReport
+	(*PackageReport)(nil),      // 24: sentinel.PackageReport
+	(*CronReport)(nil),         // 25: sentinel.CronReport
+	(*ServiceReport)(nil),      // 26: sentinel.ServiceReport
+	(*WebComponentReport)(nil), // 27: sentinel.WebComponentReport
+	(*HardwareReport)(nil),     // 28: sentinel.HardwareReport
+	(*NetworkReport)(nil),      // 29: sentinel.NetworkReport
+	(*PerfReport)(nil),         // 30: sentinel.PerfReport
+	(*AgentSelfReport)(nil),    // 31: sentinel.AgentSelfReport
+	(*ReportResponse)(nil),     // 32: sentinel.ReportResponse
 }
 var file_agent_service_proto_depIdxs = []int32{
 	2,  // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
 	3,  // 1: sentinel.RegisterRequest.kernel_info:type_name -> sentinel.KernelInfo
-	18, // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
+	20, // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
 	6,  // 3: sentinel.EventReport.events:type_name -> sentinel.ProbeEvent
 	11, // 4: sentinel.ProbeListResponse.probes:type_name -> sentinel.ProbeInfo
-	0,  // 5: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
-	4,  // 6: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
-	7,  // 7: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
-	10, // 8: sentinel.Sentinel.GetProbeList:input_type -> sentinel.ProbeListRequest
-	8,  // 9: sentinel.Sentinel.ReportShutdown:input_type -> sentinel.ShutdownRequest
-	13, // 10: sentinel.Sentinel.ReportMutation:input_type -> sentinel.MutationTrigger
-	14, // 11: sentinel.Sentinel.ActivateStarMode:input_type -> sentinel.StarActivation
-	16, // 12: sentinel.Sentinel.RenewCert:input_type -> sentinel.RenewCertRequest
-	19, // 13: sentinel.Sentinel.ReportProcesses:input_type -> sentinel.ProcessReport
-	20, // 14: sentinel.Sentinel.ReportUsers:input_type -> sentinel.UserReport
-	21, // 15: sentinel.Sentinel.ReportSystemInfo:input_type -> sentinel.SystemReport
-	22, // 16: sentinel.Sentinel.ReportPackages:input_type -> sentinel.PackageReport
-	23, // 17: sentinel.Sentinel.ReportCronJobs:input_type -> sentinel.CronReport
-	24, // 18: sentinel.Sentinel.ReportServices:input_type -> sentinel.ServiceReport
-	25, // 19: sentinel.Sentinel.ReportWebComponents:input_type -> sentinel.WebComponentReport
-	26, // 20: sentinel.Sentinel.ReportHardware:input_type -> sentinel.HardwareReport
-	27, // 21: sentinel.Sentinel.ReportNetwork:input_type -> sentinel.NetworkReport
-	28, // 22: sentinel.Sentinel.ReportPerformance:input_type -> sentinel.PerfReport
-	29, // 23: sentinel.Sentinel.ReportAgentSelf:input_type -> sentinel.AgentSelfReport
-	1,  // 24: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
-	5,  // 25: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
-	30, // 26: sentinel.Sentinel.ReportEvents:output_type -> sentinel.ReportResponse
-	12, // 27: sentinel.Sentinel.GetProbeList:output_type -> sentinel.ProbeListResponse
-	9,  // 28: sentinel.Sentinel.ReportShutdown:output_type -> sentinel.ShutdownResponse
-	30, // 29: sentinel.Sentinel.ReportMutation:output_type -> sentinel.ReportResponse
-	15, // 30: sentinel.Sentinel.ActivateStarMode:output_type -> sentinel.StarActivationAck
-	17, // 31: sentinel.Sentinel.RenewCert:output_type -> sentinel.RenewCertResponse
-	30, // 32: sentinel.Sentinel.ReportProcesses:output_type -> sentinel.ReportResponse
-	30, // 33: sentinel.Sentinel.ReportUsers:output_type -> sentinel.ReportResponse
-	30, // 34: sentinel.Sentinel.ReportSystemInfo:output_type -> sentinel.ReportResponse
-	30, // 35: sentinel.Sentinel.ReportPackages:output_type -> sentinel.ReportResponse
-	30, // 36: sentinel.Sentinel.ReportCronJobs:output_type -> sentinel.ReportResponse
-	30, // 37: sentinel.Sentinel.ReportServices:output_type -> sentinel.ReportResponse
-	30, // 38: sentinel.Sentinel.ReportWebComponents:output_type -> sentinel.ReportResponse
-	30, // 39: sentinel.Sentinel.ReportHardware:output_type -> sentinel.ReportResponse
-	30, // 40: sentinel.Sentinel.ReportNetwork:output_type -> sentinel.ReportResponse
-	30, // 41: sentinel.Sentinel.ReportPerformance:output_type -> sentinel.ReportResponse
-	30, // 42: sentinel.Sentinel.ReportAgentSelf:output_type -> sentinel.ReportResponse
-	24, // [24:43] is the sub-list for method output_type
-	5,  // [5:24] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	18, // 5: sentinel.ProbeStatusReport.entries:type_name -> sentinel.ProbeStatusEntry
+	0,  // 6: sentinel.Sentinel.Register:input_type -> sentinel.RegisterRequest
+	4,  // 7: sentinel.Sentinel.Heartbeat:input_type -> sentinel.HeartbeatRequest
+	7,  // 8: sentinel.Sentinel.ReportEvents:input_type -> sentinel.EventReport
+	10, // 9: sentinel.Sentinel.GetProbeList:input_type -> sentinel.ProbeListRequest
+	8,  // 10: sentinel.Sentinel.ReportShutdown:input_type -> sentinel.ShutdownRequest
+	13, // 11: sentinel.Sentinel.ReportMutation:input_type -> sentinel.MutationTrigger
+	14, // 12: sentinel.Sentinel.ActivateStarMode:input_type -> sentinel.StarActivation
+	16, // 13: sentinel.Sentinel.RenewCert:input_type -> sentinel.RenewCertRequest
+	21, // 14: sentinel.Sentinel.ReportProcesses:input_type -> sentinel.ProcessReport
+	22, // 15: sentinel.Sentinel.ReportUsers:input_type -> sentinel.UserReport
+	23, // 16: sentinel.Sentinel.ReportSystemInfo:input_type -> sentinel.SystemReport
+	24, // 17: sentinel.Sentinel.ReportPackages:input_type -> sentinel.PackageReport
+	25, // 18: sentinel.Sentinel.ReportCronJobs:input_type -> sentinel.CronReport
+	26, // 19: sentinel.Sentinel.ReportServices:input_type -> sentinel.ServiceReport
+	27, // 20: sentinel.Sentinel.ReportWebComponents:input_type -> sentinel.WebComponentReport
+	28, // 21: sentinel.Sentinel.ReportHardware:input_type -> sentinel.HardwareReport
+	29, // 22: sentinel.Sentinel.ReportNetwork:input_type -> sentinel.NetworkReport
+	30, // 23: sentinel.Sentinel.ReportPerformance:input_type -> sentinel.PerfReport
+	31, // 24: sentinel.Sentinel.ReportAgentSelf:input_type -> sentinel.AgentSelfReport
+	19, // 25: sentinel.Sentinel.ReportProbeStatus:input_type -> sentinel.ProbeStatusReport
+	1,  // 26: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
+	5,  // 27: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
+	32, // 28: sentinel.Sentinel.ReportEvents:output_type -> sentinel.ReportResponse
+	12, // 29: sentinel.Sentinel.GetProbeList:output_type -> sentinel.ProbeListResponse
+	9,  // 30: sentinel.Sentinel.ReportShutdown:output_type -> sentinel.ShutdownResponse
+	32, // 31: sentinel.Sentinel.ReportMutation:output_type -> sentinel.ReportResponse
+	15, // 32: sentinel.Sentinel.ActivateStarMode:output_type -> sentinel.StarActivationAck
+	17, // 33: sentinel.Sentinel.RenewCert:output_type -> sentinel.RenewCertResponse
+	32, // 34: sentinel.Sentinel.ReportProcesses:output_type -> sentinel.ReportResponse
+	32, // 35: sentinel.Sentinel.ReportUsers:output_type -> sentinel.ReportResponse
+	32, // 36: sentinel.Sentinel.ReportSystemInfo:output_type -> sentinel.ReportResponse
+	32, // 37: sentinel.Sentinel.ReportPackages:output_type -> sentinel.ReportResponse
+	32, // 38: sentinel.Sentinel.ReportCronJobs:output_type -> sentinel.ReportResponse
+	32, // 39: sentinel.Sentinel.ReportServices:output_type -> sentinel.ReportResponse
+	32, // 40: sentinel.Sentinel.ReportWebComponents:output_type -> sentinel.ReportResponse
+	32, // 41: sentinel.Sentinel.ReportHardware:output_type -> sentinel.ReportResponse
+	32, // 42: sentinel.Sentinel.ReportNetwork:output_type -> sentinel.ReportResponse
+	32, // 43: sentinel.Sentinel.ReportPerformance:output_type -> sentinel.ReportResponse
+	32, // 44: sentinel.Sentinel.ReportAgentSelf:output_type -> sentinel.ReportResponse
+	32, // 45: sentinel.Sentinel.ReportProbeStatus:output_type -> sentinel.ReportResponse
+	26, // [26:46] is the sub-list for method output_type
+	6,  // [6:26] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_agent_service_proto_init() }
@@ -1513,7 +1683,7 @@ func file_agent_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_service_proto_rawDesc), len(file_agent_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

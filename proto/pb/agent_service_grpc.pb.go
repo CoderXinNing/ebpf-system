@@ -38,6 +38,7 @@ const (
 	Sentinel_ReportNetwork_FullMethodName       = "/sentinel.Sentinel/ReportNetwork"
 	Sentinel_ReportPerformance_FullMethodName   = "/sentinel.Sentinel/ReportPerformance"
 	Sentinel_ReportAgentSelf_FullMethodName     = "/sentinel.Sentinel/ReportAgentSelf"
+	Sentinel_ReportProbeStatus_FullMethodName   = "/sentinel.Sentinel/ReportProbeStatus"
 )
 
 // SentinelClient is the client API for Sentinel service.
@@ -63,6 +64,7 @@ type SentinelClient interface {
 	ReportNetwork(ctx context.Context, in *NetworkReport, opts ...grpc.CallOption) (*ReportResponse, error)
 	ReportPerformance(ctx context.Context, in *PerfReport, opts ...grpc.CallOption) (*ReportResponse, error)
 	ReportAgentSelf(ctx context.Context, in *AgentSelfReport, opts ...grpc.CallOption) (*ReportResponse, error)
+	ReportProbeStatus(ctx context.Context, in *ProbeStatusReport, opts ...grpc.CallOption) (*ReportResponse, error)
 }
 
 type sentinelClient struct {
@@ -263,6 +265,16 @@ func (c *sentinelClient) ReportAgentSelf(ctx context.Context, in *AgentSelfRepor
 	return out, nil
 }
 
+func (c *sentinelClient) ReportProbeStatus(ctx context.Context, in *ProbeStatusReport, opts ...grpc.CallOption) (*ReportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportResponse)
+	err := c.cc.Invoke(ctx, Sentinel_ReportProbeStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SentinelServer is the server API for Sentinel service.
 // All implementations must embed UnimplementedSentinelServer
 // for forward compatibility.
@@ -286,6 +298,7 @@ type SentinelServer interface {
 	ReportNetwork(context.Context, *NetworkReport) (*ReportResponse, error)
 	ReportPerformance(context.Context, *PerfReport) (*ReportResponse, error)
 	ReportAgentSelf(context.Context, *AgentSelfReport) (*ReportResponse, error)
+	ReportProbeStatus(context.Context, *ProbeStatusReport) (*ReportResponse, error)
 	mustEmbedUnimplementedSentinelServer()
 }
 
@@ -352,6 +365,9 @@ func (UnimplementedSentinelServer) ReportPerformance(context.Context, *PerfRepor
 }
 func (UnimplementedSentinelServer) ReportAgentSelf(context.Context, *AgentSelfReport) (*ReportResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportAgentSelf not implemented")
+}
+func (UnimplementedSentinelServer) ReportProbeStatus(context.Context, *ProbeStatusReport) (*ReportResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportProbeStatus not implemented")
 }
 func (UnimplementedSentinelServer) mustEmbedUnimplementedSentinelServer() {}
 func (UnimplementedSentinelServer) testEmbeddedByValue()                  {}
@@ -716,6 +732,24 @@ func _Sentinel_ReportAgentSelf_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Sentinel_ReportProbeStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProbeStatusReport)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SentinelServer).ReportProbeStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Sentinel_ReportProbeStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SentinelServer).ReportProbeStatus(ctx, req.(*ProbeStatusReport))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Sentinel_ServiceDesc is the grpc.ServiceDesc for Sentinel service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -798,6 +832,10 @@ var Sentinel_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportAgentSelf",
 			Handler:    _Sentinel_ReportAgentSelf_Handler,
+		},
+		{
+			MethodName: "ReportProbeStatus",
+			Handler:    _Sentinel_ReportProbeStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
