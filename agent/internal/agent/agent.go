@@ -168,6 +168,23 @@ func (a *Agent) decideLevel() string {
 	return "basic"
 }
 
+// mapToProtoCapability 把 Agent 内部的能力分级映射为 proto/DB 语义。
+// 内部语义关注"环境能跑什么"，proto/DB 关注"最高技术栈"。
+// 两者值集不同，必须在边界处显式转换，否则会被 DB CHECK 约束拒绝。
+func mapToProtoCapability(level string) string {
+	switch level {
+	case "full":
+		return "xdp"
+	case "ebpf":
+		return "ebpf"
+	case "basic":
+		return "cmdb"
+	default:
+		// 保守兜底：未知级别按最低能力处理，避免静默失败
+		return "cmdb"
+	}
+}
+
 func (a *Agent) Run(ctx context.Context) {
 	log.Printf("🛡️  eBPF Sentinel Agent  ID: %s", a.id)
 
@@ -302,7 +319,7 @@ func (a *Agent) register() error {
 			LlvmAvailable: fw.LLVMAvailable, KernelHeadersAvailable: fw.KernelHeadersAvailable, GoEbpfAvailable: fw.GoEBPFAvailable,
 		},
 		KernelInfo:      &pb.KernelInfo{Version: a.capabilities.KernelVersion, Arch: a.capabilities.Arch, BtfEnabled: a.capabilities.BTFEnabled},
-		CapabilityLevel: a.level,
+		CapabilityLevel: mapToProtoCapability(a.level),
 		ActiveProbes:    int32(len(a.cfg.Autoload)),
 	}
 
