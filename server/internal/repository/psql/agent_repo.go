@@ -143,3 +143,4 @@ func (p *PSQL) UpdateAgentCert(ctx context.Context, agentID, serial string, expi
 		serial, expiresAt, agentID)
 	return err
 }
+

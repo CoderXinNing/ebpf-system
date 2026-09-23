@@ -179,6 +179,33 @@ func main() {
 		h.RevokeAgentFunc = func(agentID string) error {
 			return psqlDB.RevokeAgent(context.Background(), agentID)
 		}
+		h.DeleteAgentFunc = func(agentID string) error {
+			return psqlDB.DeleteAgent(context.Background(), agentID)
+		}
+		h.ReloadAgentsFunc = func() (int, error) {
+			agents, err := psqlDB.ListAgents(context.Background(), nil)
+			if err != nil {
+				return 0, err
+			}
+			h.Mu.Lock()
+			h.Agents = make(map[string]*handler.AgentInfo)
+			for _, a := range agents {
+				h.Agents[a.ID] = &handler.AgentInfo{
+					ID:              a.ID,
+					Hostname:        a.Hostname,
+					IPAddr:          a.IPAddr,
+					Version:         a.Version,
+					CapabilityLevel: a.CapabilityLevel,
+					ActiveProbes:    a.ActiveProbes,
+					BaselineState:   a.BaselineState,
+					FirstSeen:       a.FirstSeen.Unix(),
+					LastSeen:        a.LastSeen.Unix(),
+					Commands:        make([]*pb.ProbeCommand, 0),
+				}
+			}
+			h.Mu.Unlock()
+			return len(agents), nil
+		}
 		h.GenerateTokenFunc = func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error) {
 			return psqlDB.GenerateToken(context.Background(), name, groupID, maxUses, time.Duration(ttlHours)*time.Hour, createdBy)
 		}

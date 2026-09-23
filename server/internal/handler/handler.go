@@ -52,6 +52,8 @@ type Handler struct {
 	GetAgentPublicKeyHashFunc func(agentID string) ([]byte, error)
 	RenewCertFunc func(agentID string, csrPEM []byte) (*RenewCertResult, error)
 	RevokeAgentFunc func(agentID string) error
+	DeleteAgentFunc func(agentID string) error
+	ReloadAgentsFunc func() (int, error)
 
 	// CA 签名
 	SignCSRFunc func(csrPEM []byte, agentID string, ttlHours int) ([]byte, string, time.Time, error)
@@ -195,6 +197,8 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/health", h.Health)
 		api.GET("/agents", h.ListAgents)
 		api.POST("/agents/revoke", h.rbacMiddleware("agents", "write"), h.RevokeAgent)
+		api.POST("/agents/delete", h.rbacMiddleware("agents", "write"), h.DeleteAgent)
+		api.POST("/agents/reload", h.rbacMiddleware("agents", "write"), h.ReloadAgents)
 		api.GET("/events", h.ListEvents)
 		api.GET("/star/:correlation_id", h.rbacMiddleware("events", "read"), h.GetStarChain)
 		api.GET("/star/search", h.rbacMiddleware("events", "read"), h.SearchStarChain)
