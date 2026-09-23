@@ -2,10 +2,10 @@ package handler
 
 import (
 	"fmt"
+	"log"
 	"os/exec"
 	"sync"
 	"time"
-	"log"
 
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
@@ -14,31 +14,31 @@ import (
 )
 
 type Handler struct {
-	movedGroups map[string]string
-	Store *store.Store
-	Auth  *auth.AuthManager
-	Agents map[string]*AgentInfo
-	Events []ProbeEvent
-	Mu     sync.RWMutex
-	EventMu sync.RWMutex
-	sendCmd func(agentID string, cmd *pb.ProbeCommand) error
-	SaveEventFunc func(evt ProbeEvent) error // PSQL 模式注入
-	SaveAgentFunc func(agent AgentInfo) error // PSQL 模式注入
-	ListAlertsFunc func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
-	UpdateAlertStatusFunc func(ids []int64, status string) error // 告警状态更新
-	ListWhitelistFunc func() ([]string, error)
-	AddWhitelistFunc func(processName, reason string) error
-	RemoveWhitelistFunc func(processName string) error
-	Whitelist     []string // 白名单（进程名列表）
-	WhitelistUpdateFunc func([]string) // 白名单更新回调
-	ListStarEventsFunc func(corrID string) ([]map[string]interface{}, error) // PSQL 攻击链查询
-	GetLatestAssetFunc func(agentID string) (interface{}, interface{}, interface{}, error) // PSQL 资产查询
-	SaveAssetFunc func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
-	GetAllAssetsFunc func(agentID string) (map[string]interface{}, error) // 所有资产类型
-	SaveTypedAssetFunc func(agentID, assetType, assetName string, data interface{}) error // 保存指定类型资产
-	GetSettingFunc func(key string) (string, error)
-	SetSettingFunc func(key, value string) error
-	ListSettingsFunc func() (map[string]string, error)
+	movedGroups           map[string]string
+	Store                 *store.Store
+	Auth                  *auth.AuthManager
+	Agents                map[string]*AgentInfo
+	Events                []ProbeEvent
+	Mu                    sync.RWMutex
+	EventMu               sync.RWMutex
+	sendCmd               func(agentID string, cmd *pb.ProbeCommand) error
+	SaveEventFunc         func(evt ProbeEvent) error                        // PSQL 模式注入
+	SaveAgentFunc         func(agent AgentInfo) error                       // PSQL 模式注入
+	ListAlertsFunc        func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
+	UpdateAlertStatusFunc func(ids []int64, status string) error            // 告警状态更新
+	ListWhitelistFunc     func() ([]string, error)
+	AddWhitelistFunc      func(processName, reason string) error
+	RemoveWhitelistFunc   func(processName string) error
+	Whitelist             []string                                                                // 白名单（进程名列表）
+	WhitelistUpdateFunc   func([]string)                                                          // 白名单更新回调
+	ListStarEventsFunc    func(corrID string) ([]map[string]interface{}, error)                   // PSQL 攻击链查询
+	GetLatestAssetFunc    func(agentID string) (interface{}, interface{}, interface{}, error)     // PSQL 资产查询
+	SaveAssetFunc         func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
+	GetAllAssetsFunc      func(agentID string) (map[string]interface{}, error)                    // 所有资产类型
+	SaveTypedAssetFunc    func(agentID, assetType, assetName string, data interface{}) error      // 保存指定类型资产
+	GetSettingFunc        func(key string) (string, error)
+	SetSettingFunc        func(key, value string) error
+	ListSettingsFunc      func() (map[string]string, error)
 
 	// Enrollment（Day 1-3）
 	GenerateTokenFunc func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error)
@@ -46,14 +46,14 @@ type Handler struct {
 	RevokeTokenFunc   func(id int64) error
 
 	// Enroll（事务化）
-	EnrollAgentFunc func(req EnrollRequest) (*EnrollResult, error)
-	ComputeAgentIDFunc func(publicKeyDER []byte) string
-	UpdateAgentCertFunc func(agentID, serial string, expiresAt time.Time) error
+	EnrollAgentFunc           func(req EnrollRequest) (*EnrollResult, error)
+	ComputeAgentIDFunc        func(publicKeyDER []byte) string
+	UpdateAgentCertFunc       func(agentID, serial string, expiresAt time.Time) error
 	GetAgentPublicKeyHashFunc func(agentID string) ([]byte, error)
-	RenewCertFunc func(agentID string, csrPEM []byte) (*RenewCertResult, error)
-	RevokeAgentFunc func(agentID string) error
-	DeleteAgentFunc func(agentID string) error
-	ReloadAgentsFunc func() (int, error)
+	RenewCertFunc             func(agentID string, csrPEM []byte) (*RenewCertResult, error)
+	RevokeAgentFunc           func(agentID string) error
+	DeleteAgentFunc           func(agentID string) error
+	ReloadAgentsFunc          func() (int, error)
 
 	// CA 签名
 	SignCSRFunc func(csrPEM []byte, agentID string, ttlHours int) ([]byte, string, time.Time, error)
@@ -61,22 +61,35 @@ type Handler struct {
 }
 
 type AgentInfo struct {
-	ID           string            `json:"id"`
-	Hostname     string            `json:"hostname"`
-	IPAddr       string            `json:"ip_addr"`
-	Token        string            `json:"-"`
-	Version     string            `json:"version"`
-	Group       string            `json:"group"`
-	CapabilityLevel string         `json:"capability_level"`
-	ActiveProbes int32             `json:"active_probes"`
-	ProbeDetails string            `json:"probe_details"`
-	BaselineState string           `json:"baseline_state"`
-	BaselineRemaining int64        `json:"baseline_remaining"`
-	LastSeen     int64             `json:"last_seen"`
-	FirstSeen    int64             `json:"first_seen"`
-	Framework    *pb.FrameworkInfo `json:"framework"`
-	KernelInfo   *pb.KernelInfo    `json:"kernel_info"`
-	Commands     []*pb.ProbeCommand `json:"-"`
+	ID                string                       `json:"id"`
+	Hostname          string                       `json:"hostname"`
+	IPAddr            string                       `json:"ip_addr"`
+	Token             string                       `json:"-"`
+	Version           string                       `json:"version"`
+	Group             string                       `json:"group"`
+	CapabilityLevel   string                       `json:"capability_level"`
+	ActiveProbes      int32                        `json:"active_probes"`
+	ProbeDetails      string                       `json:"probe_details"`
+	BaselineState     string                       `json:"baseline_state"`
+	BaselineRemaining int64                        `json:"baseline_remaining"`
+	LastSeen          int64                        `json:"last_seen"`
+	FirstSeen         int64                        `json:"first_seen"`
+	Framework         *pb.FrameworkInfo            `json:"framework"`
+	KernelInfo        *pb.KernelInfo               `json:"kernel_info"`
+	Commands          []*pb.ProbeCommand           `json:"-"`
+	ProbeStatus       map[string]*ProbeStatusEntry `json:"probe_status,omitempty"`
+}
+
+// ProbeStatusEntry 单个探针的详细状态（由 Agent 通过 ReportProbeStatus 上报）
+type ProbeStatusEntry struct {
+	Name                string `json:"name"`
+	Status              string `json:"status"`
+	Reason              string `json:"reason,omitempty"`
+	LastEventAt         int64  `json:"last_event_at"`
+	LastCheckAt         int64  `json:"last_check_at"`
+	SelfTestOk          bool   `json:"selftest_ok"`
+	ConsecutiveFailures int32  `json:"consecutive_failures"`
+	LoadedAt            int64  `json:"loaded_at"`
 }
 
 type ProbeEvent struct {
@@ -167,24 +180,24 @@ func (h *Handler) SetListAlertsFunc(fn func(int) ([]map[string]interface{}, erro
 
 func NewHandler(st *store.Store, am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {
 	return &Handler{
-		Store:   st,
-		Auth:    am,
-		Agents:  make(map[string]*AgentInfo),
+		Store:       st,
+		Auth:        am,
+		Agents:      make(map[string]*AgentInfo),
 		movedGroups: make(map[string]string),
-		Events:  make([]ProbeEvent, 0, 10000),
-		sendCmd: sendCmd,
+		Events:      make([]ProbeEvent, 0, 10000),
+		sendCmd:     sendCmd,
 	}
 }
 
 // NewHandlerWithNilStore 创建无 Store 的 Handler（PSQL 模式过渡期使用）
 func NewHandlerWithNilStore(am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {
 	return &Handler{
-		Store:   nil,
-		Auth:    am,
-		Agents:  make(map[string]*AgentInfo),
+		Store:       nil,
+		Auth:        am,
+		Agents:      make(map[string]*AgentInfo),
 		movedGroups: make(map[string]string),
-		Events:  make([]ProbeEvent, 0, 10000),
-		sendCmd: sendCmd,
+		Events:      make([]ProbeEvent, 0, 10000),
+		sendCmd:     sendCmd,
 	}
 }
 
@@ -243,7 +256,9 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"groups": groups})
 		})
 		api.POST("/groups", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
-			var req struct { Name string `json:"name"` }
+			var req struct {
+				Name string `json:"name"`
+			}
 			c.BindJSON(&req)
 			if req.Name == "" {
 				c.JSON(400, gin.H{"error": "组名不能为空"})
@@ -462,9 +477,15 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				MinPasswordLen   int `json:"min_password_len"`
 			}
 			c.BindJSON(&req)
-			if req.MaxLoginAttempts > 0 { h.SetIntSetting("max_login_attempts", req.MaxLoginAttempts) }
-			if req.LockMinutes > 0 { h.SetIntSetting("lock_minutes", req.LockMinutes) }
-			if req.MinPasswordLen > 0 { h.SetIntSetting("min_password_len", req.MinPasswordLen) }
+			if req.MaxLoginAttempts > 0 {
+				h.SetIntSetting("max_login_attempts", req.MaxLoginAttempts)
+			}
+			if req.LockMinutes > 0 {
+				h.SetIntSetting("lock_minutes", req.LockMinutes)
+			}
+			if req.MinPasswordLen > 0 {
+				h.SetIntSetting("min_password_len", req.MinPasswordLen)
+			}
 			c.JSON(200, gin.H{"success": true})
 		})
 
@@ -482,9 +503,15 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				AuditDays string `json:"audit_days"`
 			}
 			c.BindJSON(&req)
-			if req.EventDays != "" { h.SetStringSetting("event_days", req.EventDays) }
-			if req.AlertDays != "" { h.SetStringSetting("alert_days", req.AlertDays) }
-			if req.AuditDays != "" { h.SetStringSetting("audit_days", req.AuditDays) }
+			if req.EventDays != "" {
+				h.SetStringSetting("event_days", req.EventDays)
+			}
+			if req.AlertDays != "" {
+				h.SetStringSetting("alert_days", req.AlertDays)
+			}
+			if req.AuditDays != "" {
+				h.SetStringSetting("audit_days", req.AuditDays)
+			}
 			c.JSON(200, gin.H{"success": true})
 		})
 
