@@ -64,7 +64,7 @@ var _ framework.Probe = (*FileProbe)(nil)
 func (p *FileProbe) SelfTestAction(opts framework.SelfTestOptions) error {
 	target := opts.FileTarget
 	if target == "" {
-		target = "/etc/hostname"
+		target = "/etc/passwd"
 	}
 	cmd := exec.Command("bash", "-c", "exec -a agent-selftest cat "+target)
 	if err := cmd.Run(); err != nil {

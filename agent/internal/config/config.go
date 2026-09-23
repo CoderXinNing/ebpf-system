@@ -73,7 +73,7 @@ func DefaultConfig() *AgentConfig {
 			WaitSeconds:       3,
 			TCPTarget:         "127.0.0.1:1",
 			XDPFallbackTarget: "8.8.8.8",
-			FileTarget:        "/etc/hostname",
+			FileTarget:        "/etc/passwd",
 		},
 	}
 }

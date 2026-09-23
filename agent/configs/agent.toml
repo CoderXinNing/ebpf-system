@@ -38,4 +38,4 @@ interval_minutes = 5
 wait_seconds = 3
 tcp_target = "127.0.0.1:1"
 xdp_fallback_target = "8.8.8.8"
-file_target = "/etc/hostname"
+file_target = "/etc/passwd"
