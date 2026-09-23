@@ -68,7 +68,7 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 		Framework: req.Framework, KernelInfo: req.KernelInfo,
 		CapabilityLevel: req.CapabilityLevel,
 		ActiveProbes:    req.ActiveProbes,
-		Commands: make([]*pb.ProbeCommand, 0),
+		Commands:        make([]*pb.ProbeCommand, 0),
 	}
 	s.handler.Mu.Lock()
 	s.handler.Agents[req.AgentId] = agentInfo
@@ -134,15 +134,15 @@ func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Re
 			corrID = req.CorrelationId
 		}
 		evtRecord := handler.ProbeEvent{
-			ID:            genToken()[:8],
-			AgentID:       req.AgentId,
-			ProbeName:     evt.ProbeName,
-			Timestamp:     evt.Timestamp,
-			EventType:     evt.EventType,
-			PID:           evt.Pid,
-			Comm:          evt.Comm,
-			Filename:      evt.Filename,
-			Details:       evt.Details,
+			ID:             genToken()[:8],
+			AgentID:        req.AgentId,
+			ProbeName:      evt.ProbeName,
+			Timestamp:      evt.Timestamp,
+			EventType:      evt.EventType,
+			PID:            evt.Pid,
+			Comm:           evt.Comm,
+			Filename:       evt.Filename,
+			Details:        evt.Details,
 			CorrelationID:  corrID,
 			CorrelationKey: evt.CorrelationKey,
 		}
@@ -192,15 +192,23 @@ func (s *Service) ReportProcesses(ctx context.Context, req *pb.ProcessReport) (*
 	}
 	procJSON, _ := json.Marshal(req.Processes)
 	log.Printf("DEBUG: ReportProcesses Marshal 后 %d bytes", len(procJSON))
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, procJSON, nil, nil) }
-	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, procJSON, nil, nil) }
+	if s.handler.Store != nil {
+		s.handler.Store.SaveAsset(req.AgentId, procJSON, nil, nil)
+	}
+	if s.handler.SaveAssetFunc != nil {
+		s.handler.SaveAssetFunc(req.AgentId, procJSON, nil, nil)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
 func (s *Service) ReportUsers(ctx context.Context, req *pb.UserReport) (*pb.ReportResponse, error) {
 	userJSON, _ := json.Marshal(req.Users)
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, userJSON, nil) }
-	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, userJSON, nil) }
+	if s.handler.Store != nil {
+		s.handler.Store.SaveAsset(req.AgentId, nil, userJSON, nil)
+	}
+	if s.handler.SaveAssetFunc != nil {
+		s.handler.SaveAssetFunc(req.AgentId, nil, userJSON, nil)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
@@ -210,8 +218,12 @@ func (s *Service) ReportSystemInfo(ctx context.Context, req *pb.SystemReport) (*
 		req.System.Services = nil
 	}
 	sysJSON, _ := json.Marshal(req.System)
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
-	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.Store != nil {
+		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
+	}
+	if s.handler.SaveAssetFunc != nil {
+		s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
@@ -252,7 +264,9 @@ func (s *Service) ReportServices(ctx context.Context, req *pb.ServiceReport) (*p
 func (s *Service) ReportWebComponents(ctx context.Context, req *pb.WebComponentReport) (*pb.ReportResponse, error) {
 	sysData := map[string]interface{}{"web_components": req.WebComponents}
 	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.Store != nil {
+		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
@@ -263,7 +277,9 @@ func (s *Service) ReportHardware(ctx context.Context, req *pb.HardwareReport) (*
 		"env_variables":  req.EnvVariables,
 	}
 	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.Store != nil {
+		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
@@ -274,23 +290,33 @@ func (s *Service) ReportNetwork(ctx context.Context, req *pb.NetworkReport) (*pb
 		"disk_usages":     req.DiskUsages,
 	}
 	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.Store != nil {
+		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
 func (s *Service) ReportPerformance(ctx context.Context, req *pb.PerfReport) (*pb.ReportResponse, error) {
 	sysData := map[string]interface{}{"perf": req.Perf}
 	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
-	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.Store != nil {
+		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
+	}
+	if s.handler.SaveAssetFunc != nil {
+		s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
 func (s *Service) ReportAgentSelf(ctx context.Context, req *pb.AgentSelfReport) (*pb.ReportResponse, error) {
 	sysData := map[string]interface{}{"agent_self": req.AgentSelf}
 	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil { s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON) }
-	if s.handler.SaveAssetFunc != nil { s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON) }
+	if s.handler.Store != nil {
+		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
+	}
+	if s.handler.SaveAssetFunc != nil {
+		s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON)
+	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
@@ -334,6 +360,47 @@ func (s *Service) GetProbeList(ctx context.Context, req *pb.ProbeListRequest) (*
 	}
 
 	return &pb.ProbeListResponse{Success: true, Probes: probes, FalsePositiveFeatures: features}, nil
+}
+
+// ReportProbeStatus 探针状态上报（自检机制）
+// 状态变化时由 Agent 主动推送；心跳 ProbeDetails 字段作为周期兜底
+func (s *Service) ReportProbeStatus(ctx context.Context, req *pb.ProbeStatusReport) (*pb.ReportResponse, error) {
+	if req.AgentId == "" {
+		return &pb.ReportResponse{Success: false, Message: "缺少 agent_id"}, nil
+	}
+	if len(req.Entries) == 0 {
+		return &pb.ReportResponse{Success: true, Message: "空报告，忽略"}, nil
+	}
+
+	s.handler.Mu.Lock()
+	agent := s.handler.Agents[req.AgentId]
+	if agent == nil {
+		s.handler.Mu.Unlock()
+		log.Printf("⚠️ ReportProbeStatus: Agent 不存在: %s", req.AgentId)
+		return &pb.ReportResponse{Success: false, Message: "Agent 未注册"}, nil
+	}
+	if agent.ProbeStatus == nil {
+		agent.ProbeStatus = make(map[string]*handler.ProbeStatusEntry)
+	}
+	for _, e := range req.Entries {
+		if e.Name == "" {
+			continue
+		}
+		agent.ProbeStatus[e.Name] = &handler.ProbeStatusEntry{
+			Name:                e.Name,
+			Status:              e.Status,
+			Reason:              e.Reason,
+			LastEventAt:         e.LastEventAt,
+			LastCheckAt:         e.LastCheckAt,
+			SelfTestOk:          e.SelftestOk,
+			ConsecutiveFailures: e.ConsecutiveFailures,
+			LoadedAt:            e.LoadedAt,
+		}
+	}
+	s.handler.Mu.Unlock()
+
+	log.Printf("📊 ReportProbeStatus: agent=%s 探针=%d", req.AgentId, len(req.Entries))
+	return &pb.ReportResponse{Success: true}, nil
 }
 
 // ReportShutdown 下线通知
