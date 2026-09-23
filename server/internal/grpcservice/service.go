@@ -386,3 +386,50 @@ func (s *Service) ActivateStarMode(ctx context.Context, req *pb.StarActivation) 
 		ErrorMessage:  "此方法在 Agent 端实现",
 	}, nil
 }
+
+// RenewCert 证书续期
+//
+// 复用旧密钥：Agent 用旧私钥生成 CSR，Server 用同一公钥签新证书
+// agent_id 不变，仅更新 cert_serial 和 cert_expires_at
+func (s *Service) RenewCert(ctx context.Context, req *pb.RenewCertRequest) (*pb.RenewCertResponse, error) {
+	// 从 context 拿 agent_id（L2 已写入）
+	agentID, _ := ctx.Value("agent_id").(string)
+	if agentID == "" {
+		return &pb.RenewCertResponse{
+			Success: false,
+			Message: "缺少 agent_id（证书 SAN 中未找到）",
+		}, nil
+	}
+
+	if req.Csr == "" {
+		return &pb.RenewCertResponse{
+			Success: false,
+			Message: "缺少 CSR",
+		}, nil
+	}
+
+	if s.handler.RenewCertFunc == nil {
+		return &pb.RenewCertResponse{
+			Success: false,
+			Message: "续期功能未初始化",
+		}, nil
+	}
+
+	// 调 handler 回调完成实际逻辑
+	result, err := s.handler.RenewCertFunc(agentID, []byte(req.Csr))
+	if err != nil {
+		return &pb.RenewCertResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+
+	return &pb.RenewCertResponse{
+		Success:     true,
+		Message:     "证书已续期",
+		AgentCrt:    string(result.CertPEM),
+		CaCrt:       string(s.handler.CACertPEM),
+		CertSerial:  result.Serial,
+		CertExpires: result.ExpiresAt.Format(time.RFC3339),
+	}, nil
+}

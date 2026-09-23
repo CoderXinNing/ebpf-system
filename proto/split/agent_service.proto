@@ -125,6 +125,22 @@ message StarActivationAck {
     string error_message = 2;
 }
 
+// ========== 证书续期 ==========
+
+message RenewCertRequest {
+    string agent_id = 1;
+    string csr = 2;  // 新的 CSR（PEM 格式）
+}
+
+message RenewCertResponse {
+    bool success = 1;
+    string message = 2;
+    string agent_crt = 3;   // 新证书
+    string ca_crt = 4;      // CA 证书
+    string cert_serial = 5;
+    string cert_expires = 6; // RFC3339
+}
+
 service Sentinel {
     rpc Register(RegisterRequest) returns (RegisterResponse);
     rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
@@ -134,6 +150,7 @@ service Sentinel {
 
     rpc ReportMutation(MutationTrigger) returns (ReportResponse);
     rpc ActivateStarMode(StarActivation) returns (StarActivationAck);
+    rpc RenewCert(RenewCertRequest) returns (RenewCertResponse);
 
     rpc ReportProcesses(ProcessReport) returns (ReportResponse);
     rpc ReportUsers(UserReport) returns (ReportResponse);

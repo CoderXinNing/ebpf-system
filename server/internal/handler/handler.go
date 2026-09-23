@@ -49,6 +49,8 @@ type Handler struct {
 	EnrollAgentFunc func(req EnrollRequest) (*EnrollResult, error)
 	ComputeAgentIDFunc func(publicKeyDER []byte) string
 	UpdateAgentCertFunc func(agentID, serial string, expiresAt time.Time) error
+	GetAgentPublicKeyHashFunc func(agentID string) ([]byte, error)
+	RenewCertFunc func(agentID string, csrPEM []byte) (*RenewCertResult, error)
 
 	// CA 签名
 	SignCSRFunc func(csrPEM []byte, agentID string, ttlHours int) ([]byte, string, time.Time, error)

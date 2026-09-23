@@ -172,6 +172,10 @@ func main() {
 		h.UpdateAgentCertFunc = func(agentID, serial string, expiresAt time.Time) error {
 			return psqlDB.UpdateAgentCert(context.Background(), agentID, serial, expiresAt)
 		}
+		h.GetAgentPublicKeyHashFunc = func(agentID string) ([]byte, error) {
+			return psqlDB.GetAgentPublicKeyHash(context.Background(), agentID)
+		}
+		h.RenewCertFunc = h.RenewCertHandler
 		h.GenerateTokenFunc = func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error) {
 			return psqlDB.GenerateToken(context.Background(), name, groupID, maxUses, time.Duration(ttlHours)*time.Hour, createdBy)
 		}

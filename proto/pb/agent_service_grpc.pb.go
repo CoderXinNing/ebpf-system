@@ -26,6 +26,7 @@ const (
 	Sentinel_ReportShutdown_FullMethodName      = "/sentinel.Sentinel/ReportShutdown"
 	Sentinel_ReportMutation_FullMethodName      = "/sentinel.Sentinel/ReportMutation"
 	Sentinel_ActivateStarMode_FullMethodName    = "/sentinel.Sentinel/ActivateStarMode"
+	Sentinel_RenewCert_FullMethodName           = "/sentinel.Sentinel/RenewCert"
 	Sentinel_ReportProcesses_FullMethodName     = "/sentinel.Sentinel/ReportProcesses"
 	Sentinel_ReportUsers_FullMethodName         = "/sentinel.Sentinel/ReportUsers"
 	Sentinel_ReportSystemInfo_FullMethodName    = "/sentinel.Sentinel/ReportSystemInfo"
@@ -50,6 +51,7 @@ type SentinelClient interface {
 	ReportShutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
 	ReportMutation(ctx context.Context, in *MutationTrigger, opts ...grpc.CallOption) (*ReportResponse, error)
 	ActivateStarMode(ctx context.Context, in *StarActivation, opts ...grpc.CallOption) (*StarActivationAck, error)
+	RenewCert(ctx context.Context, in *RenewCertRequest, opts ...grpc.CallOption) (*RenewCertResponse, error)
 	ReportProcesses(ctx context.Context, in *ProcessReport, opts ...grpc.CallOption) (*ReportResponse, error)
 	ReportUsers(ctx context.Context, in *UserReport, opts ...grpc.CallOption) (*ReportResponse, error)
 	ReportSystemInfo(ctx context.Context, in *SystemReport, opts ...grpc.CallOption) (*ReportResponse, error)
@@ -135,6 +137,16 @@ func (c *sentinelClient) ActivateStarMode(ctx context.Context, in *StarActivatio
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StarActivationAck)
 	err := c.cc.Invoke(ctx, Sentinel_ActivateStarMode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sentinelClient) RenewCert(ctx context.Context, in *RenewCertRequest, opts ...grpc.CallOption) (*RenewCertResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewCertResponse)
+	err := c.cc.Invoke(ctx, Sentinel_RenewCert_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -262,6 +274,7 @@ type SentinelServer interface {
 	ReportShutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
 	ReportMutation(context.Context, *MutationTrigger) (*ReportResponse, error)
 	ActivateStarMode(context.Context, *StarActivation) (*StarActivationAck, error)
+	RenewCert(context.Context, *RenewCertRequest) (*RenewCertResponse, error)
 	ReportProcesses(context.Context, *ProcessReport) (*ReportResponse, error)
 	ReportUsers(context.Context, *UserReport) (*ReportResponse, error)
 	ReportSystemInfo(context.Context, *SystemReport) (*ReportResponse, error)
@@ -303,6 +316,9 @@ func (UnimplementedSentinelServer) ReportMutation(context.Context, *MutationTrig
 }
 func (UnimplementedSentinelServer) ActivateStarMode(context.Context, *StarActivation) (*StarActivationAck, error) {
 	return nil, status.Error(codes.Unimplemented, "method ActivateStarMode not implemented")
+}
+func (UnimplementedSentinelServer) RenewCert(context.Context, *RenewCertRequest) (*RenewCertResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewCert not implemented")
 }
 func (UnimplementedSentinelServer) ReportProcesses(context.Context, *ProcessReport) (*ReportResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportProcesses not implemented")
@@ -480,6 +496,24 @@ func _Sentinel_ActivateStarMode_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SentinelServer).ActivateStarMode(ctx, req.(*StarActivation))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Sentinel_RenewCert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewCertRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SentinelServer).RenewCert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Sentinel_RenewCert_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SentinelServer).RenewCert(ctx, req.(*RenewCertRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -716,6 +750,10 @@ var Sentinel_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ActivateStarMode",
 			Handler:    _Sentinel_ActivateStarMode_Handler,
+		},
+		{
+			MethodName: "RenewCert",
+			Handler:    _Sentinel_RenewCert_Handler,
 		},
 		{
 			MethodName: "ReportProcesses",
