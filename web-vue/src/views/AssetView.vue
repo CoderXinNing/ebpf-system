@@ -79,16 +79,13 @@
             </div>
 
             <n-divider style="margin: 16px 0">探针状态</n-divider>
-            <n-space vertical :size="8">
-              <div v-for="probe in probes" :key="probe.name" class="probe-row">
-                <n-space justify="space-between" align="center">
-                  <n-text>{{ probe.name }}</n-text>
-                  <n-tag :type="probe.loaded ? 'success' : 'error'" round size="small">
-                    {{ probe.loaded ? '运行中' : '未加载' }}
-                  </n-tag>
-                </n-space>
-              </div>
-            </n-space>
+            <n-data-table
+              :columns="probeColumns"
+              :data="probes"
+              :pagination="false"
+              :bordered="false"
+              size="small"
+            />
           </n-tab-pane>
 
           <!-- 资产 -->
@@ -162,7 +159,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NInput, NTag, NButton, NDataTable, NEmpty, NText, NTabs, NTabPane, NDescriptions, NDescriptionsItem, NDivider, NSpace, NList, NListItem, NProgress } from 'naive-ui'
 import http from '../api/http'
@@ -176,6 +173,7 @@ interface Host {
   active_probes: number
   capability_level: string
   last_seen: number
+  probe_status?: Record<string, any>
 }
 
 const route = useRoute()
@@ -193,13 +191,72 @@ const assets = ref<any>({})
 const recentAlerts = ref<AlertItem[]>([])
 const starChains = ref<string[]>([])
 
-const probes = ref([
-  { name: 'exec_monitor', loaded: true },
-  { name: 'bash_monitor', loaded: true },
-  { name: 'tcp_monitor', loaded: true },
-  { name: 'file_access', loaded: true },
-  { name: 'xdp_reporter', loaded: true },
-])
+interface ProbeRow {
+  name: string
+  status: string
+  reason?: string
+  last_event_at: number
+  last_check_at: number
+  consecutive_failures: number
+}
+
+const probes = ref<ProbeRow[]>([])
+
+function statusTagType(status: string): 'success' | 'warning' | 'error' | 'info' | 'default' {
+  switch (status) {
+    case 'loaded': return 'success'
+    case 'loaded-silent': return 'warning'
+    case 'loaded-no-activity': return 'default'
+    case 'failed':
+    case 'unknown probe': return 'error'
+    case 'loading': return 'info'
+    default: return 'default'
+  }
+}
+
+function statusText(status: string): string {
+  switch (status) {
+    case 'loaded': return '运行中'
+    case 'loaded-silent': return '静默（自检失败）'
+    case 'loaded-no-activity': return '无法自检'
+    case 'failed': return '加载失败'
+    case 'disabled': return '已禁用'
+    case 'loading': return '加载中'
+    case 'unknown probe': return '未注册'
+    default: return status || '未知'
+  }
+}
+
+function formatProbeTime(ts: number): string {
+  if (!ts) return '-'
+  return new Date(ts * 1000).toLocaleString('zh-CN')
+}
+
+const probeColumns = [
+  { title: '探针', key: 'name' },
+  {
+    title: '状态',
+    key: 'status',
+    width: 160,
+    render(row: ProbeRow) {
+      return h(NTag, { type: statusTagType(row.status), round: true, size: 'small' },
+        { default: () => statusText(row.status) })
+    },
+  },
+  { title: '原因', key: 'reason', render(row: ProbeRow) { return row.reason || '-' } },
+  {
+    title: '最近事件',
+    key: 'last_event_at',
+    width: 170,
+    render(row: ProbeRow) { return formatProbeTime(row.last_event_at) },
+  },
+  {
+    title: '最近自检',
+    key: 'last_check_at',
+    width: 170,
+    render(row: ProbeRow) { return formatProbeTime(row.last_check_at) },
+  },
+]
 
 const alertColumns = [
   { title: '规则', key: 'rule_name' },
@@ -359,6 +416,20 @@ async function loadHosts() {
 
 async function selectHost(host: Host) {
   selectedHost.value = host
+  // 从主机对象里带出探针状态（后端已在 /agents 返回 probe_status）
+  const ps = (host as any).probe_status as Record<string, any> | undefined
+  if (ps) {
+    probes.value = Object.entries(ps).map(([name, p]: [string, any]) => ({
+      name,
+      status: p.status,
+      reason: p.reason,
+      last_event_at: p.last_event_at,
+      last_check_at: p.last_check_at,
+      consecutive_failures: p.consecutive_failures,
+    }))
+  } else {
+    probes.value = []
+  }
   await reloadAll()
 }
 
