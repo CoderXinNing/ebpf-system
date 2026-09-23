@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/alert"
+	"github.com/CoderXinNing/ebpf-system/server/internal/build"
 	"github.com/CoderXinNing/ebpf-system/server/internal/ca"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
 	"github.com/CoderXinNing/ebpf-system/server/internal/grpcservice"
@@ -51,6 +52,10 @@ type ServerConfig struct {
 		StrictMTLS          bool   `toml:"strict_mtls"`
 		CertificateTTLHours int    `toml:"certificate_ttl_hours"`
 	} `toml:"tls"`
+	Build struct {
+		GoPath         string `toml:"go_path"`
+		AutoBuildAgent bool   `toml:"auto_build_agent"`
+	} `toml:"build"`
 }
 
 func main() {
@@ -58,6 +63,14 @@ func main() {
 	if cfg == nil {
 		log.Println("⚠️ 使用默认配置")
 		cfg = defaultConfig()
+	}
+
+	// 编译 Agent（源码变化才重编）
+	if err := build.EnsureAgentBinary(build.Config{
+		GoPath:         cfg.Build.GoPath,
+		AutoBuildAgent: cfg.Build.AutoBuildAgent,
+	}); err != nil {
+		log.Printf("⚠️ Agent 编译检查失败: %v", err)
 	}
 
 	// 数据库（根据配置选择 PSQL 或 SQLite）
@@ -501,6 +514,8 @@ func defaultConfig() *ServerConfig {
 	cfg.TLS.CAFile = "certs/ca.crt"
 	cfg.TLS.StrictMTLS = false
 	cfg.TLS.CertificateTTLHours = 8760
+	cfg.Build.GoPath = ""
+	cfg.Build.AutoBuildAgent = true
 	return cfg
 }
 

@@ -27,3 +27,14 @@ certificate_ttl_hours = 8760
 [log]
 level = "info"
 format = "text"
+
+
+[build]
+# Go 编译器路径（留空则自动探测）
+# 自动探测顺序：PATH → /usr/local/go/bin/go → /usr/bin/go → /snap/bin/go → ~/go/bin/go
+go_path = ""
+
+# 是否启用自动编译 Agent
+# true  = 源码变化时自动重编
+# false = 只用 server/static/ 下的预编译二进制
+auto_build_agent = true
