@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/alert"
+	"github.com/CoderXinNing/ebpf-system/server/internal/ca"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
 	"github.com/CoderXinNing/ebpf-system/server/internal/grpcservice"
 	"github.com/CoderXinNing/ebpf-system/server/internal/handler"
@@ -118,6 +119,68 @@ func main() {
 			return psqlDB.ListSettings(context.Background())
 		},
 	)
+	// 加载 CA
+	caInstance, err := ca.Load("certs/ca.crt", "certs/ca.key")
+	if err != nil {
+		log.Printf("⚠️ CA 加载失败: %v（enrollment 不可用）", err)
+	} else {
+		h.CACertPEM = caInstance.CertPEM()
+		h.ComputeAgentIDFunc = ca.ComputeAgentID
+		h.SignCSRFunc = func(csrPEM []byte, agentID string, ttlHours int) ([]byte, string, time.Time, error) {
+			return caInstance.SignCSR(csrPEM, agentID, time.Duration(ttlHours)*time.Hour)
+		}
+		h.EnrollAgentFunc = func(req handler.EnrollRequest) (*handler.EnrollResult, error) {
+			res, err := psqlDB.EnrollAgent(context.Background(), psql.EnrollRequest{
+				Token:        req.Token,
+				AgentID:      req.AgentID,
+				Hostname:     req.Hostname,
+				IPAddr:       req.IPAddr,
+				MachineID:    req.MachineID,
+				MAC:          req.MAC,
+				PublicKeyDER: req.PublicKeyDER,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return &handler.EnrollResult{
+				AgentID:   res.AgentID,
+				GroupID:   res.GroupID,
+				GroupName: res.GroupName,
+			}, nil
+		}
+		h.UpdateAgentCertFunc = func(agentID, serial string, expiresAt time.Time) error {
+			return psqlDB.UpdateAgentCert(context.Background(), agentID, serial, expiresAt)
+		}
+		h.GenerateTokenFunc = func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error) {
+			return psqlDB.GenerateToken(context.Background(), name, groupID, maxUses, time.Duration(ttlHours)*time.Hour, createdBy)
+		}
+		h.ListTokensFunc = func() ([]map[string]interface{}, error) {
+			tokens, err := psqlDB.ListTokens(context.Background())
+			if err != nil {
+				return nil, err
+			}
+			result := make([]map[string]interface{}, 0, len(tokens))
+			for _, t := range tokens {
+				result = append(result, map[string]interface{}{
+					"id":         t.ID,
+					"name":       t.Name,
+					"group_id":   t.GroupID,
+					"max_uses":   t.MaxUses,
+					"used_count": t.UsedCount,
+					"expires_at": t.ExpiresAt,
+					"created_by": t.CreatedBy,
+					"created_at": t.CreatedAt,
+					"revoked_at": t.RevokedAt,
+				})
+			}
+			return result, nil
+		}
+		h.RevokeTokenFunc = func(id int64) error {
+			return psqlDB.RevokeToken(context.Background(), id)
+		}
+		log.Println("✅ CA 已加载，enrollment 可用")
+	}
+
 	h.SetSaveTypedAssetFunc(func(agentID, assetType, assetName string, data interface{}) error {
 		return psqlDB.SaveTypedAsset(context.Background(), agentID, assetType, assetName, data)
 	})

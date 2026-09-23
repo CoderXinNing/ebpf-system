@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"sync"
+	"time"
 	"log"
 
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
@@ -38,6 +39,20 @@ type Handler struct {
 	GetSettingFunc func(key string) (string, error)
 	SetSettingFunc func(key, value string) error
 	ListSettingsFunc func() (map[string]string, error)
+
+	// Enrollment（Day 1-3）
+	GenerateTokenFunc func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error)
+	ListTokensFunc    func() ([]map[string]interface{}, error)
+	RevokeTokenFunc   func(id int64) error
+
+	// Enroll（事务化）
+	EnrollAgentFunc func(req EnrollRequest) (*EnrollResult, error)
+	ComputeAgentIDFunc func(publicKeyDER []byte) string
+	UpdateAgentCertFunc func(agentID, serial string, expiresAt time.Time) error
+
+	// CA 签名
+	SignCSRFunc func(csrPEM []byte, agentID string, ttlHours int) ([]byte, string, time.Time, error)
+	CACertPEM   []byte // CA 证书 PEM（返回给 Agent）
 }
 
 type AgentInfo struct {
@@ -416,6 +431,14 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			}
 			c.JSON(200, gin.H{"success": true})
 		})
+
+		// Enrollment（免认证，Agent 用 Token 换证书）
+		r.POST("/api/agent/enroll", h.Enroll)
+
+		// Token 管理（管理员）
+		api.GET("/enrollment-tokens", h.rbacMiddleware("agents", "read"), h.ListEnrollmentTokens)
+		api.POST("/enrollment-tokens", h.rbacMiddleware("agents", "write"), h.CreateEnrollmentToken)
+		api.DELETE("/enrollment-tokens", h.rbacMiddleware("agents", "write"), h.RevokeEnrollmentToken)
 
 		api.GET("/security-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
 			c.JSON(200, gin.H{
