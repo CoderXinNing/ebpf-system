@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
+	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 )
 
 // probeEventTracker 高频事件埋点（sync.Map + atomic，零分配、无锁）
@@ -158,7 +159,7 @@ func (a *Agent) isProbeLoaded(name string) bool {
 }
 
 // reportProbeStatus 上报探针状态给 Server
-// Day A：仅打日志占位；Day B 接入 ReportProbeStatus RPC
+// 状态变化时由自检循环触发；心跳 ProbeDetails 作为周期兜底
 func (a *Agent) reportProbeStatus() {
 	result, err := a.probeStateActor.Ask(msgGetProbeDetails{}, 500*time.Millisecond)
 	if err != nil {
@@ -166,13 +167,59 @@ func (a *Agent) reportProbeStatus() {
 		return
 	}
 	details, ok := result.(map[string]ProbeDetail)
-	if !ok {
+	if !ok || len(details) == 0 {
 		return
 	}
+
+	// 本地日志（保留便于排查）
 	for name, d := range details {
 		log.Printf("🔬 [SELFTEST] %s status=%s selftest_ok=%v failures=%d last_event=%s",
 			name, d.Status, d.SelfTestOK, d.ConsecutiveFailures,
 			d.LastEventAt.Format(time.RFC3339))
 	}
-	// TODO(Day B): 调用 a.client.ReportProbeStatus(...)
+
+	// 未连接 Server 时跳过上报
+	if a.client == nil || a.token == "" {
+		return
+	}
+
+	entries := make([]*pb.ProbeStatusEntry, 0, len(details))
+	for name, d := range details {
+		var lastEvent, lastCheck, loadedAt int64
+		if !d.LastEventAt.IsZero() {
+			lastEvent = d.LastEventAt.Unix()
+		}
+		if !d.LastCheckAt.IsZero() {
+			lastCheck = d.LastCheckAt.Unix()
+		}
+		if !d.LoadedAt.IsZero() {
+			loadedAt = d.LoadedAt.Unix()
+		}
+		entries = append(entries, &pb.ProbeStatusEntry{
+			Name:                name,
+			Status:              d.Status,
+			Reason:              d.Reason,
+			LastEventAt:         lastEvent,
+			LastCheckAt:         lastCheck,
+			SelftestOk:          d.SelfTestOK,
+			ConsecutiveFailures: int32(d.ConsecutiveFailures),
+			LoadedAt:            loadedAt,
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	resp, err := a.client.ReportProbeStatus(a.getAuthContext(ctx), &pb.ProbeStatusReport{
+		AgentId: a.id,
+		Entries: entries,
+	})
+	if err != nil {
+		log.Printf("🔬 [SELFTEST] 上报失败: %v", err)
+		return
+	}
+	if !resp.Success {
+		log.Printf("🔬 [SELFTEST] 上报被拒绝: %s", resp.Message)
+		return
+	}
+	log.Printf("🔬 [SELFTEST] 上报成功: %d 个探针", len(entries))
 }
