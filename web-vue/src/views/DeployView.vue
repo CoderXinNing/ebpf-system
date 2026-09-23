@@ -56,17 +56,6 @@
         size="small"
       />
     </n-card>
-
-    <!-- 已部署 Agent -->
-    <n-card title="已部署主机" bordered style="margin-top: 16px">
-      <n-data-table
-        :columns="agentColumns"
-        :data="agents"
-        :loading="loading"
-        :bordered="false"
-        size="small"
-      />
-    </n-card>
   </div>
 </template>
 
@@ -91,7 +80,6 @@ const showCmdModal = ref(false)
 const generatedToken = ref('')
 
 const tokens = ref<Token[]>([])
-const agents = ref<any[]>([])
 
 const serverURL = computed(() => {
   return window.location.origin
@@ -139,34 +127,6 @@ const tokenColumns = [
   },
 ]
 
-const agentColumns = [
-  { title: '主机名', key: 'hostname', width: 180 },
-  { title: 'IP', key: 'ip_addr', width: 140 },
-  {
-    title: '状态', key: 'status', width: 90,
-    render: (row: any) => {
-      const now = Date.now() / 1000
-      const online = now - row.last_seen < 120
-      return h(NTag, { type: online ? 'success' : 'default', size: 'small', round: true },
-        { default: () => online ? '在线' : '离线' })
-    },
-  },
-  { title: '能力', key: 'capability_level', width: 80 },
-  { title: '版本', key: 'version', width: 80 },
-  {
-    title: '最后心跳', key: 'last_seen', width: 170,
-    render: (row: any) => row.last_seen ? new Date(row.last_seen * 1000).toLocaleString('zh-CN', { hour12: false }) : '-',
-  },
-  {
-    title: '操作', key: 'actions', width: 100,
-    render: (row: any) => h(NButton, {
-      size: 'tiny',
-      type: 'error',
-      onClick: () => handleRevokeAgent(row),
-    }, { default: () => '撤销' }),
-  },
-]
-
 onMounted(async () => {
   await loadAll()
 })
@@ -174,7 +134,7 @@ onMounted(async () => {
 async function loadAll() {
   loading.value = true
   try {
-    await Promise.all([loadTokens(), loadAgents()])
+    await loadTokens()
   } finally {
     loading.value = false
   }
@@ -185,15 +145,6 @@ async function loadTokens() {
     tokens.value = await listTokens()
   } catch (err: any) {
     console.error('加载 Token 失败:', err)
-  }
-}
-
-async function loadAgents() {
-  try {
-    const { data } = await http.get('/agents')
-    agents.value = data.agents || []
-  } catch (err: any) {
-    console.error('加载 Agent 失败:', err)
   }
 }
 
@@ -251,23 +202,6 @@ function handleRevoke(row: Token) {
   })
 }
 
-function handleRevokeAgent(row: any) {
-  dialog.warning({
-    title: '确认撤销 Agent',
-    content: `撤销 "${row.hostname}" 后，该 Agent 将无法再连接 Server（L4 校验拒绝）。`,
-    positiveText: '撤销',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await http.post('/agents/revoke', { agent_id: row.id })
-        message.success('Agent 已撤销')
-        await loadAgents()
-      } catch (err: any) {
-        message.error(err.response?.data?.error || '撤销失败')
-      }
-    },
-  })
-}
 </script>
 
 <style scoped>
