@@ -459,8 +459,24 @@ func getGroup(g string) string {
 	return g
 }
 
-// ReportMutation 处理 Agent 上报的突变触发
+// ReportMutation 处理 Agent 上报的突变触发。
+//
+// 语义区分（关键，改前先读）：
+//   - TriggerType == "mutation_end" → 星轨【结束信号】，只记日志，不触发新星轨
+//   - 其他（tcp_anomaly 等）        → 星轨【触发信号】，生成 corrID
+//
+// ⚠️ 若 mutation_end 也走 HandleMutation，会形成无限循环：
+//
+//	Agent 上报结束 → Server 生成新星轨 → 10分钟后结束 → 再上报结束 → ...
 func (s *Service) ReportMutation(ctx context.Context, req *pb.MutationTrigger) (*pb.ReportResponse, error) {
+	// 星轨结束信号：不生成新星轨
+	if req.TriggerType == "mutation_end" {
+		log.Printf("🏁 星轨结束信号: agent=%s corr=%s", req.AgentId, req.Detail)
+		// TODO: 可选：从 starService 清理该 corrID 关联（当前内存索引会自然过期）
+		return &pb.ReportResponse{Success: true, Message: "mutation_end 已接收"}, nil
+	}
+
+	// 其他类型：正常触发新星轨
 	corrID := s.starService.HandleMutation(req.AgentId, req.Pid)
 	log.Printf("⭐ 星轨触发: agent=%s pid=%d type=%s corr=%s",
 		req.AgentId, req.Pid, req.TriggerType, corrID)
