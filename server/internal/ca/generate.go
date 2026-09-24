@@ -80,9 +80,10 @@ func GenerateCA(opts CAOptions) (*CA, error) {
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 
 	return &CA{
-		cert:    cert,
-		key:     key,
-		certPEM: certPEM,
+		signCert:   cert,
+		signKey:    key,
+		trustCerts: []*x509.Certificate{cert},
+		certPEM:    certPEM,
 	}, nil
 }
 
@@ -158,7 +159,7 @@ func (c *CA) GenerateServerCert(opts ServerCertOptions) (*ServerCertResult, erro
 		IsCA:                  false,
 	}
 
-	derBytes, err := x509.CreateCertificate(rand.Reader, template, c.cert, &key.PublicKey, c.key)
+	derBytes, err := x509.CreateCertificate(rand.Reader, template, c.signCert, &key.PublicKey, c.signKey)
 	if err != nil {
 		return nil, fmt.Errorf("签发 Server 证书失败: %w", err)
 	}

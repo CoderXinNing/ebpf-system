@@ -107,7 +107,7 @@ func Bootstrap(opts BootstrapOptions) (*BootstrapResult, error) {
 	}
 	caKeyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(caObj.key),
+		Bytes: x509.MarshalPKCS1PrivateKey(caObj.signKey),
 	})
 	if err := WritePEM(result.CAKeyPath, caKeyPEM, true); err != nil {
 		return nil, fmt.Errorf("写入 CA 私钥失败: %w", err)
