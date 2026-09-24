@@ -92,20 +92,10 @@ func parseStatus(status string) (ppid int, user string, state string) {
 	return
 }
 
-// resolveUID UID转用户名
+// resolveUID UID转用户名（走缓存，避免每进程重复读 /etc/passwd）
 func resolveUID(uid int) string {
-	data, err := os.ReadFile("/etc/passwd")
-	if err != nil {
-		return strconv.Itoa(uid)
-	}
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
-	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), ":")
-		if len(fields) >= 3 {
-			if id, _ := strconv.Atoi(fields[2]); id == uid {
-				return fields[0]
-			}
-		}
+	if name := resolveUIDCached(uid); name != "" {
+		return name
 	}
 	return strconv.Itoa(uid)
 }

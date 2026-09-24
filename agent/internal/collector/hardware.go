@@ -126,7 +126,7 @@ func CollectEnvVariables() []EnvVariable {
 	}
 
 	// 用户级 - 读 /etc/passwd 获取所有用户
-	passwdData, _ := os.ReadFile("/etc/passwd")
+	passwdData, _ := cachedReadFile("/etc/passwd")
 	for _, line := range strings.Split(string(passwdData), "\n") {
 		fields := strings.Split(line, ":")
 		if len(fields) < 6 {

@@ -2,31 +2,31 @@ package collector
 
 import (
 	"bufio"
+	"net"
 	"os"
 	"os/exec"
-	"net"
 	"strings"
 )
 
 // UserInfo 用户详细信息
 type UserInfo struct {
-	Username      string `json:"username"`
-	UID           int    `json:"uid"`
-	GID           int    `json:"gid"`
-	Home          string `json:"home"`
-	Shell         string `json:"shell"`
-	HasShell      bool   `json:"has_shell"`
-	IsRoot        bool   `json:"is_root"`
-	IsDisabled    bool   `json:"is_disabled"`
-	HasSudo       bool   `json:"has_sudo"`
-	LastLogin     string `json:"last_login"`
-	LastLoginIP   string `json:"last_login_ip"`
+	Username    string `json:"username"`
+	UID         int    `json:"uid"`
+	GID         int    `json:"gid"`
+	Home        string `json:"home"`
+	Shell       string `json:"shell"`
+	HasShell    bool   `json:"has_shell"`
+	IsRoot      bool   `json:"is_root"`
+	IsDisabled  bool   `json:"is_disabled"`
+	HasSudo     bool   `json:"has_sudo"`
+	LastLogin   string `json:"last_login"`
+	LastLoginIP string `json:"last_login_ip"`
 }
 
 // CollectAllUsers 采集所有用户信息
 func CollectAllUsers() ([]UserInfo, error) {
-	// 读取 /etc/passwd
-	passwdData, err := os.ReadFile("/etc/passwd")
+	// 读取 /etc/passwd（走缓存）
+	passwdData, err := cachedReadFile("/etc/passwd")
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +151,9 @@ func getSudoUsers() map[string]bool {
 	return result
 }
 
-// getAllUsernames 从/etc/passwd获取所有用户名
+// getAllUsernames 从/etc/passwd获取所有用户名（走缓存）
 func getAllUsernames() []string {
-	data, _ := os.ReadFile("/etc/passwd")
+	data, _ := cachedReadFile("/etc/passwd")
 	var names []string
 	for _, line := range strings.Split(string(data), "\n") {
 		fields := strings.Split(line, ":")
