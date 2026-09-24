@@ -1,7 +1,6 @@
 package plugins
 
 import (
-	"fmt"
 	"log"
 
 	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
