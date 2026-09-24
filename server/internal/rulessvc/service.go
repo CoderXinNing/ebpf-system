@@ -72,6 +72,18 @@ func (s *Service) Publish(ctx context.Context, rs *rules.RuleSet, createdBy stri
 	return rs.Version, nil
 }
 
+// GetVersion 返回当前规则的 version + sha256（供 Agent 快速比对）
+// 无规则时返回 (0, "", nil)
+func (s *Service) GetVersion(ctx context.Context) (int64, string, error) {
+	return s.repo.GetAgentRulesVersion(ctx)
+}
+
+// GetFull 返回当前完整规则（content + signature）
+// 无规则时返回 (nil, nil)
+func (s *Service) GetFull(ctx context.Context) (*psql.AgentRuleRecord, error) {
+	return s.repo.GetLatestAgentRules(ctx)
+}
+
 // EnsureDefault 首次启动时若无规则，自举默认规则
 func (s *Service) EnsureDefault(ctx context.Context) error {
 	version, _, err := s.repo.GetAgentRulesVersion(ctx)

@@ -39,6 +39,8 @@ const (
 	Sentinel_ReportPerformance_FullMethodName   = "/sentinel.Sentinel/ReportPerformance"
 	Sentinel_ReportAgentSelf_FullMethodName     = "/sentinel.Sentinel/ReportAgentSelf"
 	Sentinel_ReportProbeStatus_FullMethodName   = "/sentinel.Sentinel/ReportProbeStatus"
+	Sentinel_GetRulesVersion_FullMethodName     = "/sentinel.Sentinel/GetRulesVersion"
+	Sentinel_GetRulesFull_FullMethodName        = "/sentinel.Sentinel/GetRulesFull"
 )
 
 // SentinelClient is the client API for Sentinel service.
@@ -65,6 +67,9 @@ type SentinelClient interface {
 	ReportPerformance(ctx context.Context, in *PerfReport, opts ...grpc.CallOption) (*ReportResponse, error)
 	ReportAgentSelf(ctx context.Context, in *AgentSelfReport, opts ...grpc.CallOption) (*ReportResponse, error)
 	ReportProbeStatus(ctx context.Context, in *ProbeStatusReport, opts ...grpc.CallOption) (*ReportResponse, error)
+	// 动态规则下发
+	GetRulesVersion(ctx context.Context, in *RulesVersionRequest, opts ...grpc.CallOption) (*RulesVersionResponse, error)
+	GetRulesFull(ctx context.Context, in *RulesFullRequest, opts ...grpc.CallOption) (*RulesFullResponse, error)
 }
 
 type sentinelClient struct {
@@ -275,6 +280,26 @@ func (c *sentinelClient) ReportProbeStatus(ctx context.Context, in *ProbeStatusR
 	return out, nil
 }
 
+func (c *sentinelClient) GetRulesVersion(ctx context.Context, in *RulesVersionRequest, opts ...grpc.CallOption) (*RulesVersionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RulesVersionResponse)
+	err := c.cc.Invoke(ctx, Sentinel_GetRulesVersion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sentinelClient) GetRulesFull(ctx context.Context, in *RulesFullRequest, opts ...grpc.CallOption) (*RulesFullResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RulesFullResponse)
+	err := c.cc.Invoke(ctx, Sentinel_GetRulesFull_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SentinelServer is the server API for Sentinel service.
 // All implementations must embed UnimplementedSentinelServer
 // for forward compatibility.
@@ -299,6 +324,9 @@ type SentinelServer interface {
 	ReportPerformance(context.Context, *PerfReport) (*ReportResponse, error)
 	ReportAgentSelf(context.Context, *AgentSelfReport) (*ReportResponse, error)
 	ReportProbeStatus(context.Context, *ProbeStatusReport) (*ReportResponse, error)
+	// 动态规则下发
+	GetRulesVersion(context.Context, *RulesVersionRequest) (*RulesVersionResponse, error)
+	GetRulesFull(context.Context, *RulesFullRequest) (*RulesFullResponse, error)
 	mustEmbedUnimplementedSentinelServer()
 }
 
@@ -368,6 +396,12 @@ func (UnimplementedSentinelServer) ReportAgentSelf(context.Context, *AgentSelfRe
 }
 func (UnimplementedSentinelServer) ReportProbeStatus(context.Context, *ProbeStatusReport) (*ReportResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportProbeStatus not implemented")
+}
+func (UnimplementedSentinelServer) GetRulesVersion(context.Context, *RulesVersionRequest) (*RulesVersionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRulesVersion not implemented")
+}
+func (UnimplementedSentinelServer) GetRulesFull(context.Context, *RulesFullRequest) (*RulesFullResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRulesFull not implemented")
 }
 func (UnimplementedSentinelServer) mustEmbedUnimplementedSentinelServer() {}
 func (UnimplementedSentinelServer) testEmbeddedByValue()                  {}
@@ -750,6 +784,42 @@ func _Sentinel_ReportProbeStatus_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Sentinel_GetRulesVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RulesVersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SentinelServer).GetRulesVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Sentinel_GetRulesVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SentinelServer).GetRulesVersion(ctx, req.(*RulesVersionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Sentinel_GetRulesFull_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RulesFullRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SentinelServer).GetRulesFull(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Sentinel_GetRulesFull_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SentinelServer).GetRulesFull(ctx, req.(*RulesFullRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Sentinel_ServiceDesc is the grpc.ServiceDesc for Sentinel service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -836,6 +906,14 @@ var Sentinel_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportProbeStatus",
 			Handler:    _Sentinel_ReportProbeStatus_Handler,
+		},
+		{
+			MethodName: "GetRulesVersion",
+			Handler:    _Sentinel_GetRulesVersion_Handler,
+		},
+		{
+			MethodName: "GetRulesFull",
+			Handler:    _Sentinel_GetRulesFull_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

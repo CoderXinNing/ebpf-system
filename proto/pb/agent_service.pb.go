@@ -1422,6 +1422,248 @@ func (x *ProbeStatusReport) GetEntries() []*ProbeStatusEntry {
 	return nil
 }
 
+// 版本查询请求（Agent 定期拉，节省带宽）
+type RulesVersionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RulesVersionRequest) Reset() {
+	*x = RulesVersionRequest{}
+	mi := &file_agent_service_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RulesVersionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RulesVersionRequest) ProtoMessage() {}
+
+func (x *RulesVersionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_service_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RulesVersionRequest.ProtoReflect.Descriptor instead.
+func (*RulesVersionRequest) Descriptor() ([]byte, []int) {
+	return file_agent_service_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *RulesVersionRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+type RulesVersionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Version       int64                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"` // 0 = 无规则
+	Sha256        string                 `protobuf:"bytes,3,opt,name=sha256,proto3" json:"sha256,omitempty"`    // canonical JSON 的 SHA256
+	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`  // 错误信息
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RulesVersionResponse) Reset() {
+	*x = RulesVersionResponse{}
+	mi := &file_agent_service_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RulesVersionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RulesVersionResponse) ProtoMessage() {}
+
+func (x *RulesVersionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_service_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RulesVersionResponse.ProtoReflect.Descriptor instead.
+func (*RulesVersionResponse) Descriptor() ([]byte, []int) {
+	return file_agent_service_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *RulesVersionResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *RulesVersionResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *RulesVersionResponse) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *RulesVersionResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// 全量拉取请求
+type RulesFullRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RulesFullRequest) Reset() {
+	*x = RulesFullRequest{}
+	mi := &file_agent_service_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RulesFullRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RulesFullRequest) ProtoMessage() {}
+
+func (x *RulesFullRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_service_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RulesFullRequest.ProtoReflect.Descriptor instead.
+func (*RulesFullRequest) Descriptor() ([]byte, []int) {
+	return file_agent_service_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *RulesFullRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+type RulesFullResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Version       int64                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	Sha256        string                 `protobuf:"bytes,3,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	Content       string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`     // canonical JSON（规则内容）
+	Signature     string                 `protobuf:"bytes,5,opt,name=signature,proto3" json:"signature,omitempty"` // base64（CA 私钥签名）
+	Message       string                 `protobuf:"bytes,6,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RulesFullResponse) Reset() {
+	*x = RulesFullResponse{}
+	mi := &file_agent_service_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RulesFullResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RulesFullResponse) ProtoMessage() {}
+
+func (x *RulesFullResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_service_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RulesFullResponse.ProtoReflect.Descriptor instead.
+func (*RulesFullResponse) Descriptor() ([]byte, []int) {
+	return file_agent_service_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *RulesFullResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *RulesFullResponse) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *RulesFullResponse) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *RulesFullResponse) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *RulesFullResponse) GetSignature() string {
+	if x != nil {
+		return x.Signature
+	}
+	return ""
+}
+
+func (x *RulesFullResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 var File_agent_service_proto protoreflect.FileDescriptor
 
 const file_agent_service_proto_rawDesc = "" +
@@ -1545,7 +1787,23 @@ const file_agent_service_proto_rawDesc = "" +
 	"\tloaded_at\x18\b \x01(\x03R\bloadedAt\"d\n" +
 	"\x11ProbeStatusReport\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x124\n" +
-	"\aentries\x18\x02 \x03(\v2\x1a.sentinel.ProbeStatusEntryR\aentries2\x87\v\n" +
+	"\aentries\x18\x02 \x03(\v2\x1a.sentinel.ProbeStatusEntryR\aentries\"0\n" +
+	"\x13RulesVersionRequest\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\"|\n" +
+	"\x14RulesVersionResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x16\n" +
+	"\x06sha256\x18\x03 \x01(\tR\x06sha256\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\"-\n" +
+	"\x10RulesFullRequest\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\"\xb1\x01\n" +
+	"\x11RulesFullResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x16\n" +
+	"\x06sha256\x18\x03 \x01(\tR\x06sha256\x12\x18\n" +
+	"\acontent\x18\x04 \x01(\tR\acontent\x12\x1c\n" +
+	"\tsignature\x18\x05 \x01(\tR\tsignature\x12\x18\n" +
+	"\amessage\x18\x06 \x01(\tR\amessage2\xa2\f\n" +
 	"\bSentinel\x12A\n" +
 	"\bRegister\x12\x19.sentinel.RegisterRequest\x1a\x1a.sentinel.RegisterResponse\x12D\n" +
 	"\tHeartbeat\x12\x1a.sentinel.HeartbeatRequest\x1a\x1b.sentinel.HeartbeatResponse\x12?\n" +
@@ -1566,7 +1824,9 @@ const file_agent_service_proto_rawDesc = "" +
 	"\rReportNetwork\x12\x17.sentinel.NetworkReport\x1a\x18.sentinel.ReportResponse\x12C\n" +
 	"\x11ReportPerformance\x12\x14.sentinel.PerfReport\x1a\x18.sentinel.ReportResponse\x12F\n" +
 	"\x0fReportAgentSelf\x12\x19.sentinel.AgentSelfReport\x1a\x18.sentinel.ReportResponse\x12J\n" +
-	"\x11ReportProbeStatus\x12\x1b.sentinel.ProbeStatusReport\x1a\x18.sentinel.ReportResponseB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
+	"\x11ReportProbeStatus\x12\x1b.sentinel.ProbeStatusReport\x1a\x18.sentinel.ReportResponse\x12P\n" +
+	"\x0fGetRulesVersion\x12\x1d.sentinel.RulesVersionRequest\x1a\x1e.sentinel.RulesVersionResponse\x12G\n" +
+	"\fGetRulesFull\x12\x1a.sentinel.RulesFullRequest\x1a\x1b.sentinel.RulesFullResponseB.Z,github.com/CoderXinNing/ebpf-system/proto/pbb\x06proto3"
 
 var (
 	file_agent_service_proto_rawDescOnce sync.Once
@@ -1580,46 +1840,50 @@ func file_agent_service_proto_rawDescGZIP() []byte {
 	return file_agent_service_proto_rawDescData
 }
 
-var file_agent_service_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_agent_service_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_agent_service_proto_goTypes = []any{
-	(*RegisterRequest)(nil),    // 0: sentinel.RegisterRequest
-	(*RegisterResponse)(nil),   // 1: sentinel.RegisterResponse
-	(*FrameworkInfo)(nil),      // 2: sentinel.FrameworkInfo
-	(*KernelInfo)(nil),         // 3: sentinel.KernelInfo
-	(*HeartbeatRequest)(nil),   // 4: sentinel.HeartbeatRequest
-	(*HeartbeatResponse)(nil),  // 5: sentinel.HeartbeatResponse
-	(*ProbeEvent)(nil),         // 6: sentinel.ProbeEvent
-	(*EventReport)(nil),        // 7: sentinel.EventReport
-	(*ShutdownRequest)(nil),    // 8: sentinel.ShutdownRequest
-	(*ShutdownResponse)(nil),   // 9: sentinel.ShutdownResponse
-	(*ProbeListRequest)(nil),   // 10: sentinel.ProbeListRequest
-	(*ProbeInfo)(nil),          // 11: sentinel.ProbeInfo
-	(*ProbeListResponse)(nil),  // 12: sentinel.ProbeListResponse
-	(*MutationTrigger)(nil),    // 13: sentinel.MutationTrigger
-	(*StarActivation)(nil),     // 14: sentinel.StarActivation
-	(*StarActivationAck)(nil),  // 15: sentinel.StarActivationAck
-	(*RenewCertRequest)(nil),   // 16: sentinel.RenewCertRequest
-	(*RenewCertResponse)(nil),  // 17: sentinel.RenewCertResponse
-	(*ProbeStatusEntry)(nil),   // 18: sentinel.ProbeStatusEntry
-	(*ProbeStatusReport)(nil),  // 19: sentinel.ProbeStatusReport
-	(*ProbeCommand)(nil),       // 20: sentinel.ProbeCommand
-	(*ProcessReport)(nil),      // 21: sentinel.ProcessReport
-	(*UserReport)(nil),         // 22: sentinel.UserReport
-	(*SystemReport)(nil),       // 23: sentinel.SystemReport
-	(*PackageReport)(nil),      // 24: sentinel.PackageReport
-	(*CronReport)(nil),         // 25: sentinel.CronReport
-	(*ServiceReport)(nil),      // 26: sentinel.ServiceReport
-	(*WebComponentReport)(nil), // 27: sentinel.WebComponentReport
-	(*HardwareReport)(nil),     // 28: sentinel.HardwareReport
-	(*NetworkReport)(nil),      // 29: sentinel.NetworkReport
-	(*PerfReport)(nil),         // 30: sentinel.PerfReport
-	(*AgentSelfReport)(nil),    // 31: sentinel.AgentSelfReport
-	(*ReportResponse)(nil),     // 32: sentinel.ReportResponse
+	(*RegisterRequest)(nil),      // 0: sentinel.RegisterRequest
+	(*RegisterResponse)(nil),     // 1: sentinel.RegisterResponse
+	(*FrameworkInfo)(nil),        // 2: sentinel.FrameworkInfo
+	(*KernelInfo)(nil),           // 3: sentinel.KernelInfo
+	(*HeartbeatRequest)(nil),     // 4: sentinel.HeartbeatRequest
+	(*HeartbeatResponse)(nil),    // 5: sentinel.HeartbeatResponse
+	(*ProbeEvent)(nil),           // 6: sentinel.ProbeEvent
+	(*EventReport)(nil),          // 7: sentinel.EventReport
+	(*ShutdownRequest)(nil),      // 8: sentinel.ShutdownRequest
+	(*ShutdownResponse)(nil),     // 9: sentinel.ShutdownResponse
+	(*ProbeListRequest)(nil),     // 10: sentinel.ProbeListRequest
+	(*ProbeInfo)(nil),            // 11: sentinel.ProbeInfo
+	(*ProbeListResponse)(nil),    // 12: sentinel.ProbeListResponse
+	(*MutationTrigger)(nil),      // 13: sentinel.MutationTrigger
+	(*StarActivation)(nil),       // 14: sentinel.StarActivation
+	(*StarActivationAck)(nil),    // 15: sentinel.StarActivationAck
+	(*RenewCertRequest)(nil),     // 16: sentinel.RenewCertRequest
+	(*RenewCertResponse)(nil),    // 17: sentinel.RenewCertResponse
+	(*ProbeStatusEntry)(nil),     // 18: sentinel.ProbeStatusEntry
+	(*ProbeStatusReport)(nil),    // 19: sentinel.ProbeStatusReport
+	(*RulesVersionRequest)(nil),  // 20: sentinel.RulesVersionRequest
+	(*RulesVersionResponse)(nil), // 21: sentinel.RulesVersionResponse
+	(*RulesFullRequest)(nil),     // 22: sentinel.RulesFullRequest
+	(*RulesFullResponse)(nil),    // 23: sentinel.RulesFullResponse
+	(*ProbeCommand)(nil),         // 24: sentinel.ProbeCommand
+	(*ProcessReport)(nil),        // 25: sentinel.ProcessReport
+	(*UserReport)(nil),           // 26: sentinel.UserReport
+	(*SystemReport)(nil),         // 27: sentinel.SystemReport
+	(*PackageReport)(nil),        // 28: sentinel.PackageReport
+	(*CronReport)(nil),           // 29: sentinel.CronReport
+	(*ServiceReport)(nil),        // 30: sentinel.ServiceReport
+	(*WebComponentReport)(nil),   // 31: sentinel.WebComponentReport
+	(*HardwareReport)(nil),       // 32: sentinel.HardwareReport
+	(*NetworkReport)(nil),        // 33: sentinel.NetworkReport
+	(*PerfReport)(nil),           // 34: sentinel.PerfReport
+	(*AgentSelfReport)(nil),      // 35: sentinel.AgentSelfReport
+	(*ReportResponse)(nil),       // 36: sentinel.ReportResponse
 }
 var file_agent_service_proto_depIdxs = []int32{
 	2,  // 0: sentinel.RegisterRequest.framework:type_name -> sentinel.FrameworkInfo
 	3,  // 1: sentinel.RegisterRequest.kernel_info:type_name -> sentinel.KernelInfo
-	20, // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
+	24, // 2: sentinel.HeartbeatResponse.commands:type_name -> sentinel.ProbeCommand
 	6,  // 3: sentinel.EventReport.events:type_name -> sentinel.ProbeEvent
 	11, // 4: sentinel.ProbeListResponse.probes:type_name -> sentinel.ProbeInfo
 	18, // 5: sentinel.ProbeStatusReport.entries:type_name -> sentinel.ProbeStatusEntry
@@ -1631,40 +1895,44 @@ var file_agent_service_proto_depIdxs = []int32{
 	13, // 11: sentinel.Sentinel.ReportMutation:input_type -> sentinel.MutationTrigger
 	14, // 12: sentinel.Sentinel.ActivateStarMode:input_type -> sentinel.StarActivation
 	16, // 13: sentinel.Sentinel.RenewCert:input_type -> sentinel.RenewCertRequest
-	21, // 14: sentinel.Sentinel.ReportProcesses:input_type -> sentinel.ProcessReport
-	22, // 15: sentinel.Sentinel.ReportUsers:input_type -> sentinel.UserReport
-	23, // 16: sentinel.Sentinel.ReportSystemInfo:input_type -> sentinel.SystemReport
-	24, // 17: sentinel.Sentinel.ReportPackages:input_type -> sentinel.PackageReport
-	25, // 18: sentinel.Sentinel.ReportCronJobs:input_type -> sentinel.CronReport
-	26, // 19: sentinel.Sentinel.ReportServices:input_type -> sentinel.ServiceReport
-	27, // 20: sentinel.Sentinel.ReportWebComponents:input_type -> sentinel.WebComponentReport
-	28, // 21: sentinel.Sentinel.ReportHardware:input_type -> sentinel.HardwareReport
-	29, // 22: sentinel.Sentinel.ReportNetwork:input_type -> sentinel.NetworkReport
-	30, // 23: sentinel.Sentinel.ReportPerformance:input_type -> sentinel.PerfReport
-	31, // 24: sentinel.Sentinel.ReportAgentSelf:input_type -> sentinel.AgentSelfReport
+	25, // 14: sentinel.Sentinel.ReportProcesses:input_type -> sentinel.ProcessReport
+	26, // 15: sentinel.Sentinel.ReportUsers:input_type -> sentinel.UserReport
+	27, // 16: sentinel.Sentinel.ReportSystemInfo:input_type -> sentinel.SystemReport
+	28, // 17: sentinel.Sentinel.ReportPackages:input_type -> sentinel.PackageReport
+	29, // 18: sentinel.Sentinel.ReportCronJobs:input_type -> sentinel.CronReport
+	30, // 19: sentinel.Sentinel.ReportServices:input_type -> sentinel.ServiceReport
+	31, // 20: sentinel.Sentinel.ReportWebComponents:input_type -> sentinel.WebComponentReport
+	32, // 21: sentinel.Sentinel.ReportHardware:input_type -> sentinel.HardwareReport
+	33, // 22: sentinel.Sentinel.ReportNetwork:input_type -> sentinel.NetworkReport
+	34, // 23: sentinel.Sentinel.ReportPerformance:input_type -> sentinel.PerfReport
+	35, // 24: sentinel.Sentinel.ReportAgentSelf:input_type -> sentinel.AgentSelfReport
 	19, // 25: sentinel.Sentinel.ReportProbeStatus:input_type -> sentinel.ProbeStatusReport
-	1,  // 26: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
-	5,  // 27: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
-	32, // 28: sentinel.Sentinel.ReportEvents:output_type -> sentinel.ReportResponse
-	12, // 29: sentinel.Sentinel.GetProbeList:output_type -> sentinel.ProbeListResponse
-	9,  // 30: sentinel.Sentinel.ReportShutdown:output_type -> sentinel.ShutdownResponse
-	32, // 31: sentinel.Sentinel.ReportMutation:output_type -> sentinel.ReportResponse
-	15, // 32: sentinel.Sentinel.ActivateStarMode:output_type -> sentinel.StarActivationAck
-	17, // 33: sentinel.Sentinel.RenewCert:output_type -> sentinel.RenewCertResponse
-	32, // 34: sentinel.Sentinel.ReportProcesses:output_type -> sentinel.ReportResponse
-	32, // 35: sentinel.Sentinel.ReportUsers:output_type -> sentinel.ReportResponse
-	32, // 36: sentinel.Sentinel.ReportSystemInfo:output_type -> sentinel.ReportResponse
-	32, // 37: sentinel.Sentinel.ReportPackages:output_type -> sentinel.ReportResponse
-	32, // 38: sentinel.Sentinel.ReportCronJobs:output_type -> sentinel.ReportResponse
-	32, // 39: sentinel.Sentinel.ReportServices:output_type -> sentinel.ReportResponse
-	32, // 40: sentinel.Sentinel.ReportWebComponents:output_type -> sentinel.ReportResponse
-	32, // 41: sentinel.Sentinel.ReportHardware:output_type -> sentinel.ReportResponse
-	32, // 42: sentinel.Sentinel.ReportNetwork:output_type -> sentinel.ReportResponse
-	32, // 43: sentinel.Sentinel.ReportPerformance:output_type -> sentinel.ReportResponse
-	32, // 44: sentinel.Sentinel.ReportAgentSelf:output_type -> sentinel.ReportResponse
-	32, // 45: sentinel.Sentinel.ReportProbeStatus:output_type -> sentinel.ReportResponse
-	26, // [26:46] is the sub-list for method output_type
-	6,  // [6:26] is the sub-list for method input_type
+	20, // 26: sentinel.Sentinel.GetRulesVersion:input_type -> sentinel.RulesVersionRequest
+	22, // 27: sentinel.Sentinel.GetRulesFull:input_type -> sentinel.RulesFullRequest
+	1,  // 28: sentinel.Sentinel.Register:output_type -> sentinel.RegisterResponse
+	5,  // 29: sentinel.Sentinel.Heartbeat:output_type -> sentinel.HeartbeatResponse
+	36, // 30: sentinel.Sentinel.ReportEvents:output_type -> sentinel.ReportResponse
+	12, // 31: sentinel.Sentinel.GetProbeList:output_type -> sentinel.ProbeListResponse
+	9,  // 32: sentinel.Sentinel.ReportShutdown:output_type -> sentinel.ShutdownResponse
+	36, // 33: sentinel.Sentinel.ReportMutation:output_type -> sentinel.ReportResponse
+	15, // 34: sentinel.Sentinel.ActivateStarMode:output_type -> sentinel.StarActivationAck
+	17, // 35: sentinel.Sentinel.RenewCert:output_type -> sentinel.RenewCertResponse
+	36, // 36: sentinel.Sentinel.ReportProcesses:output_type -> sentinel.ReportResponse
+	36, // 37: sentinel.Sentinel.ReportUsers:output_type -> sentinel.ReportResponse
+	36, // 38: sentinel.Sentinel.ReportSystemInfo:output_type -> sentinel.ReportResponse
+	36, // 39: sentinel.Sentinel.ReportPackages:output_type -> sentinel.ReportResponse
+	36, // 40: sentinel.Sentinel.ReportCronJobs:output_type -> sentinel.ReportResponse
+	36, // 41: sentinel.Sentinel.ReportServices:output_type -> sentinel.ReportResponse
+	36, // 42: sentinel.Sentinel.ReportWebComponents:output_type -> sentinel.ReportResponse
+	36, // 43: sentinel.Sentinel.ReportHardware:output_type -> sentinel.ReportResponse
+	36, // 44: sentinel.Sentinel.ReportNetwork:output_type -> sentinel.ReportResponse
+	36, // 45: sentinel.Sentinel.ReportPerformance:output_type -> sentinel.ReportResponse
+	36, // 46: sentinel.Sentinel.ReportAgentSelf:output_type -> sentinel.ReportResponse
+	36, // 47: sentinel.Sentinel.ReportProbeStatus:output_type -> sentinel.ReportResponse
+	21, // 48: sentinel.Sentinel.GetRulesVersion:output_type -> sentinel.RulesVersionResponse
+	23, // 49: sentinel.Sentinel.GetRulesFull:output_type -> sentinel.RulesFullResponse
+	28, // [28:50] is the sub-list for method output_type
+	6,  // [6:28] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -1683,7 +1951,7 @@ func file_agent_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_service_proto_rawDesc), len(file_agent_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

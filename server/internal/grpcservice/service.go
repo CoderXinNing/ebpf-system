@@ -434,6 +434,46 @@ func (s *Service) ReportProbeStatus(ctx context.Context, req *pb.ProbeStatusRepo
 	return &pb.ReportResponse{Success: true}, nil
 }
 
+// GetRulesVersion 返回当前规则的 version + sha256（Agent 定期拉，省带宽）
+func (s *Service) GetRulesVersion(ctx context.Context, req *pb.RulesVersionRequest) (*pb.RulesVersionResponse, error) {
+	if s.rulesSvc == nil {
+		return &pb.RulesVersionResponse{Success: false, Message: "规则服务未初始化"}, nil
+	}
+	version, sha256, err := s.rulesSvc.GetVersion(ctx)
+	if err != nil {
+		log.Printf("⚠️ GetRulesVersion 失败: %v", err)
+		return &pb.RulesVersionResponse{Success: false, Message: err.Error()}, nil
+	}
+	return &pb.RulesVersionResponse{
+		Success: true,
+		Version: version,
+		Sha256:  sha256,
+	}, nil
+}
+
+// GetRulesFull 返回完整规则（content + signature），供 Agent 验签后加载
+func (s *Service) GetRulesFull(ctx context.Context, req *pb.RulesFullRequest) (*pb.RulesFullResponse, error) {
+	if s.rulesSvc == nil {
+		return &pb.RulesFullResponse{Success: false, Message: "规则服务未初始化"}, nil
+	}
+	rec, err := s.rulesSvc.GetFull(ctx)
+	if err != nil {
+		log.Printf("⚠️ GetRulesFull 失败: %v", err)
+		return &pb.RulesFullResponse{Success: false, Message: err.Error()}, nil
+	}
+	if rec == nil {
+		return &pb.RulesFullResponse{Success: true, Version: 0, Message: "无规则"}, nil
+	}
+	log.Printf("📋 GetRulesFull: agent=%s version=%d", req.AgentId, rec.Version)
+	return &pb.RulesFullResponse{
+		Success:   true,
+		Version:   rec.Version,
+		Sha256:    rec.SHA256,
+		Content:   string(rec.Content),
+		Signature: rec.Signature,
+	}, nil
+}
+
 // ReportShutdown 下线通知
 func (s *Service) ReportShutdown(ctx context.Context, req *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	s.handler.Mu.Lock()

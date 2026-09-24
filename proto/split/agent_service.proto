@@ -157,6 +157,34 @@ message ProbeStatusReport {
     repeated ProbeStatusEntry entries = 2;
 }
 
+// ========== 动态规则下发（敏感路径等）==========
+
+// 版本查询请求（Agent 定期拉，节省带宽）
+message RulesVersionRequest {
+    string agent_id = 1;
+}
+
+message RulesVersionResponse {
+    bool success = 1;
+    int64 version = 2;   // 0 = 无规则
+    string sha256 = 3;   // canonical JSON 的 SHA256
+    string message = 4;  // 错误信息
+}
+
+// 全量拉取请求
+message RulesFullRequest {
+    string agent_id = 1;
+}
+
+message RulesFullResponse {
+    bool success = 1;
+    int64 version = 2;
+    string sha256 = 3;
+    string content = 4;   // canonical JSON（规则内容）
+    string signature = 5; // base64（CA 私钥签名）
+    string message = 6;
+}
+
 service Sentinel {
     rpc Register(RegisterRequest) returns (RegisterResponse);
     rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
@@ -181,4 +209,8 @@ service Sentinel {
     rpc ReportAgentSelf(AgentSelfReport) returns (ReportResponse);
 
     rpc ReportProbeStatus(ProbeStatusReport) returns (ReportResponse);
+
+    // 动态规则下发
+    rpc GetRulesVersion(RulesVersionRequest) returns (RulesVersionResponse);
+    rpc GetRulesFull(RulesFullRequest) returns (RulesFullResponse);
 }
