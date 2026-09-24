@@ -49,9 +49,9 @@ type Agent struct {
 	// gRPC Metadata（token 鉴权）
 	authContext context.Context
 
-	// 星轨激活状态（精准追踪，非全机快照）
-	starMu     sync.RWMutex
-	activeStar *StarTrace
+	// 星轨激活状态（多星轨并行，key=corrID）
+	starsMu sync.RWMutex
+	stars   map[string]*StarTrace
 
 	// TCP 突变检测
 	tcpAnomaly *TCPAnomalyDetector
@@ -117,6 +117,7 @@ func New(cfg *config.AgentConfig) *Agent {
 
 	// 初始化自检事件埋点
 	agent.probeEventTracker = &probeEventTracker{}
+	agent.stars = make(map[string]*StarTrace)
 
 	// 初始化 TCP 突变检测器（默认配置，后续从配置文件读取）
 	agent.tcpAnomaly = NewTCPAnomalyDetector(
