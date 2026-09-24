@@ -14,6 +14,9 @@ import (
 )
 
 type Handler struct {
+	// GRPCPort Server 的 gRPC 监听端口（enrollment 时回报给 Agent）
+	GRPCPort int
+
 	movedGroups           map[string]string
 	Store                 *store.Store
 	Auth                  *auth.AuthManager

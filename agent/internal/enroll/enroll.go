@@ -170,6 +170,7 @@ type enrollResponse struct {
 	CertSerial  string `json:"cert_serial"`
 	CertExpires string `json:"cert_expires"`
 	GroupName   string `json:"group_name"`
+	GRPCAddr    string `json:"grpc_addr"`
 	Error       string `json:"error"`
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -120,7 +121,20 @@ func (h *Handler) Enroll(c *gin.Context) {
 
 	log.Printf("✅ Agent 注册成功: %s (%s) 分组=%s", result.AgentID, req.Hostname, result.GroupName)
 
-	// 6. 返回
+	// 6. 计算 gRPC 地址（回报给 Agent，供其写 agent.toml）
+	// 推导：用 Agent 请求时用的 Host（去掉端口）+ Server 配置的 GRPCPort
+	// 这样 Agent 能访问到的地址就是它连得上的地址
+	grpcHost := c.Request.Host
+	if idx := strings.Index(grpcHost, ":"); idx > 0 {
+		grpcHost = grpcHost[:idx]
+	}
+	grpcPort := h.GRPCPort
+	if grpcPort == 0 {
+		grpcPort = 50051 // 兜底默认
+	}
+	grpcAddr := fmt.Sprintf("%s:%d", grpcHost, grpcPort)
+
+	// 7. 返回
 	c.JSON(http.StatusOK, gin.H{
 		"success":      true,
 		"agent_id":     result.AgentID,
@@ -129,5 +143,6 @@ func (h *Handler) Enroll(c *gin.Context) {
 		"cert_serial":  serial,
 		"cert_expires": expiresAt.Format("2006-01-02T15:04:05Z07:00"),
 		"group_name":   result.GroupName,
+		"grpc_addr":    grpcAddr, // 新增
 	})
 }

@@ -361,6 +361,11 @@ func main() {
 	grpcSvc := grpcservice.NewService(h, agentAuth)
 
 	// 从 DB 加载已有 Agent（Server 重启后恢复内存状态）
+	// 注入 gRPC 端口给 Handler（enrollment 时回报给 Agent）
+	if h != nil {
+		h.GRPCPort = cfg.Server.GRPCPort
+	}
+
 	loadAgentsFromDB(h, psqlDB)
 
 	// TLS
