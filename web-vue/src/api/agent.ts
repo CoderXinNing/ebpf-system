@@ -11,6 +11,23 @@ export interface ProbeStatusEntry {
   loaded_at: number
 }
 
+export interface FrameworkInfo {
+  bcc_available: boolean
+  libbpf_available: boolean
+  libbpf_core: boolean
+  bpftrace_available: boolean
+  clang_available: boolean
+  llvm_available: boolean
+  kernel_headers_available: boolean
+  go_ebpf_available: boolean
+}
+
+export interface KernelInfo {
+  version: string
+  arch: string
+  btf_enabled: boolean
+}
+
 export interface AgentInfo {
   id: string
   hostname: string
@@ -20,6 +37,8 @@ export interface AgentInfo {
   last_seen: number
   capability_level: string
   probe_status?: Record<string, ProbeStatusEntry>
+  framework?: FrameworkInfo
+  kernel_info?: KernelInfo
 }
 
 export async function getAgents(): Promise<AgentInfo[]> {

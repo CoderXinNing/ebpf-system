@@ -55,6 +55,8 @@
           </div>
         </div>
 
+        <n-tabs v-model:value="activeTab" type="line" animated class="probe-tabs">
+        <n-tab-pane name="probes" tab="探针状态" style="padding: 0">
         <div class="probe-toolbar">
           <n-input v-model:value="probeKeyword" placeholder="搜索探针" size="small" clearable style="width: 240px" />
           <n-text depth="3" style="font-size: 12px">
@@ -72,6 +74,43 @@
             size="small"
           />
         </div>
+        </n-tab-pane>
+
+        <n-tab-pane name="env" tab="环境信息" style="padding: 0">
+          <div class="env-content">
+            <template v-if="hasEnvData">
+              <div class="env-section">
+                <div class="env-section-title">内核信息</div>
+                <n-descriptions :column="2" bordered size="small">
+                  <n-descriptions-item label="内核版本">{{ kernelInfo.version || '-' }}</n-descriptions-item>
+                  <n-descriptions-item label="架构">{{ kernelInfo.arch || '-' }}</n-descriptions-item>
+                  <n-descriptions-item label="BTF 支持" :span="2">
+                    <n-tag :type="kernelInfo.btf_enabled ? 'success' : 'warning'" size="small" round>
+                      {{ kernelInfo.btf_enabled ? '✅ 支持（CO-RE 可用）' : '❌ 不支持' }}
+                    </n-tag>
+                  </n-descriptions-item>
+                </n-descriptions>
+              </div>
+
+              <div class="env-section">
+                <div class="env-section-title">框架 / 工具链</div>
+                <n-descriptions :column="2" bordered size="small">
+                  <n-descriptions-item
+                    v-for="item in frameworkItems"
+                    :key="item.key"
+                    :label="item.label"
+                  >
+                    <n-tag :type="item.value ? 'success' : 'default'" size="small" round>
+                      {{ item.value ? '✅ 可用' : '—' }}
+                    </n-tag>
+                  </n-descriptions-item>
+                </n-descriptions>
+              </div>
+            </template>
+            <n-empty v-else description="该主机未上报环境信息" style="margin-top: 40px" />
+          </div>
+        </n-tab-pane>
+        </n-tabs>
       </template>
       <n-empty v-else description="请从左侧选择主机" style="margin: auto" />
     </div>
@@ -82,6 +121,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
 import {
   NInput, NTag, NButton, NDataTable, NEmpty, NText, NSwitch,
+  NTabs, NTabPane, NDescriptions, NDescriptionsItem,
 } from 'naive-ui'
 import { getAgents, type AgentInfo, type ProbeStatusEntry } from '../api/agent'
 
@@ -91,6 +131,7 @@ const hostKeyword = ref('')
 const probeKeyword = ref('')
 const loading = ref(false)
 const autoRefresh = ref(true)
+const activeTab = ref<'probes' | 'env'>('probes')
 
 let refreshTimer: number | null = null
 
@@ -175,6 +216,34 @@ function formatProbeTime(ts: number): string {
   if (!ts) return '-'
   return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false })
 }
+
+// ---- 环境信息 ----
+const kernelInfo = computed(() => {
+  return selectedHost.value?.kernel_info || { version: '', arch: '', btf_enabled: false }
+})
+
+const frameworkItems = computed(() => {
+  const fw = selectedHost.value?.framework
+  if (!fw) return []
+  return [
+    { key: 'bcc', label: 'BCC', value: fw.bcc_available },
+    { key: 'libbpf', label: 'libbpf', value: fw.libbpf_available },
+    { key: 'libbpf_core', label: 'libbpf CO-RE', value: fw.libbpf_core },
+    { key: 'bpftrace', label: 'bpftrace', value: fw.bpftrace_available },
+    { key: 'clang', label: 'clang', value: fw.clang_available },
+    { key: 'llvm', label: 'LLVM', value: fw.llvm_available },
+    { key: 'kernel_headers', label: '内核头文件', value: fw.kernel_headers_available },
+    { key: 'go_ebpf', label: 'Go eBPF', value: fw.go_ebpf_available },
+  ]
+})
+
+const hasEnvData = computed(() => {
+  const fw = selectedHost.value?.framework
+  const ki = selectedHost.value?.kernel_info
+  const fwOK = !!(fw && Object.values(fw).some(v => v === true))
+  const kiOK = !!(ki && ki.version)
+  return fwOK || kiOK
+})
 
 const columns = [
   { title: '探针', key: 'name', width: 180 },
@@ -394,5 +463,45 @@ watch(autoRefresh, setupAutoRefresh)
   flex: 1;
   overflow: auto;
   padding: 8px 16px;
+}
+
+.probe-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.probe-tabs :deep(.n-tabs-nav) {
+  padding: 0 16px;
+}
+
+.probe-tabs :deep(.n-tabs-pane-wrapper) {
+  flex: 1;
+  overflow: hidden;
+}
+
+.probe-tabs :deep(.n-tab-pane) {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.env-content {
+  padding: 16px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.env-section {
+  margin-bottom: 24px;
+}
+
+.env-section-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #475569;
+  margin-bottom: 8px;
 }
 </style>
