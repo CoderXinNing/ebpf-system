@@ -29,6 +29,22 @@ func (p *FileProbe) Name() string { return "file_access" }
 
 func (p *FileProbe) Init() error { return nil }
 
+// 默认敏感路径（首次启动注入，Server 动态下发会覆盖）
+//
+// 精确匹配（用户意图 = 监控文件）
+var defaultExactPaths = []string{
+	"/etc/shadow",
+	"/etc/passwd",
+	"/etc/sudoers",
+}
+
+// 前缀匹配（用户意图 = 监控目录，路径须以 / 结尾）
+var defaultPrefixPaths = []string{
+	"/root/.ssh/",
+	"/home/",
+	"/var/log/auth",
+}
+
 func (p *FileProbe) Attach() error {
 	p.probe = v3_loader.NewFileProbe(p.objPath, p.agentHash, func(header *v3_loader.SentinelEventHeader, filename string) {
 		if p.callback != nil {
@@ -38,6 +54,14 @@ func (p *FileProbe) Attach() error {
 
 	if err := p.probe.Load(); err != nil {
 		return err
+	}
+
+	// 注入默认规则（避免启动期"无规则"裸奔）
+	if err := p.probe.UpdateSensitivePaths(defaultExactPaths, defaultPrefixPaths); err != nil {
+		log.Printf("⚠️ 默认敏感路径注入失败: %v（file_access 将无规则）", err)
+	} else {
+		log.Printf("✅ 默认敏感路径已注入: 精确 %d 条, 前缀 %d 条",
+			len(defaultExactPaths), len(defaultPrefixPaths))
 	}
 
 	p.loaded = true

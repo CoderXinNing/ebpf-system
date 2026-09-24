@@ -22,10 +22,12 @@ type FileProbe struct {
 }
 
 type fileObjects struct {
-	TraceOpenat      *ebpf.Program `ebpf:"trace_openat"`
-	ConfigMap        *ebpf.Map     `ebpf:"config_map"`
-	FileEvents       *ebpf.Map     `ebpf:"file_events"`
-	SentinelWhitelist *ebpf.Map    `ebpf:"sentinel_whitelist"`
+	TraceOpenat       *ebpf.Program `ebpf:"trace_openat"`
+	ConfigMap         *ebpf.Map     `ebpf:"config_map"`
+	FileEvents        *ebpf.Map     `ebpf:"file_events"`
+	SentinelWhitelist *ebpf.Map     `ebpf:"sentinel_whitelist"`
+	SensitiveExact    *ebpf.Map     `ebpf:"sensitive_exact"`
+	SensitivePrefixes *ebpf.Map     `ebpf:"sensitive_prefixes"`
 }
 
 // NewFileProbe 创建 file_access 探针
@@ -112,6 +114,82 @@ func (p *FileProbe) UpdateWhitelist(processNames []string) error {
 		copy(key[:], name)
 		var value uint8 = 1
 		if err := p.objs.SentinelWhitelist.Put(&key, &value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateSensitivePaths 更新敏感路径规则。
+//
+//   - exactPaths  → 精确匹配（存 sensitive_exact）
+//   - prefixPaths → 前缀匹配（存 sensitive_prefixes，路径须以 / 结尾）
+//
+// 流程：先清空两个 map，再逐条写入（清空窗口极短，可接受）。
+func (p *FileProbe) UpdateSensitivePaths(exactPaths, prefixPaths []string) error {
+	if p.objs == nil || p.objs.SensitiveExact == nil || p.objs.SensitivePrefixes == nil {
+		return fmt.Errorf("探针未加载")
+	}
+
+	// 1. 清空 exact
+	if err := clearMap(p.objs.SensitiveExact); err != nil {
+		return fmt.Errorf("清空 exact 失败: %w", err)
+	}
+	// 2. 清空 prefixes
+	if err := clearMap(p.objs.SensitivePrefixes); err != nil {
+		return fmt.Errorf("清空 prefixes 失败: %w", err)
+	}
+
+	// 3. 写入 exact
+	var val uint8 = 1
+	for _, path := range exactPaths {
+		if len(path) > 255 {
+			return fmt.Errorf("路径超长（>255）: %s", path)
+		}
+		var key [256]byte
+		copy(key[:], path)
+		if err := p.objs.SensitiveExact.Put(&key, &val); err != nil {
+			return fmt.Errorf("写入 exact 失败 [%s]: %w", path, err)
+		}
+	}
+
+	// 4. 写入 prefixes（LPM key: 4字节 prefixlen + 256字节 path）
+	for _, path := range prefixPaths {
+		if len(path) > 255 {
+			return fmt.Errorf("路径超长（>255）: %s", path)
+		}
+		keyBytes := make([]byte, 4+256)
+		// prefixlen = len(path) * 8 bit（小端）
+		prefixLen := uint32(len(path) * 8)
+		keyBytes[0] = byte(prefixLen)
+		keyBytes[1] = byte(prefixLen >> 8)
+		keyBytes[2] = byte(prefixLen >> 16)
+		keyBytes[3] = byte(prefixLen >> 24)
+		copy(keyBytes[4:], path)
+
+		if err := p.objs.SensitivePrefixes.Put(keyBytes, &val); err != nil {
+			return fmt.Errorf("写入 prefix 失败 [%s]: %w", path, err)
+		}
+	}
+
+	return nil
+}
+
+// clearMap 清空 map（遍历删除所有 key）
+func clearMap(m *ebpf.Map) error {
+	var key [256]byte
+	var value uint8
+	iter := m.Iterate()
+	var toDelete [][256]byte
+	for iter.Next(&key, &value) {
+		k := key // 拷贝
+		toDelete = append(toDelete, k)
+	}
+	if err := iter.Err(); err != nil {
+		return err
+	}
+	for _, k := range toDelete {
+		if err := m.Delete(&k); err != nil {
 			return err
 		}
 	}

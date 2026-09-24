@@ -79,6 +79,38 @@ struct {
 } sentinel_whitelist SEC(".maps");
 
 // ============================================
+// 敏感路径动态规则（file_access 使用）
+//
+// 双 map 设计原因：
+//   LPM_TRIE 的 prefixlen 是"要求查询串至少有这么多位"。
+//   精确路径 "/etc/shadow"（11字节）若存为含 \0 的 96 位前缀，
+//   查询时只有 88 位 → 永远匹配不上 → 漏报。
+//   故精确匹配用 HASH，前缀匹配用 LPM_TRIE。
+// ============================================
+
+// 精确匹配（用户选"监控文件"）
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 1024);
+    __type(key, char[256]);
+    __type(value, __u8);
+} sensitive_exact SEC(".maps");
+
+// 前缀匹配（用户选"监控目录"，路径以 / 结尾）
+struct lpm_path_key {
+    __u32 prefixlen;   // 前缀 bit 数（path_len * 8）
+    char  path[256];   // 路径
+} __attribute__((packed));
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
+    __uint(max_entries, 1024);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
+    __type(key, struct lpm_path_key);
+    __type(value, __u8);
+} sensitive_prefixes SEC(".maps");
+
+// ============================================
 // Ring Buffer（所有探针共用）
 // ============================================
 struct {

@@ -13,35 +13,36 @@ struct {
 } file_events SEC(".maps");
 
 // ============================================
-// 敏感路径前缀匹配（C 层快速过滤）
+// 敏感路径匹配（动态 map）
+//
+// 1. 精确匹配：sensitive_exact (HASH)
+// 2. 前缀匹配：sensitive_prefixes (LPM_TRIE)
 // ============================================
 static __always_inline int is_sensitive_path(const char *filename) {
     if (!filename) return 0;
-    
-    // 敏感路径前缀列表（可后续改为 Map 动态下发）
-    static const char *sensitive_prefixes[] = {
-        "/etc/shadow",
-        "/etc/passwd",
-        "/etc/sudoers",
-        "/root/.ssh",
-        "/home/",
-        "/var/log/auth",
-    };
-    
-    char path[64] = {};
-    bpf_probe_read_user_str(path, 64, filename);
-    
-    for (int i = 0; i < 6; i++) {
-        int matched = 1;
-        for (int j = 0; j < 64; j++) {
-            if (sensitive_prefixes[i][j] == '\0') break;
-            if (path[j] != sensitive_prefixes[i][j]) {
-                matched = 0;
-                break;
-            }
-        }
-        if (matched) return 1;
+
+    // 只用一块 buffer（BPF 栈上限 512 字节）
+    // lpm.path 同时用于 exact 查询（HASH 的 key 也是 char[256]）
+    struct lpm_path_key lpm = {};
+    long n = bpf_probe_read_user_str(lpm.path, sizeof(lpm.path), filename);
+    if (n <= 0) {
+        return 0;
     }
+    lpm.path[255] = '\0';
+
+    // 1. 精确匹配（HASH）：用 lpm.path 作为 key
+    __u8 *exact_hit = bpf_map_lookup_elem(&sensitive_exact, lpm.path);
+    if (exact_hit && *exact_hit == 1) {
+        return 1;
+    }
+
+    // 2. 前缀匹配（LPM_TRIE）
+    lpm.prefixlen = sizeof(lpm.path) * 8;  // 最大 bit 数，内核找最长匹配
+    __u8 *prefix_hit = bpf_map_lookup_elem(&sensitive_prefixes, &lpm);
+    if (prefix_hit && *prefix_hit == 1) {
+        return 1;
+    }
+
     return 0;
 }
 
