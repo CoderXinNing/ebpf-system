@@ -109,8 +109,8 @@
                   <span class="evt-time">+{{ formatRelTime(evt.timestamp, group.firstTs) }}</span>
                   <span class="evt-icon">{{ getEventIcon(evt.event_type) }}</span>
                   <span class="evt-title">{{ getEventTitle(evt) }}</span>
-                  <span class="evt-target" :title="evt.filename || evt.details">
-                    {{ truncate(evt.filename || evt.details || '', 40) }}
+                  <span class="evt-target" :title="getEventTarget(evt)">
+                    {{ truncate(getEventTarget(evt), 80) }}
                   </span>
                   <n-tag v-if="evt.count > 1" size="tiny" type="warning">x{{ evt.count }}</n-tag>
                 </div>
@@ -333,6 +333,26 @@ function getEventType(t: string): 'success' | 'warning' | 'error' | 'info' {
 function getEventTitle(evt: any): string {
   const m: Record<string, string> = { execve: '进程执行', file_access: '文件访问', tcp_connect: '网络连接', bash_input: 'Shell命令', xdp_alert: 'XDP告警' }
   return m[evt.event_type] || evt.event_type
+}
+
+// getEventTarget 返回事件的关键内容（用于时间线展示）
+//   - execve：Agent 上报的 filename 固定是 "execve"，真实命令在 details
+//   - bash_input：details 是命令行
+//   - 其他：优先 filename
+function getEventTarget(evt: any): string {
+  let s = ''
+  if (evt.event_type === 'execve' || evt.event_type === 'bash_input') {
+    s = evt.details || evt.filename || ''
+  } else {
+    s = evt.filename || evt.details || ''
+  }
+  // details 可能是 JSON 字符串（带引号），去掉首尾引号
+  if (s.startsWith('"') && s.endsWith('"')) {
+    s = s.slice(1, -1)
+  }
+  // 可能还有转义引号
+  s = s.replace(/\\"/g, '"')
+  return s
 }
 
 function getEventIcon(t: string): string {
