@@ -3,8 +3,9 @@ package plugins
 import (
 	"log"
 
-	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
+	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 )
 
 // BashProbe 是 V3 bash 探针的适配器
@@ -60,3 +61,13 @@ func (p *BashProbe) Stop() error {
 }
 
 var _ framework.Probe = (*BashProbe)(nil)
+
+// PreCheck bash_monitor 环境预检查：依赖 CO-RE（BTF）。
+func (p *BashProbe) PreCheck(caps *probe.AgentCapabilities) error {
+	if err := framework.CommonPreCheck(caps); err != nil {
+		return framework.WrapReason("bash_monitor", err.Error())
+	}
+	return nil
+}
+
+var _ framework.PreChecker = (*BashProbe)(nil)

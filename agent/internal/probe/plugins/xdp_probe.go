@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/exec"
 
+	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 )
@@ -88,3 +89,16 @@ func (p *XDPProbe) SelfTestAction(opts framework.SelfTestOptions) error {
 }
 
 var _ framework.SelfTester = (*XDPProbe)(nil)
+
+// PreCheck xdp_reporter 环境预检查：依赖 CO-RE（BTF）+ 物理网卡配置。
+func (p *XDPProbe) PreCheck(caps *probe.AgentCapabilities) error {
+	if err := framework.CommonPreCheck(caps); err != nil {
+		return framework.WrapReason("xdp_reporter", err.Error())
+	}
+	if p.cfg.Iface == "" {
+		return framework.WrapReason("xdp_reporter", "未配置网卡（xdp.iface）")
+	}
+	return nil
+}
+
+var _ framework.PreChecker = (*XDPProbe)(nil)

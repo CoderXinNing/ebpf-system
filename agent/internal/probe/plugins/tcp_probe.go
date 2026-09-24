@@ -9,6 +9,7 @@ import (
 
 	"github.com/cilium/ebpf"
 
+	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 )
@@ -103,3 +104,13 @@ func (p *TCPProbe) SelfTestAction(opts framework.SelfTestOptions) error {
 }
 
 var _ framework.SelfTester = (*TCPProbe)(nil)
+
+// PreCheck tcp_monitor 环境预检查：依赖 CO-RE（BTF）+ tracepoint。
+func (p *TCPProbe) PreCheck(caps *probe.AgentCapabilities) error {
+	if err := framework.CommonPreCheck(caps); err != nil {
+		return framework.WrapReason("tcp_monitor", err.Error())
+	}
+	return nil
+}
+
+var _ framework.PreChecker = (*TCPProbe)(nil)
