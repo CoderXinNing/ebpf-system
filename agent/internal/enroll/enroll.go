@@ -250,11 +250,18 @@ func readFirstMAC() string {
 
 // generateAgentConfig 生成 agent.toml
 func generateAgentConfig(path string, cfg Config, resp *enrollResponse) error {
-	// 从 ServerURL 提取 gRPC 地址
-	// http://172.16.2.145:8080 → 172.16.2.145:50051
-	grpcAddr := strings.TrimPrefix(cfg.ServerURL, "http://")
-	grpcAddr = strings.TrimPrefix(grpcAddr, "https://")
-	grpcAddr = strings.Split(grpcAddr, ":")[0] + ":50051"
+	// gRPC 地址：优先用 Server 回报的（含实际端口）
+	// 兜底：从 ServerURL 推导 + 默认端口 50051（兼容旧 Server）
+	grpcAddr := resp.GRPCAddr
+	if grpcAddr == "" {
+		host := strings.TrimPrefix(cfg.ServerURL, "http://")
+		host = strings.TrimPrefix(host, "https://")
+		host = strings.Split(host, ":")[0]
+		grpcAddr = host + ":50051"
+		log.Printf("⚠️ Server 未返回 grpc_addr，使用推导值: %s", grpcAddr)
+	} else {
+		log.Printf("✅ Server 返回 grpc_addr: %s", grpcAddr)
+	}
 
 	iface := detectIface()
 
