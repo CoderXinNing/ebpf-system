@@ -74,20 +74,23 @@ func (st *StarTrace) RemovePid(pid uint32) {
 
 // Matches 判断 pid 是否属于本星轨的追踪集合。
 //
-// 逻辑：
+// 逻辑（严格）：
 //  1. pid == RootPid → 命中
-//  2. pid ∈ Ancestors → 命中
-//  3. pid 向上追最多 10 层，路径上遇到 RootPid 或 Ancestors → 命中
+//  2. pid 向上追最多 10 层，路径上遇到 RootPid → 命中
 //
-// 性能：纯 Go map 查找，不用 eBPF map lookup。典型 < 1μs。
+// ⚠️ Ancestors 不参与匹配。
+// 原因：Ancestors 含高 fan-out 祖先（如 systemd --user）时，
+//
+//	祖先的所有后代（兄弟分支）会被误判为星轨成员 → 全机快照。
+//
+// Ancestors 仅作攻击链展示标签，不参与过滤。
+//
+// 性能：纯 Go map 查找。典型 < 1μs。
 func (st *StarTrace) Matches(pid uint32) bool {
 	if pid == 0 {
 		return false
 	}
 	if pid == st.RootPid {
-		return true
-	}
-	if st.Ancestors[pid] {
 		return true
 	}
 
@@ -102,7 +105,7 @@ func (st *StarTrace) Matches(pid uint32) bool {
 		if ppid == 0 || ppid == cur {
 			break
 		}
-		if ppid == st.RootPid || st.Ancestors[ppid] {
+		if ppid == st.RootPid {
 			hit = true
 			break
 		}
