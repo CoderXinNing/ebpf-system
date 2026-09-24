@@ -29,3 +29,9 @@ COMMENT ON TABLE agent_rules IS 'Agent 动态规则（敏感路径等），versi
 COMMENT ON COLUMN agent_rules.content IS '规则内容 JSONB（sensitive_paths 等）';
 COMMENT ON COLUMN agent_rules.sha256 IS 'canonical JSON 的 SHA256';
 COMMENT ON COLUMN agent_rules.signature IS 'CA 私钥对 sha256 的签名（base64）';
+
+-- ============================================
+-- 权限授权（应用连接用户 sentinel）
+-- ============================================
+GRANT SELECT, INSERT, UPDATE, DELETE ON agent_rules TO sentinel;
+GRANT USAGE, SELECT ON SEQUENCE agent_rules_id_seq TO sentinel;

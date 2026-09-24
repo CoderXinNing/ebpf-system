@@ -14,6 +14,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/alert"
 	"github.com/CoderXinNing/ebpf-system/server/internal/handler"
 	"github.com/CoderXinNing/ebpf-system/server/internal/middleware"
+	"github.com/CoderXinNing/ebpf-system/server/internal/rulessvc"
 	"github.com/CoderXinNing/ebpf-system/server/internal/service"
 	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 )
@@ -25,6 +26,7 @@ type Service struct {
 	agentAuth   *middleware.AgentAuthInterceptor
 	starService *service.StarActivationService
 	alertEngine *alert.Engine
+	rulesSvc    *rulessvc.Service
 }
 
 func NewService(h *handler.Handler, auth *middleware.AgentAuthInterceptor) *Service {
@@ -33,6 +35,11 @@ func NewService(h *handler.Handler, auth *middleware.AgentAuthInterceptor) *Serv
 		agentAuth:   auth,
 		starService: service.NewStarActivationService(),
 	}
+}
+
+// SetRulesService 注入规则服务（由 main 注入）
+func (s *Service) SetRulesService(svc *rulessvc.Service) {
+	s.rulesSvc = svc
 }
 
 // SetAlertEngine 设置告警引擎（由 main 注入）

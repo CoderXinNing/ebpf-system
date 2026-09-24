@@ -25,6 +25,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/paths"
 	"github.com/CoderXinNing/ebpf-system/server/internal/repository/psql"
 	"github.com/CoderXinNing/ebpf-system/server/internal/repository/sqlite"
+	"github.com/CoderXinNing/ebpf-system/server/internal/rulessvc"
 	"github.com/CoderXinNing/ebpf-system/server/internal/udp"
 	"github.com/CoderXinNing/ebpf-system/server/internal/ws"
 	"github.com/gin-gonic/gin"
@@ -358,7 +359,25 @@ func main() {
 	agentAuth := middleware.NewAgentAuthInterceptor()
 
 	// gRPC Service
+	// 规则服务（CA 签名 + DB 存储）
+	var rulesSvc *rulessvc.Service
+	if psqlDB != nil {
+		var err error
+		rulesSvc, err = rulessvc.New(psqlDB, paths.Cert("ca.key"))
+		if err != nil {
+			log.Printf("⚠️ 规则服务初始化失败: %v（规则下发不可用）", err)
+		} else {
+			// 首次启动自举默认规则
+			if err := rulesSvc.EnsureDefault(context.Background()); err != nil {
+				log.Printf("⚠️ 默认规则自举失败: %v", err)
+			}
+		}
+	}
+
 	grpcSvc := grpcservice.NewService(h, agentAuth)
+	if rulesSvc != nil {
+		grpcSvc.SetRulesService(rulesSvc)
+	}
 
 	// 从 DB 加载已有 Agent（Server 重启后恢复内存状态）
 	// 注入 gRPC 端口给 Handler（enrollment 时回报给 Agent）

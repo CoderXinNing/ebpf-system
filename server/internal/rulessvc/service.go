@@ -94,7 +94,7 @@ func (s *Service) EnsureDefault(ctx context.Context) error {
 			PrefixPaths: []string{
 				"/root/.ssh/",
 				"/home/",
-				"/var/log/auth",
+				"/var/log/auth/",
 			},
 		},
 	}
