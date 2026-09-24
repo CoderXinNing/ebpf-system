@@ -54,15 +54,42 @@ done
 # ============================================
 # 检查
 # ============================================
-# root 检查：非 root 时自动 sudo 重试
+# ============================================
+# root 权限检查
+# ============================================
+# 三种安装方式：
+#   1. Server 接管：命令由 root 通道注入，设 SKIP_SUDO_CHECK=1 跳过
+#   2. 一键安装：curl | bash —— 管道场景，提示手动加 sudo（不自动提权）
+#   3. 手动下载：本地文件 —— 自动 sudo 重试，体验友好
 if [[ $EUID -ne 0 ]]; then
-    if command -v sudo &> /dev/null; then
-        echo "🔐 需要 root 权限，自动 sudo 重试..."
-        exec sudo bash "$0" "$@"
-    else
-        echo "❌ 请用 root 运行（sudo bash）"
+    # 场景 1：Server 接管，调用方声明"已在 root 环境"
+    if [[ "${SKIP_SUDO_CHECK:-0}" == "1" ]]; then
+        echo "❌ SKIP_SUDO_CHECK=1 但当前非 root，无法继续"
         exit 1
     fi
+
+    if ! command -v sudo &> /dev/null; then
+        echo "❌ 需要 root 权限，且系统未安装 sudo"
+        exit 1
+    fi
+
+    # 场景 2：管道运行（$0 为 bash/-bash）—— 提示手动 sudo，不自动提权
+    if [[ "$0" == "bash" || "$0" == "-bash" ]]; then
+        echo "❌ 通过管道运行时需显式 sudo（安全考虑，不自动提权）："
+        echo ""
+        echo "   curl -sSL http://<server>:8080/install.sh | sudo bash -s -- \\"
+        echo "     --server=http://<server>:8080 \\"
+        echo "     --token=ATK-xxxx"
+        echo ""
+        echo "   或先下载再执行："
+        echo "   curl -sSL http://<server>:8080/install.sh -o install.sh"
+        echo "   sudo bash install.sh --server=... --token=..."
+        exit 1
+    fi
+
+    # 场景 3：本地文件 —— 自动 sudo 重试
+    echo "🔐 需要 root 权限，自动 sudo 重试..."
+    exec sudo bash "$0" "$@"
 fi
 
 if [[ -z "$SERVER_URL" ]] || [[ -z "$TOKEN" ]]; then
