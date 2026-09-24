@@ -3,3 +3,5 @@ bin/
 proto/split/*.pb.go
 agent/data/agent.id
 server/static/agent-linux-amd64
+certs/
+.bak-cert-*/
