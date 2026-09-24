@@ -1,11 +1,13 @@
 package plugins
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"os/exec"
 
-	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 )
 
 // XDPProbe V3 XDP 探针适配器
@@ -62,3 +64,27 @@ func (p *XDPProbe) Stop() error {
 }
 
 var _ framework.Probe = (*XDPProbe)(nil)
+
+func (p *XDPProbe) SelfTestAction(opts framework.SelfTestOptions) error {
+	gw := getDefaultGateway()
+	if gw == "" {
+		gw = opts.XDPFallbackTarget
+		if gw == "" {
+			gw = "8.8.8.8"
+		}
+	}
+	cmd := exec.Command("bash", "-c",
+		"exec -a agent-selftest ping -c1 -W1 "+gw)
+	err := cmd.Run()
+	if err == nil {
+		return nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		log.Printf("🔬 [SELFTEST][EXPECTED] XDP 自检 ping 未通 (exit=%d)", exitErr.ExitCode())
+		return nil
+	}
+	return fmt.Errorf("%w: %v", framework.ErrSelfTestActionFailed, err)
+}
+
+var _ framework.SelfTester = (*XDPProbe)(nil)

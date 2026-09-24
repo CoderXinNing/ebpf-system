@@ -31,3 +31,11 @@ enabled = true
 iface = "ens33"
 server_ip = "172.16.2.141"
 server_port = 9999
+
+[selftest]
+enabled = true
+interval_minutes = 5
+wait_seconds = 3
+tcp_target = "127.0.0.1:1"
+xdp_fallback_target = "8.8.8.8"
+file_target = "/etc/passwd"

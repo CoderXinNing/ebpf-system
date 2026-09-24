@@ -33,6 +33,11 @@ const router = createRouter({
       component: () => import('../views/AssetView.vue'),
     },
     {
+      path: '/probes',
+      name: 'Probes',
+      component: () => import('../views/ProbeView.vue'),
+    },
+    {
       path: '/whitelist',
       name: 'Whitelist',
       component: () => import('../views/WhitelistView.vue'),

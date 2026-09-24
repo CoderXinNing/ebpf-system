@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cilium/ebpf"
-	ciliumebpf "github.com/cilium/ebpf"
+	"crypto/tls"
+	"crypto/x509"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/actor"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/baseline"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
@@ -20,8 +20,8 @@ import (
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/plugins"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
-	"crypto/tls"
-	"crypto/x509"
+	"github.com/cilium/ebpf"
+	ciliumebpf "github.com/cilium/ebpf"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -32,16 +32,16 @@ const AgentVersion = "1.0.0"
 
 type Agent struct {
 	id, hostname, kernelVer, ipAddr, token string
-	level        string
-	cfg          *config.AgentConfig
-	capabilities *probe.AgentCapabilities
-	conn         *grpc.ClientConn
-	client       pb.SentinelClient
+	level                                  string
+	cfg                                    *config.AgentConfig
+	capabilities                           *probe.AgentCapabilities
+	conn                                   *grpc.ClientConn
+	client                                 pb.SentinelClient
 
 	// 并发安全组件
-	probeStateActor *actor.Actor      // 状态收敛
-	probeState      *ProbeState       // 缓存引用（只读，心跳非阻塞用）
-	eventQueue      *EventQueue       // 非阻塞事件队列
+	probeStateActor *actor.Actor // 状态收敛
+	probeState      *ProbeState  // 缓存引用（只读，心跳非阻塞用）
+	eventQueue      *EventQueue  // 非阻塞事件队列
 	baseline        *baseline.BaselineEngine
 	probeManager    *framework.Manager // 探针管理器
 
@@ -63,6 +63,9 @@ type Agent struct {
 
 	// 观察等级管理器
 	observationMgr *ObservationManager
+
+	// 自检事件埋点（sync.Map + atomic，热路径零分配）
+	probeEventTracker *probeEventTracker
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -110,6 +113,9 @@ func New(cfg *config.AgentConfig) *Agent {
 
 	// 初始化观察等级管理器
 	agent.observationMgr = NewObservationManager()
+
+	// 初始化自检事件埋点
+	agent.probeEventTracker = &probeEventTracker{}
 
 	// 初始化 TCP 突变检测器（默认配置，后续从配置文件读取）
 	agent.tcpAnomaly = NewTCPAnomalyDetector(
@@ -160,6 +166,23 @@ func (a *Agent) decideLevel() string {
 	}
 
 	return "basic"
+}
+
+// mapToProtoCapability 把 Agent 内部的能力分级映射为 proto/DB 语义。
+// 内部语义关注"环境能跑什么"，proto/DB 关注"最高技术栈"。
+// 两者值集不同，必须在边界处显式转换，否则会被 DB CHECK 约束拒绝。
+func mapToProtoCapability(level string) string {
+	switch level {
+	case "full":
+		return "xdp"
+	case "ebpf":
+		return "ebpf"
+	case "basic":
+		return "cmdb"
+	default:
+		// 保守兜底：未知级别按最低能力处理，避免静默失败
+		return "cmdb"
+	}
 }
 
 func (a *Agent) Run(ctx context.Context) {
@@ -213,6 +236,9 @@ func (a *Agent) Run(ctx context.Context) {
 			a.baseline.Persist()
 		}
 	}()
+
+	// 探针自检循环
+	go a.probeSelfTestLoop(ctx)
 
 	// TCP 突变检测循环
 	go a.tcpAnomalyLoop(ctx)
@@ -292,8 +318,8 @@ func (a *Agent) register() error {
 			BpftraceAvailable: fw.BpftraceAvailable, ClangAvailable: fw.ClangAvailable,
 			LlvmAvailable: fw.LLVMAvailable, KernelHeadersAvailable: fw.KernelHeadersAvailable, GoEbpfAvailable: fw.GoEBPFAvailable,
 		},
-		KernelInfo: &pb.KernelInfo{Version: a.capabilities.KernelVersion, Arch: a.capabilities.Arch, BtfEnabled: a.capabilities.BTFEnabled},
-		CapabilityLevel: a.level,
+		KernelInfo:      &pb.KernelInfo{Version: a.capabilities.KernelVersion, Arch: a.capabilities.Arch, BtfEnabled: a.capabilities.BTFEnabled},
+		CapabilityLevel: mapToProtoCapability(a.level),
 		ActiveProbes:    int32(len(a.cfg.Autoload)),
 	}
 
@@ -506,6 +532,13 @@ func (a *Agent) registerProbePlugins() {
 	a.probeManager.Register(plugins.NewXDPProbe(
 		v3_loader.XDPConfig{Iface: a.cfg.XDP.Iface, Mode: a.cfg.XDP.Mode},
 		func(pid uint32, comm string, details string) {
+			// XDP 事件埋点
+			// ⚠️ TODO(P0): 当前 XDP C 层全量 ringbuf_submit，无过滤/采样
+			// 本埋点频率 = 网卡收包频率，在 C 层加过滤前属于热路径
+			// 见待办：[P0] XDP 探针 C 层缺过滤/采样
+			// 自检语义局限：LastEventAt 高频刷新，XDP 自检只能证明通路活着，
+			//              不能精确验证"捕获到了本次自检动作"
+			a.markProbeEvent("xdp_reporter")
 			// XDP 是无进程事件（PID=0），只上报摘要
 			a.eventQueue.Push(&pb.ProbeEvent{
 				ProbeName: "xdp",
@@ -555,6 +588,7 @@ func (a *Agent) getPidPpidMap() *ebpf.Map {
 }
 
 func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string, correlationKey uint64) {
+	a.markProbeEvent("exec_monitor")
 	// 星轨激活时统一用 starCorrelationID
 	var localCorrID string
 	if a.starCorrelationID != "" {
@@ -565,15 +599,15 @@ func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string, corre
 
 	// 上报事件
 	a.eventQueue.Push(&pb.ProbeEvent{
-		ProbeName:       "execve",
-		Timestamp:       time.Now().Unix(),
-		EventType:       "execve",
-		Pid:             int32(pid),
-		Comm:            comm,
-		Filename:        "execve",
-		Details:         cmdline,
-		CorrelationKey:  correlationKey,
-		CorrelationId:   localCorrID,
+		ProbeName:      "execve",
+		Timestamp:      time.Now().Unix(),
+		EventType:      "execve",
+		Pid:            int32(pid),
+		Comm:           comm,
+		Filename:       "execve",
+		Details:        cmdline,
+		CorrelationKey: correlationKey,
+		CorrelationId:  localCorrID,
 	}, PriorityNormal)
 
 	if localCorrID != "" {
@@ -582,6 +616,7 @@ func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string, corre
 }
 
 func (a *Agent) handleFileEventV3(pid uint32, comm string, filename string, correlationKey uint64) {
+	a.markProbeEvent("file_access")
 	log.Printf("🔔 V3 file_access 事件: PID=%d COMM=%s FILE=%s", pid, comm, filename)
 
 	// 总是尝试向上查父进程，看是否有更早的 correlation_id
@@ -604,15 +639,15 @@ func (a *Agent) handleFileEventV3(pid uint32, comm string, filename string, corr
 
 	// 上报事件
 	a.eventQueue.Push(&pb.ProbeEvent{
-		ProbeName:       "file_access",
-		Timestamp:       time.Now().Unix(),
-		EventType:       "file_access",
-		Pid:             int32(pid),
-		Comm:            comm,
-		Filename:        filename,
-		Details:         filename,
-		CorrelationKey:  correlationKey,
-		CorrelationId:   localCorrID,
+		ProbeName:      "file_access",
+		Timestamp:      time.Now().Unix(),
+		EventType:      "file_access",
+		Pid:            int32(pid),
+		Comm:           comm,
+		Filename:       filename,
+		Details:        filename,
+		CorrelationKey: correlationKey,
+		CorrelationId:  localCorrID,
 	}, PriorityHigh)
 
 	if localCorrID != "" {
@@ -629,6 +664,7 @@ func (a *Agent) handleBashEventV3(pid uint32, comm string, line string, correlat
 		return
 	}
 
+	a.markProbeEvent("bash_monitor")
 	log.Printf("🔔 V3 bash 事件: PID=%d COMM=%s CMD=%s", pid, comm, line)
 
 	var localCorrID string
@@ -639,19 +675,20 @@ func (a *Agent) handleBashEventV3(pid uint32, comm string, line string, correlat
 	}
 
 	a.eventQueue.Push(&pb.ProbeEvent{
-		ProbeName:       "bash_input",
-		Timestamp:       time.Now().Unix(),
-		EventType:       "bash_input",
-		Pid:             int32(pid),
-		Comm:            comm,
-		Filename:        "bash_input",
-		Details:         line,
-		CorrelationKey:  correlationKey,
-		CorrelationId:   localCorrID,
+		ProbeName:      "bash_input",
+		Timestamp:      time.Now().Unix(),
+		EventType:      "bash_input",
+		Pid:            int32(pid),
+		Comm:           comm,
+		Filename:       "bash_input",
+		Details:        line,
+		CorrelationKey: correlationKey,
+		CorrelationId:  localCorrID,
 	}, PriorityNormal)
 }
 
 func (a *Agent) handleTCPEventV3(pid uint32, comm string, count uint64, dstIP uint32, dstPort uint16) {
+	a.markProbeEvent("tcp_monitor")
 	a.probeStateActor.Send(msgIncrementBaseline{key: strings.TrimRight(comm, "") + ":tcp_count"})
 
 	var correlationKey uint64
@@ -670,15 +707,15 @@ func (a *Agent) handleTCPEventV3(pid uint32, comm string, count uint64, dstIP ui
 	target := fmt.Sprintf("%s:%d", dstIPStr, dstPort)
 
 	a.eventQueue.Push(&pb.ProbeEvent{
-		ProbeName:       "tcp_connect",
-		Timestamp:       time.Now().Unix(),
-		EventType:       "tcp_connect",
-		Pid:             int32(pid),
-		Comm:            strings.TrimRight(comm, ""),
-		Filename:        target,
-		Details:         fmt.Sprintf("外联x%d次 → %s", count, target),
-		CorrelationKey:  correlationKey,
-		CorrelationId:   localCorrID,
+		ProbeName:      "tcp_connect",
+		Timestamp:      time.Now().Unix(),
+		EventType:      "tcp_connect",
+		Pid:            int32(pid),
+		Comm:           strings.TrimRight(comm, ""),
+		Filename:       target,
+		Details:        fmt.Sprintf("外联x%d次 → %s", count, target),
+		CorrelationKey: correlationKey,
+		CorrelationId:  localCorrID,
 	}, PriorityNormal)
 }
 
@@ -870,7 +907,7 @@ func (a *Agent) reportMutationEnd(corrID string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	resp, err := a.client.ReportMutation(a.getAuthContext(ctx), &pb.MutationTrigger{
 		AgentId:     a.id,
 		Pid:         0, // MutationEnd 无特定 PID

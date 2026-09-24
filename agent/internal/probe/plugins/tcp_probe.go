@@ -1,13 +1,16 @@
 package plugins
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"os/exec"
+	"strings"
 
 	"github.com/cilium/ebpf"
 
-	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 )
 
 // TCPProbe 是 V3 TCP 探针的适配器
@@ -76,3 +79,27 @@ func (p *TCPProbe) SetCollectMode(mode uint64) error {
 	}
 	return p.probe.SetCollectMode(mode)
 }
+
+func (p *TCPProbe) SelfTestAction(opts framework.SelfTestOptions) error {
+	target := opts.TCPTarget
+	if target == "" {
+		target = "127.0.0.1:1"
+	}
+	hostPort := strings.Replace(target, ":", "/", 1)
+	script := fmt.Sprintf(
+		"exec -a agent-selftest bash -c 'exec 3<>/dev/tcp/%s' 2>/dev/null",
+		hostPort)
+	cmd := exec.Command("bash", "-c", script)
+	err := cmd.Run()
+	if err == nil {
+		return nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		log.Printf("🔬 [SELFTEST][EXPECTED] TCP 自检连接被拒 (exit=%d)", exitErr.ExitCode())
+		return nil
+	}
+	return fmt.Errorf("%w: %v", framework.ErrSelfTestActionFailed, err)
+}
+
+var _ framework.SelfTester = (*TCPProbe)(nil)

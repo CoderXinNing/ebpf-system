@@ -95,6 +95,7 @@ const menuOptions = [
   { label: '攻击链', key: '/star' },
   { label: '告警', key: '/alerts' },
   { label: '资产', key: '/assets' },
+  { label: '探针', key: '/probes' },
   { label: '白名单', key: '/whitelist' },
   { label: '部署', key: '/deploy' },
   { label: '设置', key: '/settings' },
