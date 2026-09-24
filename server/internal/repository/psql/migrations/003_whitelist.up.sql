@@ -16,3 +16,7 @@ CREATE TABLE IF NOT EXISTS whitelist (
 CREATE INDEX IF NOT EXISTS idx_whitelist_process_name ON whitelist(process_name);
 
 COMMENT ON TABLE whitelist IS '进程白名单（用户干预最高优先级）';
+
+-- 权限授权（防御性：应用用户 sentinel）
+GRANT SELECT, INSERT, UPDATE, DELETE ON whitelist TO sentinel;
+GRANT USAGE, SELECT ON SEQUENCE whitelist_id_seq TO sentinel;

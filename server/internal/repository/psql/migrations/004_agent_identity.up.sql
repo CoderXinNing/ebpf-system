@@ -74,3 +74,12 @@ CREATE INDEX IF NOT EXISTS idx_enrollment_tokens_expires ON enrollment_tokens(ex
 --   - 事务 + SELECT FOR UPDATE
 --   - 成功即 revoke
 -- ============================================
+
+-- ============================================
+-- 权限授权（防御性：应用用户 sentinel）
+-- ============================================
+GRANT SELECT, INSERT, UPDATE, DELETE ON enrollment_tokens TO sentinel;
+GRANT USAGE, SELECT ON SEQUENCE enrollment_tokens_id_seq TO sentinel;
+
+-- agents 表在 001 建（owner=sentinel），这里仅加防御性授权
+GRANT SELECT, INSERT, UPDATE, DELETE ON agents TO sentinel;
