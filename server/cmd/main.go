@@ -12,12 +12,11 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/gin-gonic/gin"
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/alert"
+	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
 	"github.com/CoderXinNing/ebpf-system/server/internal/build"
 	"github.com/CoderXinNing/ebpf-system/server/internal/ca"
-	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
 	"github.com/CoderXinNing/ebpf-system/server/internal/grpcservice"
 	"github.com/CoderXinNing/ebpf-system/server/internal/handler"
 	"github.com/CoderXinNing/ebpf-system/server/internal/middleware"
@@ -26,6 +25,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/repository/sqlite"
 	"github.com/CoderXinNing/ebpf-system/server/internal/udp"
 	"github.com/CoderXinNing/ebpf-system/server/internal/ws"
+	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -120,170 +120,180 @@ func main() {
 		h = handler.NewHandlerWithNilStore(am, nil)
 		if psqlDB != nil {
 			h.SetSaveAssetFunc(func(agentID string, processesJSON, usersJSON, systemJSON []byte) error {
-		log.Printf("DEBUG: SaveAssetFunc processes=%d bytes users=%d bytes system=%d bytes", len(processesJSON), len(usersJSON), len(systemJSON))
-		return psqlDB.SaveAsset(context.Background(), agentID, processesJSON, usersJSON, systemJSON)
-	})
-	h.SetSettingCallbacks(
-		func(key string) (string, error) {
-			return psqlDB.GetLogSetting(context.Background(), key)
-		},
-		func(key, value string) error {
-			return psqlDB.SetLogSetting(context.Background(), key, value)
-		},
-		func() (map[string]string, error) {
-			return psqlDB.ListSettings(context.Background())
-		},
-	)
-	// 加载 CA
-	caInstance, err := ca.Load("certs/ca.crt", "certs/ca.key")
-	if err != nil {
-		log.Printf("⚠️ CA 加载失败: %v（enrollment 不可用）", err)
-	} else {
-		h.CACertPEM = caInstance.CertPEM()
-		h.ComputeAgentIDFunc = ca.ComputeAgentID
-		h.SignCSRFunc = func(csrPEM []byte, agentID string, ttlHours int) ([]byte, string, time.Time, error) {
-			if ttlHours <= 0 {
-				ttlHours = cfg.TLS.CertificateTTLHours
-				if ttlHours <= 0 {
-					ttlHours = 8760
-				}
-			}
-			return caInstance.SignCSR(csrPEM, agentID, time.Duration(ttlHours)*time.Hour)
-		}
-		h.EnrollAgentFunc = func(req handler.EnrollRequest) (*handler.EnrollResult, error) {
-			res, err := psqlDB.EnrollAgent(context.Background(), psql.EnrollRequest{
-				Token:        req.Token,
-				AgentID:      req.AgentID,
-				Hostname:     req.Hostname,
-				IPAddr:       req.IPAddr,
-				MachineID:    req.MachineID,
-				MAC:          req.MAC,
-				PublicKeyDER: req.PublicKeyDER,
+				log.Printf("DEBUG: SaveAssetFunc processes=%d bytes users=%d bytes system=%d bytes", len(processesJSON), len(usersJSON), len(systemJSON))
+				return psqlDB.SaveAsset(context.Background(), agentID, processesJSON, usersJSON, systemJSON)
 			})
-			if err != nil {
-				return nil, err
+			h.SetSettingCallbacks(
+				func(key string) (string, error) {
+					return psqlDB.GetLogSetting(context.Background(), key)
+				},
+				func(key, value string) error {
+					return psqlDB.SetLogSetting(context.Background(), key, value)
+				},
+				func() (map[string]string, error) {
+					return psqlDB.ListSettings(context.Background())
+				},
+			)
+			// 证书初始化（首次运行自动生成 CA + Server 证书；旧品牌 CA 会报错退出）
+			if _, err := ca.Bootstrap(ca.BootstrapOptions{
+				Dir:               "certs",
+				ServerCommonName:  "localhost",
+				ServerDNSNames:    []string{"localhost", "*.localhost"},
+				ServerIPAddresses: collectLocalIPs(),
+			}); err != nil {
+				log.Fatalf("❌ 证书初始化失败: %v", err)
 			}
-			return &handler.EnrollResult{
-				AgentID:   res.AgentID,
-				GroupID:   res.GroupID,
-				GroupName: res.GroupName,
-			}, nil
-		}
-		h.UpdateAgentCertFunc = func(agentID, serial string, expiresAt time.Time) error {
-			return psqlDB.UpdateAgentCert(context.Background(), agentID, serial, expiresAt)
-		}
-		h.GetAgentPublicKeyHashFunc = func(agentID string) ([]byte, error) {
-			return psqlDB.GetAgentPublicKeyHash(context.Background(), agentID)
-		}
-		h.RenewCertFunc = h.RenewCertHandler
-		h.RevokeAgentFunc = func(agentID string) error {
-			return psqlDB.RevokeAgent(context.Background(), agentID)
-		}
-		h.DeleteAgentFunc = func(agentID string) error {
-			return psqlDB.DeleteAgent(context.Background(), agentID)
-		}
-		h.ReloadAgentsFunc = func() (int, error) {
-			agents, err := psqlDB.ListAgents(context.Background(), nil)
-			if err != nil {
-				return 0, err
-			}
-			h.Mu.Lock()
-			h.Agents = make(map[string]*handler.AgentInfo)
-			for _, a := range agents {
-				h.Agents[a.ID] = &handler.AgentInfo{
-					ID:              a.ID,
-					Hostname:        a.Hostname,
-					IPAddr:          a.IPAddr,
-					Version:         a.Version,
-					CapabilityLevel: a.CapabilityLevel,
-					ActiveProbes:    a.ActiveProbes,
-					BaselineState:   a.BaselineState,
-					FirstSeen:       a.FirstSeen.Unix(),
-					LastSeen:        a.LastSeen.Unix(),
-					Commands:        make([]*pb.ProbeCommand, 0),
-				}
-			}
-			h.Mu.Unlock()
-			return len(agents), nil
-		}
-		h.GenerateTokenFunc = func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error) {
-			return psqlDB.GenerateToken(context.Background(), name, groupID, maxUses, time.Duration(ttlHours)*time.Hour, createdBy)
-		}
-		h.ListTokensFunc = func() ([]map[string]interface{}, error) {
-			tokens, err := psqlDB.ListTokens(context.Background())
-			if err != nil {
-				return nil, err
-			}
-			result := make([]map[string]interface{}, 0, len(tokens))
-			for _, t := range tokens {
-				result = append(result, map[string]interface{}{
-					"id":         t.ID,
-					"name":       t.Name,
-					"group_id":   t.GroupID,
-					"max_uses":   t.MaxUses,
-					"used_count": t.UsedCount,
-					"expires_at": t.ExpiresAt,
-					"created_by": t.CreatedBy,
-					"created_at": t.CreatedAt,
-					"revoked_at": t.RevokedAt,
-				})
-			}
-			return result, nil
-		}
-		h.RevokeTokenFunc = func(id int64) error {
-			return psqlDB.RevokeToken(context.Background(), id)
-		}
-		log.Println("✅ CA 已加载，enrollment 可用")
-	}
 
-	h.SetSaveTypedAssetFunc(func(agentID, assetType, assetName string, data interface{}) error {
-		return psqlDB.SaveTypedAsset(context.Background(), agentID, assetType, assetName, data)
-	})
-	h.SetGetAllAssetsFunc(func(agentID string) (map[string]interface{}, error) {
-		return psqlDB.GetAllAssets(context.Background(), agentID)
-	})
-	h.SetGetLatestAssetFunc(func(agentID string) (interface{}, interface{}, interface{}, error) {
-		processes, users, system, err := psqlDB.GetLatestAsset(context.Background(), agentID)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		return processes, users, system, nil
-	})
-	h.SetListStarEventsFunc(func(corrID string) ([]map[string]interface{}, error) {
-		events, err := psqlDB.ListEventsByCorrelationID(context.Background(), corrID)
-		if err != nil {
-			return nil, err
-		}
-		result := make([]map[string]interface{}, 0, len(events))
-		for _, evt := range events {
-			result = append(result, map[string]interface{}{
-				"id":             evt.ID,
-				"agent_id":       evt.AgentID,
-				"probe_name":     evt.ProbeName,
-				"event_type":     evt.EventType,
-				"pid":            evt.PID,
-				"comm":           evt.Comm,
-				"filename":       evt.Filename,
-				"details":        evt.Details,
-				"correlation_id": evt.CorrelationID,
-				"timestamp":      evt.Timestamp.Unix(),
+			// 加载 CA
+			caInstance, err := ca.Load("certs/ca.crt", "certs/ca.key")
+			if err != nil {
+				log.Printf("⚠️ CA 加载失败: %v（enrollment 不可用）", err)
+			} else {
+				h.CACertPEM = caInstance.CertPEM()
+				h.ComputeAgentIDFunc = ca.ComputeAgentID
+				h.SignCSRFunc = func(csrPEM []byte, agentID string, ttlHours int) ([]byte, string, time.Time, error) {
+					if ttlHours <= 0 {
+						ttlHours = cfg.TLS.CertificateTTLHours
+						if ttlHours <= 0 {
+							ttlHours = 8760
+						}
+					}
+					return caInstance.SignCSR(csrPEM, agentID, time.Duration(ttlHours)*time.Hour)
+				}
+				h.EnrollAgentFunc = func(req handler.EnrollRequest) (*handler.EnrollResult, error) {
+					res, err := psqlDB.EnrollAgent(context.Background(), psql.EnrollRequest{
+						Token:        req.Token,
+						AgentID:      req.AgentID,
+						Hostname:     req.Hostname,
+						IPAddr:       req.IPAddr,
+						MachineID:    req.MachineID,
+						MAC:          req.MAC,
+						PublicKeyDER: req.PublicKeyDER,
+					})
+					if err != nil {
+						return nil, err
+					}
+					return &handler.EnrollResult{
+						AgentID:   res.AgentID,
+						GroupID:   res.GroupID,
+						GroupName: res.GroupName,
+					}, nil
+				}
+				h.UpdateAgentCertFunc = func(agentID, serial string, expiresAt time.Time) error {
+					return psqlDB.UpdateAgentCert(context.Background(), agentID, serial, expiresAt)
+				}
+				h.GetAgentPublicKeyHashFunc = func(agentID string) ([]byte, error) {
+					return psqlDB.GetAgentPublicKeyHash(context.Background(), agentID)
+				}
+				h.RenewCertFunc = h.RenewCertHandler
+				h.RevokeAgentFunc = func(agentID string) error {
+					return psqlDB.RevokeAgent(context.Background(), agentID)
+				}
+				h.DeleteAgentFunc = func(agentID string) error {
+					return psqlDB.DeleteAgent(context.Background(), agentID)
+				}
+				h.ReloadAgentsFunc = func() (int, error) {
+					agents, err := psqlDB.ListAgents(context.Background(), nil)
+					if err != nil {
+						return 0, err
+					}
+					h.Mu.Lock()
+					h.Agents = make(map[string]*handler.AgentInfo)
+					for _, a := range agents {
+						h.Agents[a.ID] = &handler.AgentInfo{
+							ID:              a.ID,
+							Hostname:        a.Hostname,
+							IPAddr:          a.IPAddr,
+							Version:         a.Version,
+							CapabilityLevel: a.CapabilityLevel,
+							ActiveProbes:    a.ActiveProbes,
+							BaselineState:   a.BaselineState,
+							FirstSeen:       a.FirstSeen.Unix(),
+							LastSeen:        a.LastSeen.Unix(),
+							Commands:        make([]*pb.ProbeCommand, 0),
+						}
+					}
+					h.Mu.Unlock()
+					return len(agents), nil
+				}
+				h.GenerateTokenFunc = func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error) {
+					return psqlDB.GenerateToken(context.Background(), name, groupID, maxUses, time.Duration(ttlHours)*time.Hour, createdBy)
+				}
+				h.ListTokensFunc = func() ([]map[string]interface{}, error) {
+					tokens, err := psqlDB.ListTokens(context.Background())
+					if err != nil {
+						return nil, err
+					}
+					result := make([]map[string]interface{}, 0, len(tokens))
+					for _, t := range tokens {
+						result = append(result, map[string]interface{}{
+							"id":         t.ID,
+							"name":       t.Name,
+							"group_id":   t.GroupID,
+							"max_uses":   t.MaxUses,
+							"used_count": t.UsedCount,
+							"expires_at": t.ExpiresAt,
+							"created_by": t.CreatedBy,
+							"created_at": t.CreatedAt,
+							"revoked_at": t.RevokedAt,
+						})
+					}
+					return result, nil
+				}
+				h.RevokeTokenFunc = func(id int64) error {
+					return psqlDB.RevokeToken(context.Background(), id)
+				}
+				log.Println("✅ CA 已加载，enrollment 可用")
+			}
+
+			h.SetSaveTypedAssetFunc(func(agentID, assetType, assetName string, data interface{}) error {
+				return psqlDB.SaveTypedAsset(context.Background(), agentID, assetType, assetName, data)
 			})
-		}
-		return result, nil
-	})
-	h.SetListWhitelistFunc(func() ([]string, error) {
-		return psqlDB.ListWhitelist(context.Background())
-	})
-	h.SetAddWhitelistFunc(func(processName, reason string) error {
-		return psqlDB.AddWhitelist(context.Background(), processName, reason, "admin")
-	})
-	h.SetRemoveWhitelistFunc(func(processName string) error {
-		return psqlDB.RemoveWhitelist(context.Background(), processName)
-	})
-	h.SetUpdateAlertStatusFunc(func(ids []int64, status string) error {
-		return psqlDB.UpdateAlertStatus(context.Background(), ids, status)
-	})
-	h.SetListAlertsFunc(func(limit int) ([]map[string]interface{}, error) {
+			h.SetGetAllAssetsFunc(func(agentID string) (map[string]interface{}, error) {
+				return psqlDB.GetAllAssets(context.Background(), agentID)
+			})
+			h.SetGetLatestAssetFunc(func(agentID string) (interface{}, interface{}, interface{}, error) {
+				processes, users, system, err := psqlDB.GetLatestAsset(context.Background(), agentID)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				return processes, users, system, nil
+			})
+			h.SetListStarEventsFunc(func(corrID string) ([]map[string]interface{}, error) {
+				events, err := psqlDB.ListEventsByCorrelationID(context.Background(), corrID)
+				if err != nil {
+					return nil, err
+				}
+				result := make([]map[string]interface{}, 0, len(events))
+				for _, evt := range events {
+					result = append(result, map[string]interface{}{
+						"id":             evt.ID,
+						"agent_id":       evt.AgentID,
+						"probe_name":     evt.ProbeName,
+						"event_type":     evt.EventType,
+						"pid":            evt.PID,
+						"comm":           evt.Comm,
+						"filename":       evt.Filename,
+						"details":        evt.Details,
+						"correlation_id": evt.CorrelationID,
+						"timestamp":      evt.Timestamp.Unix(),
+					})
+				}
+				return result, nil
+			})
+			h.SetListWhitelistFunc(func() ([]string, error) {
+				return psqlDB.ListWhitelist(context.Background())
+			})
+			h.SetAddWhitelistFunc(func(processName, reason string) error {
+				return psqlDB.AddWhitelist(context.Background(), processName, reason, "admin")
+			})
+			h.SetRemoveWhitelistFunc(func(processName string) error {
+				return psqlDB.RemoveWhitelist(context.Background(), processName)
+			})
+			h.SetUpdateAlertStatusFunc(func(ids []int64, status string) error {
+				return psqlDB.UpdateAlertStatus(context.Background(), ids, status)
+			})
+			h.SetListAlertsFunc(func(limit int) ([]map[string]interface{}, error) {
 				alerts, err := psqlDB.ListAlerts(context.Background(), limit)
 				if err != nil {
 					return nil, err
@@ -325,16 +335,16 @@ func main() {
 			})
 			h.SetSaveEventFunc(func(evt handler.ProbeEvent) error {
 				return psqlDB.SaveEvent(context.Background(), &model.Event{
-					AgentID:    evt.AgentID,
-					ProbeName:  evt.ProbeName,
-					EventType:  evt.EventType,
-					PID:        int32(evt.PID),
-					Comm:       evt.Comm,
-					Filename:   evt.Filename,
-					Details:    evt.Details,
+					AgentID:       evt.AgentID,
+					ProbeName:     evt.ProbeName,
+					EventType:     evt.EventType,
+					PID:           int32(evt.PID),
+					Comm:          evt.Comm,
+					Filename:      evt.Filename,
+					Details:       evt.Details,
 					CorrelationID: evt.CorrelationID,
 					SourceChannel: "grpc",
-					Timestamp:  time.Unix(evt.Timestamp, 0),
+					Timestamp:     time.Unix(evt.Timestamp, 0),
 				})
 			})
 		}
@@ -565,7 +575,6 @@ func loadConfig(path string) *ServerConfig {
 	return &cfg
 }
 
-
 // loadAgentsFromDB 启动时从数据库加载 Agent 到内存
 // 目的：Server 重启后前端能看到已注册的主机
 // 说明：不恢复 token（DB 只存 hash），Agent 会通过重新注册获取新 token
@@ -600,4 +609,29 @@ func loadAgentsFromDB(h *handler.Handler, db *psql.PSQL) {
 		loaded++
 	}
 	log.Printf("📥 已从 DB 加载 %d 个 Agent 到内存", loaded)
+}
+
+// collectLocalIPs 收集本机 IP，用于 Server 证书的 SAN IP 字段。
+// 包含：127.0.0.1、::1，以及所有非 loopback 的 IPv4。
+// 用途：Server 证书 SAN IP 需匹配 Agent 实际连接的地址（如 172.16.2.145）。
+func collectLocalIPs() []string {
+	ips := []string{"127.0.0.1", "::1"}
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ips
+	}
+	for _, addr := range addrs {
+		ipnet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		ip := ipnet.IP
+		if ip.IsLoopback() {
+			continue
+		}
+		if v4 := ip.To4(); v4 != nil {
+			ips = append(ips, v4.String())
+		}
+	}
+	return ips
 }
