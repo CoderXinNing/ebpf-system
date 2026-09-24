@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
 )
 
 // CorrelationEntry 关联映射条目
@@ -88,9 +87,9 @@ func (m *ActiveCorrelationMap) evictOldest() {
 
 // GlobalCorrelationEntry 全局关联条目
 type GlobalCorrelationEntry struct {
-	GlobalID      string
-	LocalCorrIDs  map[string]bool // 多个 Agent 的 local_correlation_id
-	LastSeen      time.Time
+	GlobalID     string
+	LocalCorrIDs map[string]bool // 多个 Agent 的 local_correlation_id
+	LastSeen     time.Time
 }
 
 // GlobalCorrelationMap 跨主机全局关联池
@@ -137,16 +136,28 @@ func (m *GlobalCorrelationMap) Merge(dstIP string, dstPort uint16, localCorrID s
 	return globalID
 }
 
+// CorrPidEntry corrID → (agentID, pid) 反向索引条目
+type CorrPidEntry struct {
+	AgentID string
+	Pid     int32
+	SeenAt  time.Time
+}
+
 // StarActivationService 星轨激活服务
 type StarActivationService struct {
 	correlations *ActiveCorrelationMap
 	globalMap    *GlobalCorrelationMap
+
+	// corrToPid 反向索引：corrID → 触发进程。用于星轨激活时下发 root_pid
+	corrMu    sync.RWMutex
+	corrToPid map[string]CorrPidEntry
 }
 
 func NewStarActivationService() *StarActivationService {
 	return &StarActivationService{
 		correlations: NewActiveCorrelationMap(5000, 60*time.Second),
 		globalMap:    NewGlobalCorrelationMap(1000, 120*time.Second),
+		corrToPid:    make(map[string]CorrPidEntry),
 	}
 }
 
@@ -169,7 +180,43 @@ func (s *StarActivationService) MergeGlobal(dstIP string, dstPort uint16, localC
 // HandleMutation 处理 Agent 上报的突变触发
 func (s *StarActivationService) HandleMutation(agentID string, pid int32) string {
 	key := fmt.Sprintf("%s:pid_%d", agentID, pid)
-	return s.correlations.GetOrCreate(key)
+	corrID := s.correlations.GetOrCreate(key)
+
+	// 记录反向索引，供下发星轨激活命令时使用（携带 root_pid）
+	s.corrMu.Lock()
+	s.corrToPid[corrID] = CorrPidEntry{
+		AgentID: agentID,
+		Pid:     pid,
+		SeenAt:  time.Now(),
+	}
+	// 简单容量控制：超过 5000 条时清理最旧的
+	if len(s.corrToPid) > 5000 {
+		var oldestKey string
+		var oldestTime time.Time
+		for k, v := range s.corrToPid {
+			if oldestKey == "" || v.SeenAt.Before(oldestTime) {
+				oldestKey = k
+				oldestTime = v.SeenAt
+			}
+		}
+		if oldestKey != "" {
+			delete(s.corrToPid, oldestKey)
+		}
+	}
+	s.corrMu.Unlock()
+
+	return corrID
+}
+
+// GetPid 查询 corrID 对应的触发进程
+func (s *StarActivationService) GetPid(corrID string) (agentID string, pid int32, ok bool) {
+	s.corrMu.RLock()
+	defer s.corrMu.RUnlock()
+	v, exists := s.corrToPid[corrID]
+	if !exists {
+		return "", 0, false
+	}
+	return v.AgentID, v.Pid, true
 }
 
 // GetCorrelationID 查询某 key 的 correlation_id

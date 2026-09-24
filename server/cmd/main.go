@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -500,6 +501,12 @@ func main() {
 			if psqlDB != nil {
 				psqlDB.UpdateAlertCorrelationID(context.Background(), a.AgentID, a.RuleName, alertCorrID)
 			}
+			// 构造星轨激活 payload（含 root_pid，供 Agent 精准追踪）
+			starPayload, _ := json.Marshal(map[string]interface{}{
+				"corr_id":  corrID,
+				"root_pid": a.PID,
+			})
+
 			// 塞入 Agent 命令队列（下次心跳时下发）
 			if h != nil {
 				h.Mu.Lock()
@@ -507,9 +514,10 @@ func main() {
 					agent.Commands = append(agent.Commands, &pb.ProbeCommand{
 						Type:        pb.ProbeCommand_ACTIVATE_STAR,
 						ProbeName:   "tcp_monitor",
-						ProbeConfig: corrID,
+						ProbeConfig: string(starPayload),
 					})
-					log.Printf("📤 星轨激活命令已塞入 Agent %s 队列", a.AgentID)
+					log.Printf("📤 星轨激活命令已塞入 Agent %s 队列 (corr=%s root_pid=%d)",
+						a.AgentID, corrID, a.PID)
 				}
 				h.Mu.Unlock()
 			}
