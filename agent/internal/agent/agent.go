@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"crypto/tls"
@@ -48,9 +49,9 @@ type Agent struct {
 	// gRPC Metadata（token 鉴权）
 	authContext context.Context
 
-	// 星轨激活状态
-	starCorrelationID string
-	starMode          string
+	// 星轨激活状态（精准追踪，非全机快照）
+	starMu     sync.RWMutex
+	activeStar *StarTrace
 
 	// TCP 突变检测
 	tcpAnomaly *TCPAnomalyDetector
@@ -249,6 +250,9 @@ func (a *Agent) Run(ctx context.Context) {
 	// 观察等级降级循环（每 2 分钟检查一次）
 	go a.observationDowngradeLoop(ctx)
 
+	// 星轨进程树周期重建（每 60 秒）
+	go a.starRebuildLoop(ctx)
+
 	// 心跳循环（阻塞直到 ctx 被取消）
 	a.runHeartbeatLoopWithCtx(ctx)
 }
@@ -386,7 +390,7 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 	resp, err := a.client.ReportEvents(a.getAuthContext(ctx), &pb.EventReport{
 		AgentId:       a.id,
 		Events:        events,
-		CorrelationId: a.starCorrelationID,
+		CorrelationId: a.currentStarCorrID(),
 	})
 	if err != nil {
 		log.Printf("⚠️ 事件上报失败: %v", err)
@@ -589,13 +593,16 @@ func (a *Agent) getPidPpidMap() *ebpf.Map {
 
 func (a *Agent) handleExecEventV3(pid uint32, comm string, cmdline string, correlationKey uint64) {
 	a.markProbeEvent("exec_monitor")
-	// 星轨激活时统一用 starCorrelationID
-	var localCorrID string
-	if a.starCorrelationID != "" {
-		localCorrID = a.starCorrelationID
-	} else if correlationKey != 0 && a.correlationManager != nil {
-		localCorrID = a.correlationManager.GetOrCreate(correlationKey)
+
+	// 更新星轨进程树（如有活跃星轨）
+	if pidMap := a.getPidPpidMap(); pidMap != nil {
+		var ppid uint32
+		if err := pidMap.Lookup(&pid, &ppid); err == nil {
+			a.updateStarPidTree(pid, ppid)
+		}
 	}
+
+	localCorrID := a.determineCorrID(pid, correlationKey)
 
 	// 上报事件
 	a.eventQueue.Push(&pb.ProbeEvent{
@@ -629,13 +636,7 @@ func (a *Agent) handleFileEventV3(pid uint32, comm string, filename string, corr
 		}
 	}
 
-	// 星轨激活时统一用 starCorrelationID
-	var localCorrID string
-	if a.starCorrelationID != "" {
-		localCorrID = a.starCorrelationID
-	} else if correlationKey != 0 && a.correlationManager != nil {
-		localCorrID = a.correlationManager.GetOrCreate(correlationKey)
-	}
+	localCorrID := a.determineCorrID(pid, correlationKey)
 
 	// 上报事件
 	a.eventQueue.Push(&pb.ProbeEvent{
@@ -667,12 +668,7 @@ func (a *Agent) handleBashEventV3(pid uint32, comm string, line string, correlat
 	a.markProbeEvent("bash_monitor")
 	log.Printf("🔔 V3 bash 事件: PID=%d COMM=%s CMD=%s", pid, comm, line)
 
-	var localCorrID string
-	if a.starCorrelationID != "" {
-		localCorrID = a.starCorrelationID
-	} else if correlationKey != 0 && a.correlationManager != nil {
-		localCorrID = a.correlationManager.GetOrCreate(correlationKey)
-	}
+	localCorrID := a.determineCorrID(pid, correlationKey)
 
 	a.eventQueue.Push(&pb.ProbeEvent{
 		ProbeName:      "bash_input",
@@ -879,7 +875,7 @@ func (a *Agent) observationDowngradeLoop(ctx context.Context) {
 				continue
 			}
 			// 如果没有活跃星轨，降级到 REDUCED
-			if a.starCorrelationID == "" {
+			if !a.hasActiveStar() {
 				a.observationMgr.Downgrade()
 			}
 		}
@@ -902,12 +898,9 @@ func (a *Agent) mutationEndLoop(ctx context.Context) {
 			expiredIDs := a.correlationManager.CleanupExpired()
 			for _, corrID := range expiredIDs {
 				a.reportMutationEnd(corrID)
-				// 如果过期的是当前星轨 ID，清空并降级
-				if corrID == a.starCorrelationID {
-					log.Printf("⭐ 星轨结束: %s", corrID)
-					a.starCorrelationID = ""
-				}
 			}
+			// 独立检查星轨是否到期（不依赖 correlationManager 过期）
+			a.checkStarExpire()
 		}
 	}
 }

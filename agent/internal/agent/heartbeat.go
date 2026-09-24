@@ -32,47 +32,47 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 				return
 			default:
 			}
-		// 确保已注册
-		if a.token == "" {
-			continue
-		}
-
-		log.Printf("💓 心跳发送中...")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		resp, err := a.client.Heartbeat(a.getAuthContext(ctx), &pb.HeartbeatRequest{
-			AgentId:           a.id,
-			Timestamp:         time.Now().Unix(),
-			ActiveProbes:      a.getActiveProbeCount(),
-			ProbeDetails:      a.getProbeDetailsJSON(),
-			BaselineState:     a.baseline.GetState().String(),
-			BaselineRemaining: int64(a.baseline.RemainingTime().Seconds()),
-		})
-		cancel()
-
-		if err != nil {
-			log.Printf("⚠️ 心跳失败: %v", err)
-			if err := a.connectAndRegister(); err != nil {
-				log.Printf("⚠️ 重连失败: %v", err)
+			// 确保已注册
+			if a.token == "" {
+				continue
 			}
-			continue
-		}
 
-		updateHeartbeatMap()
+			log.Printf("💓 心跳发送中...")
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			resp, err := a.client.Heartbeat(a.getAuthContext(ctx), &pb.HeartbeatRequest{
+				AgentId:           a.id,
+				Timestamp:         time.Now().Unix(),
+				ActiveProbes:      a.getActiveProbeCount(),
+				ProbeDetails:      a.getProbeDetailsJSON(),
+				BaselineState:     a.baseline.GetState().String(),
+				BaselineRemaining: int64(a.baseline.RemainingTime().Seconds()),
+			})
+			cancel()
 
-		// Server 不认识了（比如 Server 重启），触发重新注册
-		if !resp.Success {
-			log.Printf("⚠️ 心跳被拒绝（Server 内存中无此 Agent），尝试重新注册...")
-			if err := a.connectAndRegister(); err != nil {
-				log.Printf("⚠️ 重新注册失败: %v", err)
+			if err != nil {
+				log.Printf("⚠️ 心跳失败: %v", err)
+				if err := a.connectAndRegister(); err != nil {
+					log.Printf("⚠️ 重连失败: %v", err)
+				}
+				continue
 			}
-			continue
-		}
 
-		if len(resp.Commands) > 0 {
-			for _, cmd := range resp.Commands {
-				a.handleCommand(cmd)
+			updateHeartbeatMap()
+
+			// Server 不认识了（比如 Server 重启），触发重新注册
+			if !resp.Success {
+				log.Printf("⚠️ 心跳被拒绝（Server 内存中无此 Agent），尝试重新注册...")
+				if err := a.connectAndRegister(); err != nil {
+					log.Printf("⚠️ 重新注册失败: %v", err)
+				}
+				continue
 			}
-		}
+
+			if len(resp.Commands) > 0 {
+				for _, cmd := range resp.Commands {
+					a.handleCommand(cmd)
+				}
+			}
 		}
 	}
 }
@@ -105,8 +105,8 @@ func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 		log.Println("🔄 手动触发: 全量资产采集")
 		a.collectAndReportAssets()
 	case pb.ProbeCommand_ACTIVATE_STAR:
-		log.Printf("⭐ 收到星轨激活命令: corrID=%s", cmd.ProbeConfig)
-		a.starCorrelationID = cmd.ProbeConfig
+		log.Printf("⭐ 收到星轨激活命令: %s", cmd.ProbeConfig)
+		a.activateStar(cmd.ProbeConfig)
 		// 升级观察等级到 FULL
 		if a.observationMgr != nil {
 			a.observationMgr.Upgrade("星轨激活")
