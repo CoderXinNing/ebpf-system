@@ -196,7 +196,9 @@ func (s *Service) ReportProcesses(ctx context.Context, req *pb.ProcessReport) (*
 		s.handler.Store.SaveAsset(req.AgentId, procJSON, nil, nil)
 	}
 	if s.handler.SaveAssetFunc != nil {
-		s.handler.SaveAssetFunc(req.AgentId, procJSON, nil, nil)
+		if err := s.handler.SaveAssetFunc(req.AgentId, procJSON, nil, nil); err != nil {
+			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
@@ -207,7 +209,9 @@ func (s *Service) ReportUsers(ctx context.Context, req *pb.UserReport) (*pb.Repo
 		s.handler.Store.SaveAsset(req.AgentId, nil, userJSON, nil)
 	}
 	if s.handler.SaveAssetFunc != nil {
-		s.handler.SaveAssetFunc(req.AgentId, nil, userJSON, nil)
+		if err := s.handler.SaveAssetFunc(req.AgentId, nil, userJSON, nil); err != nil {
+			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
@@ -222,24 +226,36 @@ func (s *Service) ReportSystemInfo(ctx context.Context, req *pb.SystemReport) (*
 		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
 	}
 	if s.handler.SaveAssetFunc != nil {
-		s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON)
+		if err := s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON); err != nil {
+			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
 func (s *Service) ReportPackages(ctx context.Context, req *pb.PackageReport) (*pb.ReportResponse, error) {
 	if s.handler.SaveTypedAssetFunc != nil {
-		s.handler.SaveTypedAssetFunc(req.AgentId, "package", "packages", req.Packages)
-		s.handler.SaveTypedAssetFunc(req.AgentId, "package", "jar_packages", req.JarPackages)
-		s.handler.SaveTypedAssetFunc(req.AgentId, "package", "python_packages", req.PythonPackages)
-		s.handler.SaveTypedAssetFunc(req.AgentId, "package", "npm_packages", req.NpmPackages)
+		if err := s.handler.SaveTypedAssetFunc(req.AgentId, "package", "packages", req.Packages); err != nil {
+			log.Printf("⚠️ 分类资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
+		if err := s.handler.SaveTypedAssetFunc(req.AgentId, "package", "jar_packages", req.JarPackages); err != nil {
+			log.Printf("⚠️ 分类资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
+		if err := s.handler.SaveTypedAssetFunc(req.AgentId, "package", "python_packages", req.PythonPackages); err != nil {
+			log.Printf("⚠️ 分类资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
+		if err := s.handler.SaveTypedAssetFunc(req.AgentId, "package", "npm_packages", req.NpmPackages); err != nil {
+			log.Printf("⚠️ 分类资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
 
 func (s *Service) ReportCronJobs(ctx context.Context, req *pb.CronReport) (*pb.ReportResponse, error) {
 	if s.handler.SaveTypedAssetFunc != nil {
-		s.handler.SaveTypedAssetFunc(req.AgentId, "service", "crons", req.Crons)
+		if err := s.handler.SaveTypedAssetFunc(req.AgentId, "service", "crons", req.Crons); err != nil {
+			log.Printf("⚠️ 分类资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
@@ -255,8 +271,12 @@ func (s *Service) ReportServices(ctx context.Context, req *pb.ServiceReport) (*p
 		log.Printf("DEBUG: 第一个 status: name=%s enabled=%v active=%s", s0.Name, s0.Enabled, s0.Active)
 	}
 	if s.handler.SaveTypedAssetFunc != nil {
-		s.handler.SaveTypedAssetFunc(req.AgentId, "service", "services", req.Services)
-		s.handler.SaveTypedAssetFunc(req.AgentId, "service", "service_status", req.ServiceStatus)
+		if err := s.handler.SaveTypedAssetFunc(req.AgentId, "service", "services", req.Services); err != nil {
+			log.Printf("⚠️ 分类资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
+		if err := s.handler.SaveTypedAssetFunc(req.AgentId, "service", "service_status", req.ServiceStatus); err != nil {
+			log.Printf("⚠️ 分类资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
@@ -303,7 +323,9 @@ func (s *Service) ReportPerformance(ctx context.Context, req *pb.PerfReport) (*p
 		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
 	}
 	if s.handler.SaveAssetFunc != nil {
-		s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON)
+		if err := s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON); err != nil {
+			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
@@ -315,7 +337,9 @@ func (s *Service) ReportAgentSelf(ctx context.Context, req *pb.AgentSelfReport) 
 		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
 	}
 	if s.handler.SaveAssetFunc != nil {
-		s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON)
+		if err := s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON); err != nil {
+			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
+		}
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
