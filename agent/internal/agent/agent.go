@@ -388,10 +388,13 @@ func (a *Agent) flushEvents(events []*pb.ProbeEvent) {
 	log.Printf("🔗 client 正常，准备上报...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	// 注：外层 CorrelationId 留空。事件级 CorrelationId 已由 determineCorrID 精确打标，
+	// Server 端不应 fallback 到"任意活跃星轨"（否则会把无关进程的事件误归入星轨）。
+	// 保留外层字段是 proto 兼容性要求，但语义已废弃。
 	resp, err := a.client.ReportEvents(a.getAuthContext(ctx), &pb.EventReport{
 		AgentId:       a.id,
 		Events:        events,
-		CorrelationId: a.currentStarCorrID(),
+		CorrelationId: "",
 	})
 	if err != nil {
 		log.Printf("⚠️ 事件上报失败: %v", err)
