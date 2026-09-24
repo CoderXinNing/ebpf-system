@@ -72,30 +72,6 @@ int trace_openat(struct trace_event_raw_sys_enter *args) {
         return 0;
     }
 
-    // ============================================
-    // 自检路径过滤（防 Agent 自检误报）
-    // ============================================
-    // 精确匹配 "/proc/self/astertrack-selftest"（含 \0，共 31 字节）
-    // ⚠️ 严禁改为前缀匹配，否则 /proc/self/astertrack-selftestXXX 会被误判
-    // ⚠️ 路径固定不可改：Agent 侧自检动作硬编码此路径
-    // ⚠️ 用 unroll 循环而非 memcmp：BPF 不支持 libc 的 memcmp 符号
-    char fname[64] = {};
-    if (bpf_probe_read_user_str(fname, sizeof(fname), filename) > 0) {
-        static const char SELFTEST_PATH[] = "/proc/self/astertrack-selftest";
-        int match = 1;
-        #pragma unroll
-        for (int i = 0; i < 32; i++) {  // sizeof(SELFTEST_PATH)=31，多比 1 字节更安全
-            if (fname[i] != SELFTEST_PATH[i]) {
-                match = 0;
-                break;
-            }
-            if (SELFTEST_PATH[i] == '\0') break;  // 遇到 \0 且之前都相等 → 命中
-        }
-        if (match) {
-            return 0;  // 自检事件：直接丢弃，不占用 ringbuf
-        }
-    }
-
     // 敏感路径过滤
     if (!is_sensitive_path(filename)) {
         return 0;

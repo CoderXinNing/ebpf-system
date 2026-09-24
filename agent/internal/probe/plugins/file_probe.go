@@ -1,10 +1,8 @@
 package plugins
 
 import (
-	"errors"
 	"fmt"
 	"log"
-	"os/exec"
 
 	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
@@ -63,27 +61,17 @@ func (p *FileProbe) Stop() error {
 
 var _ framework.Probe = (*FileProbe)(nil)
 
-// selfTestPath 自检路径，与 file_access.c 中的 SELFTEST_PATH 必须严格一致。
-// 该路径是"薛定谔的文件"：/proc/self/ 是内核伪文件系统，文件不存在但
-// openat 照常触发 tracepoint，且攻击者无法在 /proc/self/ 下伪造。
-const selfTestPath = "/proc/self/astertrack-selftest"
-
-func (p *FileProbe) SelfTestAction(opts framework.SelfTestOptions) error {
-	cmd := exec.Command("bash", "-c", "cat "+selfTestPath+" 2>/dev/null")
-	err := cmd.Run()
-	if err == nil {
-		// 罕见：文件竟然存在（被攻击者放置？）。仍然算动作成功。
-		return nil
-	}
-	// 预期失败：文件不存在，cat 退出码 1
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-		return nil // 预期失败，不算动作失败
-	}
-	return fmt.Errorf("%w: %v", framework.ErrSelfTestActionFailed, err)
-}
-
-var _ framework.SelfTester = (*FileProbe)(nil)
+// 注：FileProbe 不实现 framework.SelfTester。
+//
+// 原因：file_access 探针只上报【敏感路径】的访问事件。自检动作必须走敏感路径
+// 才能产生可观测事件，但这会触发"密码文件读取"等真实告警 —— 自检与告警相互矛盾。
+//
+// 替代：file_access 天然有持续流量（Agent 资产采集、系统进程读敏感文件），
+// 通过"最近有事件"即可判断其存活，无需人工自检。
+//
+// 状态：自动标记为 loaded-no-activity（与 bash_monitor 一致）。
+//
+// TODO：未来若引入 Agent 侧 PID 过滤（识别自身进程），可重新实现 SelfTestAction。
 
 // PreCheck file_access 环境预检查：依赖 CO-RE（BTF）+ tracepoint 目录。
 func (p *FileProbe) PreCheck(caps *probe.AgentCapabilities) error {
