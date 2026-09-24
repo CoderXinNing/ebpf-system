@@ -5,3 +5,4 @@ agent/data/agent.id
 server/static/agent-linux-amd64
 certs/
 .bak-cert-*/
+agent/data/baseline.json
