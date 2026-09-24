@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os/exec"
@@ -62,16 +63,24 @@ func (p *FileProbe) Stop() error {
 
 var _ framework.Probe = (*FileProbe)(nil)
 
+// selfTestPath 自检路径，与 file_access.c 中的 SELFTEST_PATH 必须严格一致。
+// 该路径是"薛定谔的文件"：/proc/self/ 是内核伪文件系统，文件不存在但
+// openat 照常触发 tracepoint，且攻击者无法在 /proc/self/ 下伪造。
+const selfTestPath = "/proc/self/astertrack-selftest"
+
 func (p *FileProbe) SelfTestAction(opts framework.SelfTestOptions) error {
-	target := opts.FileTarget
-	if target == "" {
-		target = "/etc/passwd"
+	cmd := exec.Command("bash", "-c", "cat "+selfTestPath+" 2>/dev/null")
+	err := cmd.Run()
+	if err == nil {
+		// 罕见：文件竟然存在（被攻击者放置？）。仍然算动作成功。
+		return nil
 	}
-	cmd := exec.Command("bash", "-c", "exec -a agent-selftest cat "+target)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%w: %v", framework.ErrSelfTestActionFailed, err)
+	// 预期失败：文件不存在，cat 退出码 1
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return nil // 预期失败，不算动作失败
 	}
-	return nil
+	return fmt.Errorf("%w: %v", framework.ErrSelfTestActionFailed, err)
 }
 
 var _ framework.SelfTester = (*FileProbe)(nil)
