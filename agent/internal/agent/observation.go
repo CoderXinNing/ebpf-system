@@ -38,7 +38,7 @@ type ObservationManager struct {
 func NewObservationManager() *ObservationManager {
 	return &ObservationManager{
 		level:    ObsReduced, // 默认 REDUCED
-		cooldown: 5 * time.Minute,
+		cooldown: ObservationDowngradePeriod,
 	}
 }
 

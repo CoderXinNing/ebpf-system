@@ -7,9 +7,6 @@ import (
 	"time"
 )
 
-// MaxActiveStars 同时活跃星轨数上限（保护内存）
-const MaxActiveStars = 50
-
 // currentStarCorrID 返回任意一个活跃星轨 ID（兼容 flushEvents 的单值字段）
 // 注：flushEvents 的 CorrelationId 是旧字段，多星轨下语义弱化，保留兼容
 func (a *Agent) currentStarCorrID() string {
@@ -145,7 +142,7 @@ func (a *Agent) rebuildStarPidTree() {
 
 // starRebuildLoop 周期修正星轨进程树（每 60 秒）
 func (a *Agent) starRebuildLoop(ctx context.Context) {
-	ticker := time.NewTicker(60 * time.Second)
+	ticker := time.NewTicker(StarRebuildPeriod)
 	defer ticker.Stop()
 	for {
 		select {

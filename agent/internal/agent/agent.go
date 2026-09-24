@@ -207,7 +207,7 @@ func (a *Agent) Run(ctx context.Context) {
 
 	go a.eventReporter()
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(AssetCollectStartDelay)
 		a.collectAndReportAssets()
 	}()
 	go func() {
@@ -224,7 +224,7 @@ func (a *Agent) Run(ctx context.Context) {
 
 	// 基线窗口定时器（每分钟汇总）
 	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
+		ticker := time.NewTicker(BaselineFlushPeriod)
 		defer ticker.Stop()
 		for range ticker.C {
 			a.flushBaselineWindow()
@@ -233,7 +233,7 @@ func (a *Agent) Run(ctx context.Context) {
 
 	// 基线持久化（每5分钟）
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(BaselinePersistPeriod)
 		defer ticker.Stop()
 		for range ticker.C {
 			a.baseline.Persist()
@@ -348,7 +348,7 @@ func (a *Agent) eventReporter() {
 	log.Println("🔄 eventReporter 启动")
 	consumeCh := a.eventQueue.Consume()
 	batch := make([]*pb.ProbeEvent, 0, 100)
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(EventFlushInterval)
 	defer ticker.Stop()
 
 	for {
@@ -868,7 +868,7 @@ func calculateFileSHA256(path string) (string, error) {
 // tcpAnomalyLoop 定期分析 TCP 连接突变
 // observationDowngradeLoop 定期检查并降级观察等级
 func (a *Agent) observationDowngradeLoop(ctx context.Context) {
-	ticker := time.NewTicker(2 * time.Minute)
+	ticker := time.NewTicker(ObservationDowngradePeriod)
 	defer ticker.Stop()
 
 	for {
@@ -889,7 +889,7 @@ func (a *Agent) observationDowngradeLoop(ctx context.Context) {
 
 // mutationEndLoop 定期检查并上报 MutationEnd
 func (a *Agent) mutationEndLoop(ctx context.Context) {
-	ticker := time.NewTicker(60 * time.Second)
+	ticker := time.NewTicker(MutationEndCheckPeriod)
 	defer ticker.Stop()
 
 	for {

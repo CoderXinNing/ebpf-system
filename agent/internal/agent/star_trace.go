@@ -35,7 +35,7 @@ type StarTrace struct {
 // NewStarTrace 创建星轨追踪上下文
 func NewStarTrace(corrID string, rootPid uint32, ancestors map[uint32]bool, ttl time.Duration) *StarTrace {
 	if ttl <= 0 {
-		ttl = 10 * time.Minute
+		ttl = StarTTL
 	}
 	now := time.Now()
 	return &StarTrace{

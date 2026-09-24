@@ -61,14 +61,14 @@ func (a *Agent) probeSelfTestLoop(ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(30 * time.Second):
+	case <-time.After(SelfTestStartDelay):
 	}
 
 	a.runProbeSelfTest() // 首轮
 
 	interval := time.Duration(a.cfg.Selftest.IntervalMinutes) * time.Minute
 	if interval <= 0 {
-		interval = 5 * time.Minute
+		interval = SelfTestInterval
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

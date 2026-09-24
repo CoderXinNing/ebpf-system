@@ -27,7 +27,7 @@ type CorrelationManager struct {
 // NewCorrelationManager 创建关联管理器
 func NewCorrelationManager(agentID string, ttl time.Duration) *CorrelationManager {
 	if ttl <= 0 {
-		ttl = 10 * time.Minute
+		ttl = CorrelationTTL
 	}
 	return &CorrelationManager{
 		entries: make(map[uint64]*CorrelationEntry),
