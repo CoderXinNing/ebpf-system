@@ -5,6 +5,7 @@ import (
 	"log"
 	"os/exec"
 
+	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 )
@@ -74,3 +75,13 @@ func (p *FileProbe) SelfTestAction(opts framework.SelfTestOptions) error {
 }
 
 var _ framework.SelfTester = (*FileProbe)(nil)
+
+// PreCheck file_access 环境预检查：依赖 CO-RE（BTF）+ tracepoint 目录。
+func (p *FileProbe) PreCheck(caps *probe.AgentCapabilities) error {
+	if err := framework.CommonPreCheck(caps); err != nil {
+		return framework.WrapReason("file_access", err.Error())
+	}
+	return nil
+}
+
+var _ framework.PreChecker = (*FileProbe)(nil)

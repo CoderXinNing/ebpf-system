@@ -773,6 +773,19 @@ func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
 			continue
 		}
 
+		// 环境预检查（可选接口，探针自己最懂自己的需求）
+		if pc, ok := probeInst.(framework.PreChecker); ok {
+			if err := pc.PreCheck(a.capabilities); err != nil {
+				a.probeStateActor.Send(msgSetProbeStatus{
+					name:   p.Name,
+					status: "unsupported: " + err.Error(),
+				})
+				log.Printf("⚠️ %s 环境预检查失败: %v", p.Name, err)
+				continue
+			}
+			log.Printf("✅ %s 环境预检查通过", p.Name)
+		}
+
 		a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "loading"})
 		go func(name string, p framework.Probe) {
 			defer func() {

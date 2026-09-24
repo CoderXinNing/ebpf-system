@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/exec"
 
+	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 )
@@ -89,3 +90,13 @@ func (p *ExecProbe) SelfTestAction(opts framework.SelfTestOptions) error {
 }
 
 var _ framework.SelfTester = (*ExecProbe)(nil)
+
+// PreCheck exec_monitor 环境预检查：依赖 CO-RE（BTF）。
+func (p *ExecProbe) PreCheck(caps *probe.AgentCapabilities) error {
+	if err := framework.CommonPreCheck(caps); err != nil {
+		return framework.WrapReason("exec_monitor", err.Error())
+	}
+	return nil
+}
+
+var _ framework.PreChecker = (*ExecProbe)(nil)

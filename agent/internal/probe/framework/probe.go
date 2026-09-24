@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 )
 
 // Rule 是动态下发的规则（黑白名单）
@@ -108,3 +110,19 @@ var (
 	// ErrSelfTestActionFailed 动作本身失败：命令未执行
 	ErrSelfTestActionFailed = errors.New("selftest: 动作本身失败（命令未执行）")
 )
+
+// PreChecker 可选接口：探针在加载前做环境预检查。
+//
+// 不实现 → 走宽松默认（只靠 SHA256 + 加载时错误兜底）。
+// 实现   → 环境不满足时拒绝加载，状态标 unsupported: <reason>。
+//
+// 自定义探针建议：
+//  1. 直接不实现，走宽松默认（最省事）
+//  2. 实现并调用 framework.CommonPreCheck(caps)，5 行覆盖通用检查
+//  3. 实现 + 完全自定义（精细控制）
+type PreChecker interface {
+	// PreCheck 在 Init/Attach 之前调用。
+	// 返回 nil 表示环境满足；返回 error 会被标记为 "unsupported: <reason>"。
+	// 探针自己最懂自己的需求，caps 只提供通用环境信息。
+	PreCheck(caps *probe.AgentCapabilities) error
+}
