@@ -10,7 +10,9 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"encoding/pem"
+
 	"fmt"
+	"github.com/CoderXinNing/ebpf-system/internal/brand"
 	"io"
 	"log"
 	"net/http"
@@ -22,10 +24,10 @@ import (
 
 // Config enroll 配置
 type Config struct {
-	ServerURL string // 如 http://172.16.2.145:8080
-	Token     string // 注册 Token（ATK-xxx）
+	ServerURL  string // 如 http://172.16.2.145:8080
+	Token      string // 注册 Token（ATK-xxx）
 	InstallDir string // 安装目录，默认 /opt/astertrack
-	Hostname  string // 可选，默认自动获取
+	Hostname   string // 可选，默认自动获取
 }
 
 // Result enroll 结果
@@ -78,8 +80,8 @@ func Run(cfg Config) (*Result, error) {
 	// 3. 生成 CSR
 	csrTemplate := &x509.CertificateRequest{
 		Subject: pkix.Name{
-			CommonName:   "AsterTrack Agent",
-			Organization: []string{"AsterTrack"},
+			CommonName:   brand.AgentCommonName,
+			Organization: []string{brand.OrgName},
 		},
 	}
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTemplate, privateKey)
@@ -161,14 +163,14 @@ func Run(cfg Config) (*Result, error) {
 
 // enrollResponse Server 返回
 type enrollResponse struct {
-	Success      bool   `json:"success"`
-	AgentID      string `json:"agent_id"`
-	AgentCRT     string `json:"agent_crt"`
-	CACRT        string `json:"ca_crt"`
-	CertSerial   string `json:"cert_serial"`
-	CertExpires  string `json:"cert_expires"`
-	GroupName    string `json:"group_name"`
-	Error        string `json:"error"`
+	Success     bool   `json:"success"`
+	AgentID     string `json:"agent_id"`
+	AgentCRT    string `json:"agent_crt"`
+	CACRT       string `json:"ca_crt"`
+	CertSerial  string `json:"cert_serial"`
+	CertExpires string `json:"cert_expires"`
+	GroupName   string `json:"group_name"`
+	Error       string `json:"error"`
 }
 
 // callEnroll 调用 enrollment API
@@ -277,13 +279,12 @@ server_port = 9999
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
-
 // detectIface 探测第一个物理网卡
 //
 // 优先级：
-//   1. 有 IP 且 state=UP 的物理网卡（ens*/enp*/eth*）
-//   2. 任意有 IP 的非 lo 网卡
-//   3. 兜底 eth0
+//  1. 有 IP 且 state=UP 的物理网卡（ens*/enp*/eth*）
+//  2. 任意有 IP 的非 lo 网卡
+//  3. 兜底 eth0
 func detectIface() string {
 	entries, err := os.ReadDir("/sys/class/net")
 	if err != nil {

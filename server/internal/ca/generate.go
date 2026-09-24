@@ -11,11 +11,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+
+	"github.com/CoderXinNing/ebpf-system/internal/brand"
 	"time"
 )
 
 // DefaultCACommonName 新的 CA 品牌名（与旧 ebpf-sentinel-ca 区分）
-const DefaultCACommonName = "AsterTrack CA"
+const DefaultCACommonName = brand.CACommonName
 
 // CAOptions CA 生成参数
 type CAOptions struct {
@@ -36,7 +38,7 @@ func GenerateCA(opts CAOptions) (*CA, error) {
 		opts.CommonName = DefaultCACommonName
 	}
 	if opts.Organization == "" {
-		opts.Organization = "AsterTrack"
+		opts.Organization = brand.OrgName
 	}
 	if opts.ValidityDays <= 0 {
 		opts.ValidityDays = 3650 // 10 年
@@ -116,7 +118,7 @@ func (c *CA) GenerateServerCert(opts ServerCertOptions) (*ServerCertResult, erro
 		opts.CommonName = "localhost"
 	}
 	if opts.Organization == "" {
-		opts.Organization = "AsterTrack"
+		opts.Organization = brand.OrgName
 	}
 	if opts.ValidityDays <= 0 {
 		opts.ValidityDays = 365

@@ -10,6 +10,8 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+
+	"github.com/CoderXinNing/ebpf-system/internal/brand"
 	"net/url"
 	"os"
 	"strings"
@@ -188,7 +190,7 @@ func (c *CA) SignCSR(csrPEM []byte, agentID string, ttl time.Duration) ([]byte, 
 	}
 
 	// 4. 构造 SAN URI
-	sanURI, err := url.Parse("spiffe://astertrack/agent/" + agentID)
+	sanURI, err := url.Parse(brand.SPIFFEAgentPrefix + agentID)
 	if err != nil {
 		return nil, "", time.Time{}, fmt.Errorf("构造 SAN URI 失败: %w", err)
 	}
@@ -200,8 +202,8 @@ func (c *CA) SignCSR(csrPEM []byte, agentID string, ttl time.Duration) ([]byte, 
 	template := &x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			CommonName:   "AsterTrack Agent",
-			Organization: []string{"AsterTrack"},
+			CommonName:   brand.AgentCommonName,
+			Organization: []string{brand.OrgName},
 		},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,

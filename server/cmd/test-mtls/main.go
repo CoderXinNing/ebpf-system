@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/CoderXinNing/ebpf-system/internal/brand"
 )
 
 func main() {
@@ -68,7 +70,7 @@ func main() {
 	parsed, _ := x509.ParseCertificate(cert)
 	agentID := ""
 	for _, uri := range parsed.URIs {
-		if uri.Scheme == "spiffe" && uri.Host == "astertrack" {
+		if uri.Scheme == "spiffe" && uri.Host == brand.SPIFFEDomain {
 			agentID = uri.Path
 			agentID = agentID[len("/agent/"):]
 		}

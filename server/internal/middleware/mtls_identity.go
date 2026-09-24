@@ -8,6 +8,8 @@ import (
 	"log"
 	"strings"
 
+	"github.com/CoderXinNing/ebpf-system/internal/brand"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -100,7 +102,7 @@ func extractAgentIDFromContext(ctx context.Context) (string, *x509.Certificate, 
 	// 从 SAN URI 提取 agent_id
 	// 格式：spiffe://astertrack/agent/<agent_id>
 	for _, uri := range cert.URIs {
-		if uri.Scheme == "spiffe" && uri.Host == "astertrack" {
+		if uri.Scheme == "spiffe" && uri.Host == brand.SPIFFEDomain {
 			path := strings.TrimPrefix(uri.Path, "/agent/")
 			if strings.HasPrefix(path, "agent-") {
 				return path, cert, nil

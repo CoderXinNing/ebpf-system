@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/CoderXinNing/ebpf-system/internal/brand"
 )
 
 // BootstrapOptions 证书初始化参数
@@ -96,7 +98,7 @@ func Bootstrap(opts BootstrapOptions) (*BootstrapResult, error) {
 	// 4. 生成 CA
 	caObj, err := GenerateCA(CAOptions{
 		CommonName:   DefaultCACommonName,
-		Organization: "AsterTrack",
+		Organization: brand.OrgName,
 		ValidityDays: opts.CAValidityDays,
 	})
 	if err != nil {
@@ -116,7 +118,7 @@ func Bootstrap(opts BootstrapOptions) (*BootstrapResult, error) {
 	// 5. 生成 Server 证书
 	serverResult, err := caObj.GenerateServerCert(ServerCertOptions{
 		CommonName:   opts.ServerCommonName,
-		Organization: "AsterTrack",
+		Organization: brand.OrgName,
 		DNSNames:     opts.ServerDNSNames,
 		IPAddresses:  opts.ServerIPAddresses,
 		ValidityDays: opts.ServerValidityDays,

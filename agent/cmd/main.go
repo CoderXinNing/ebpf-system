@@ -13,6 +13,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/enroll"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/paths"
+	"github.com/CoderXinNing/ebpf-system/internal/brand"
 )
 
 func main() {
@@ -23,7 +24,7 @@ func main() {
 			runEnroll(os.Args[2:])
 			return
 		case "version":
-			fmt.Println("AsterTrack Agent v1.0.0")
+			fmt.Printf("%s Agent v%s\n", brand.Name, brand.AgentVersion)
 			return
 		case "help", "-h", "--help":
 			printUsage()
@@ -108,7 +109,7 @@ func runAgent() {
 
 // printUsage 打印帮助
 func printUsage() {
-	fmt.Println(`AsterTrack Agent v1.0.0
+	fmt.Printf(`%s Agent v%s
 
 用法:
   agent                                  启动 Agent
@@ -122,5 +123,5 @@ func printUsage() {
   agent enroll --server=http://172.16.2.145:8080 --token=ATK-xxx
 
   # 正常启动
-  agent --config /opt/astertrack/agent.toml`)
+  agent --config /opt/astertrack/agent.toml`, brand.Name, brand.AgentVersion)
 }
