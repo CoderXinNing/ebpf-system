@@ -54,9 +54,15 @@ done
 # ============================================
 # 检查
 # ============================================
+# root 检查：非 root 时自动 sudo 重试
 if [[ $EUID -ne 0 ]]; then
-    echo "❌ 请用 root 运行（sudo bash）"
-    exit 1
+    if command -v sudo &> /dev/null; then
+        echo "🔐 需要 root 权限，自动 sudo 重试..."
+        exec sudo bash "$0" "$@"
+    else
+        echo "❌ 请用 root 运行（sudo bash）"
+        exit 1
+    fi
 fi
 
 if [[ -z "$SERVER_URL" ]] || [[ -z "$TOKEN" ]]; then
