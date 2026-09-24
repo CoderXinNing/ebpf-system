@@ -5,6 +5,8 @@ import (
 	"log"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/CoderXinNing/ebpf-system/server/internal/paths"
 )
 
 // Config 是 Server 端统一配置
@@ -56,9 +58,9 @@ func Load(path string) *Config {
 			Path: "sentinel.db",
 		},
 		TLS: TLSConfig{
-			CertFile:            "certs/server.crt",
-			KeyFile:             "certs/server.key",
-			CAFile:              "certs/ca.crt",
+			CertFile:            paths.Cert("server.crt"),
+			KeyFile:             paths.Cert("server.key"),
+			CAFile:              paths.Cert("ca.crt"),
 			StrictMTLS:          false,
 			CertificateTTLHours: 8760,
 		},

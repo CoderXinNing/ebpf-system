@@ -22,6 +22,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/handler"
 	"github.com/CoderXinNing/ebpf-system/server/internal/middleware"
 	"github.com/CoderXinNing/ebpf-system/server/internal/model"
+	"github.com/CoderXinNing/ebpf-system/server/internal/paths"
 	"github.com/CoderXinNing/ebpf-system/server/internal/repository/psql"
 	"github.com/CoderXinNing/ebpf-system/server/internal/repository/sqlite"
 	"github.com/CoderXinNing/ebpf-system/server/internal/udp"
@@ -60,7 +61,10 @@ type ServerConfig struct {
 }
 
 func main() {
-	cfg := loadConfig("server/configs/server.toml")
+	// 初始化路径（环境变量 ASTERTRACK_ROOT > cwd）
+	paths.Init()
+
+	cfg := loadConfig(paths.Config("server.toml"))
 	if cfg == nil {
 		log.Println("⚠️ 使用默认配置")
 		cfg = defaultConfig()
@@ -146,7 +150,7 @@ func main() {
 			}
 
 			// 加载 CA
-			caInstance, err := ca.Load("certs/ca.crt", "certs/ca.key")
+			caInstance, err := ca.Load(paths.Cert("ca.crt"), paths.Cert("ca.key"))
 			if err != nil {
 				log.Printf("⚠️ CA 加载失败: %v（enrollment 不可用）", err)
 			} else {
@@ -360,8 +364,8 @@ func main() {
 	loadAgentsFromDB(h, psqlDB)
 
 	// TLS
-	tlsCert := "certs/server.crt"
-	tlsKey := "certs/server.key"
+	tlsCert := paths.Cert("server.crt")
+	tlsKey := paths.Cert("server.key")
 	if cfg.TLS.CertFile != "" {
 		tlsCert = cfg.TLS.CertFile
 	}
@@ -564,9 +568,9 @@ func defaultConfig() *ServerConfig {
 	cfg.Database.User = "sentinel"
 	cfg.Database.Password = "sentinel_dev_2026"
 	cfg.Database.DBName = "sentinel"
-	cfg.TLS.CertFile = "certs/server.crt"
-	cfg.TLS.KeyFile = "certs/server.key"
-	cfg.TLS.CAFile = "certs/ca.crt"
+	cfg.TLS.CertFile = paths.Cert("server.crt")
+	cfg.TLS.KeyFile = paths.Cert("server.key")
+	cfg.TLS.CAFile = paths.Cert("ca.crt")
 	cfg.TLS.StrictMTLS = false
 	cfg.TLS.CertificateTTLHours = 8760
 	cfg.Build.GoPath = ""

@@ -12,6 +12,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/agent/internal/agent"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/enroll"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/paths"
 )
 
 func main() {
@@ -61,9 +62,18 @@ func runEnroll(args []string) {
 
 // runAgent 正常启动 Agent
 func runAgent() {
-	configPath := flag.String("config", "agent/configs/agent.toml", "配置文件路径")
+	configPath := flag.String("config", "", "配置文件路径（默认 ASTERTRACK_ROOT/agent/configs/agent.toml）")
 	genConfig := flag.Bool("gen-config", false, "生成默认配置文件")
 	flag.Parse()
+
+	// 初始化路径（环境变量 ASTERTRACK_ROOT > cwd）
+	// ⚠️ 必须在 flag.Parse() 之后、任何路径求值之前调用
+	paths.Init()
+
+	// 未指定 config 时用默认路径（Init 后才能求值）
+	if *configPath == "" {
+		*configPath = paths.Join("agent", "configs", "agent.toml")
+	}
 
 	if *genConfig {
 		config.GenerateDefault(*configPath)

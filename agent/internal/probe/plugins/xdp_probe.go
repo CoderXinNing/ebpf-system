@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/exec"
 
+	"github.com/CoderXinNing/ebpf-system/agent/internal/paths"
 	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
@@ -42,7 +43,7 @@ func (p *XDPProbe) Attach() error {
 		}
 	})
 
-	if err := p.probe.Load("v3_engine/probes/xdp_reporter.o", p.cfg); err != nil {
+	if err := p.probe.Load(paths.Probe("xdp_reporter.o"), p.cfg); err != nil {
 		return err
 	}
 

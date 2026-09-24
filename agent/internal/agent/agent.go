@@ -16,6 +16,7 @@ import (
 	"github.com/CoderXinNing/ebpf-system/agent/internal/actor"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/baseline"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/paths"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/plugins"
@@ -421,7 +422,7 @@ func (a *Agent) Shutdown() {
 		})
 	}
 	// 按配置清理探针 pin（remove=true 的才清理）
-	pinBase := "/sys/fs/bpf/ebpf-sentinel"
+	pinBase := paths.PinBase()
 	for _, p := range a.cfg.Autoload {
 		if !p.Remove {
 			log.Printf("ℹ️ %s remove=false，保留 pin", p.Name)
@@ -449,7 +450,7 @@ func cstring(b []byte) string {
 }
 
 func updateHeartbeatMap() {
-	hbMap, err := ciliumebpf.LoadPinnedMap("/sys/fs/bpf/ebpf-sentinel/agent_heartbeat", nil)
+	hbMap, err := ciliumebpf.LoadPinnedMap(paths.PinMap("agent_heartbeat"), nil)
 	if err != nil {
 		return
 	}
@@ -520,7 +521,7 @@ func (a *Agent) registerProbePlugins() {
 
 	// V3 exec 探针
 	a.probeManager.Register(plugins.NewExecProbe(
-		"v3_engine/probes/exec_monitor.o",
+		paths.Probe("exec_monitor.o"),
 		agentHash,
 		func(pid uint32, comm string, cmdline string, correlationKey uint64) {
 			a.handleExecEventV3(pid, comm, cmdline, correlationKey)
@@ -529,7 +530,7 @@ func (a *Agent) registerProbePlugins() {
 
 	// V3 file_access 探针
 	a.probeManager.Register(plugins.NewFileProbe(
-		"v3_engine/probes/file_access.o",
+		paths.Probe("file_access.o"),
 		agentHash,
 		func(pid uint32, comm string, filename string, correlationKey uint64) {
 			a.handleFileEventV3(pid, comm, filename, correlationKey)
@@ -562,7 +563,7 @@ func (a *Agent) registerProbePlugins() {
 
 	// V3 bash 探针
 	a.probeManager.Register(plugins.NewBashProbe(
-		"v3_engine/probes/bash_monitor.o",
+		paths.Probe("bash_monitor.o"),
 		"/bin/bash",
 		agentHash,
 		func(pid uint32, comm string, line string, correlationKey uint64) {
@@ -572,7 +573,7 @@ func (a *Agent) registerProbePlugins() {
 
 	// V3 TCP 探针
 	a.probeManager.Register(plugins.NewTCPProbe(
-		"v3_engine/probes/tcp_monitor.o",
+		paths.Probe("tcp_monitor.o"),
 		agentHash,
 		func(pid uint32, comm string, count uint64, dstIP uint32, dstPort uint16) {
 			a.handleTCPEventV3(pid, comm, count, dstIP, dstPort)

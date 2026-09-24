@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/CoderXinNing/ebpf-system/agent/internal/paths"
 )
 
 // BaselineConfig 基线配置
@@ -36,8 +38,8 @@ type EngineState int
 
 const (
 	StateLearning EngineState = iota // 学习中
-	StateObserve                      // 观察期
-	StateProtect                      // 防护中
+	StateObserve                     // 观察期
+	StateProtect                     // 防护中
 )
 
 func (s EngineState) String() string {
@@ -54,20 +56,20 @@ func (s EngineState) String() string {
 
 // Feature 特征
 type Feature struct {
-	IP     string
-	Key    string  // 如 "root:exec_per_hour" 或 "java:parent:conn_per_hour"
-	Value  float64
+	IP    string
+	Key   string // 如 "root:exec_per_hour" 或 "java:parent:conn_per_hour"
+	Value float64
 }
 
 // BaselineState 基线生命周期状态
 type BaselineState int
 
 const (
-	Unknown BaselineState = iota // 首次发现
-	Observed                     // 观察中
-	Candidate                    // 候选基线
-	Stable                       // 稳定基线
-	Expired                      // 已过期
+	Unknown   BaselineState = iota // 首次发现
+	Observed                       // 观察中
+	Candidate                      // 候选基线
+	Stable                         // 稳定基线
+	Expired                        // 已过期
 )
 
 func (s BaselineState) String() string {
@@ -133,7 +135,7 @@ func NewBaselineEngine(configPath string) *BaselineEngine {
 			}{
 				Mode:             "silent",
 				DurationMinutes:  7 * 24 * 60, // 7天
-				ObserveMinutes:   48,           // 48小时
+				ObserveMinutes:   48,          // 48小时
 				Alpha:            0.3,
 				Threshold:        3.0,
 				ObserveThreshold: 4.0,
@@ -413,8 +415,8 @@ func (b *BaselineEngine) Persist() {
 		return
 	}
 
-	os.MkdirAll("agent/data", 0755)
-	if err := os.WriteFile("agent/data/baseline.json", data, 0644); err != nil {
+	os.MkdirAll(paths.AgentDataDir(), 0755)
+	if err := os.WriteFile(paths.BaselineFile(), data, 0644); err != nil {
 		log.Printf("⚠️ 基线持久化失败: %v", err)
 		return
 	}
@@ -423,7 +425,7 @@ func (b *BaselineEngine) Persist() {
 
 // Restore 从本地文件恢复基线
 func (b *BaselineEngine) Restore() {
-	data, err := os.ReadFile("agent/data/baseline.json")
+	data, err := os.ReadFile(paths.BaselineFile())
 	if err != nil {
 		log.Printf("ℹ️ 无历史基线，开始学习期")
 		return
@@ -500,11 +502,10 @@ func (b *BaselineEngine) Restore() {
 	log.Printf("📥 基线已恢复(旧格式): %d 个特征, 跳过学习期直接防护", len(b.baselines))
 
 	// 旧文件改名备份
-	backupPath := "agent/data/baseline.json.old"
-	os.Rename("agent/data/baseline.json", backupPath)
+	backupPath := paths.BaselineFile() + ".old"
+	os.Rename(paths.BaselineFile(), backupPath)
 	log.Printf("📦 旧格式文件已备份: %s", backupPath)
 }
-
 
 // ForceProtectMode 强制进入防护状态（测试用）
 func (b *BaselineEngine) ForceProtectMode() {

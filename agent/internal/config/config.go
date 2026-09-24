@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/CoderXinNing/ebpf-system/agent/internal/paths"
 )
 
 // AgentConfig Agent完整配置
@@ -60,12 +62,12 @@ func DefaultConfig() *AgentConfig {
 			RetryDelay:        5 * time.Second,
 			HeartbeatInterval: 10 * time.Second,
 			CollectInterval:   300 * time.Second,
-			IDFile:            "agent/data/agent.id",
+			IDFile:            paths.AgentIDFile(),
 		},
 		Certs: CertsSection{
-			CA:   "certs/ca.crt",
-			Cert: "certs/agent.crt",
-			Key:  "certs/agent.key",
+			CA:   paths.Cert("ca.crt"),
+			Cert: paths.Cert("agent.crt"),
+			Key:  paths.Cert("agent.key"),
 		},
 		Selftest: SelftestConfig{
 			Enabled:           true,
