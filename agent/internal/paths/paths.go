@@ -67,6 +67,14 @@ func AgentIDFile() string { return filepath.Join(AgentDataDir(), "agent.id") }
 // BaselineFile baseline.json 路径
 func BaselineFile() string { return filepath.Join(AgentDataDir(), "baseline.json") }
 
+// ========== 动态规则缓存 ==========
+
+// RulesCacheFile 规则内容缓存路径（canonical JSON）
+func RulesCacheFile() string { return filepath.Join(AgentDataDir(), "rules.json") }
+
+// RulesSigFile 规则签名缓存路径
+func RulesSigFile() string { return filepath.Join(AgentDataDir(), "rules.sig") }
+
 // ========== BPF pin（固定路径，与 root 无关）==========
 
 // PinBase BPF pin 基路径

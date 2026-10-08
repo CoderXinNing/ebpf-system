@@ -3,6 +3,7 @@ package v3_loader
 import (
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
@@ -19,6 +20,12 @@ type FileProbe struct {
 	link      *ManualTracepointLink
 	objs      *fileObjects
 	agentHash uint32
+
+	// 记录上次写入的 keys（避免用 Iterate 清空 LPM_TRIE）
+	// 注：cilium/ebpf 对 LPM_TRIE 的 Iterate 有 key size 问题
+	lastMu     sync.Mutex
+	lastExact  []string
+	lastPrefix []string
 }
 
 type fileObjects struct {
@@ -125,23 +132,31 @@ func (p *FileProbe) UpdateWhitelist(processNames []string) error {
 //   - exactPaths  → 精确匹配（存 sensitive_exact）
 //   - prefixPaths → 前缀匹配（存 sensitive_prefixes，路径须以 / 结尾）
 //
-// 流程：先清空两个 map，再逐条写入（清空窗口极短，可接受）。
+// 清空策略：不用 Iterate（cilium/ebpf 对 LPM_TRIE 的 Iterate 有 key size 问题），
+// 改为记录"上次写入的 keys"，本次逐条 Delete 后再写新的。
 func (p *FileProbe) UpdateSensitivePaths(exactPaths, prefixPaths []string) error {
 	if p.objs == nil || p.objs.SensitiveExact == nil || p.objs.SensitivePrefixes == nil {
 		return fmt.Errorf("探针未加载")
 	}
 
-	// 1. 清空 exact
-	if err := clearMap(p.objs.SensitiveExact); err != nil {
-		return fmt.Errorf("清空 exact 失败: %w", err)
+	p.lastMu.Lock()
+	defer p.lastMu.Unlock()
+
+	var val uint8 = 1
+
+	// 1. 删除上次的 exact keys
+	for _, path := range p.lastExact {
+		var key [256]byte
+		copy(key[:], path)
+		_ = p.objs.SensitiveExact.Delete(&key)
 	}
-	// 2. 清空 prefixes
-	if err := clearMap(p.objs.SensitivePrefixes); err != nil {
-		return fmt.Errorf("清空 prefixes 失败: %w", err)
+	// 2. 删除上次的 prefix keys
+	for _, path := range p.lastPrefix {
+		keyBytes := makeLPMKey(path)
+		_ = p.objs.SensitivePrefixes.Delete(keyBytes)
 	}
 
-	// 3. 写入 exact
-	var val uint8 = 1
+	// 3. 写入新的 exact
 	for _, path := range exactPaths {
 		if len(path) > 255 {
 			return fmt.Errorf("路径超长（>255）: %s", path)
@@ -153,47 +168,33 @@ func (p *FileProbe) UpdateSensitivePaths(exactPaths, prefixPaths []string) error
 		}
 	}
 
-	// 4. 写入 prefixes（LPM key: 4字节 prefixlen + 256字节 path）
+	// 4. 写入新的 prefix
 	for _, path := range prefixPaths {
 		if len(path) > 255 {
 			return fmt.Errorf("路径超长（>255）: %s", path)
 		}
-		keyBytes := make([]byte, 4+256)
-		// prefixlen = len(path) * 8 bit（小端）
-		prefixLen := uint32(len(path) * 8)
-		keyBytes[0] = byte(prefixLen)
-		keyBytes[1] = byte(prefixLen >> 8)
-		keyBytes[2] = byte(prefixLen >> 16)
-		keyBytes[3] = byte(prefixLen >> 24)
-		copy(keyBytes[4:], path)
-
+		keyBytes := makeLPMKey(path)
 		if err := p.objs.SensitivePrefixes.Put(keyBytes, &val); err != nil {
 			return fmt.Errorf("写入 prefix 失败 [%s]: %w", path, err)
 		}
 	}
 
+	// 5. 记录本次 keys（下次清空用）
+	p.lastExact = append([]string(nil), exactPaths...)
+	p.lastPrefix = append([]string(nil), prefixPaths...)
 	return nil
 }
 
-// clearMap 清空 map（遍历删除所有 key）
-func clearMap(m *ebpf.Map) error {
-	var key [256]byte
-	var value uint8
-	iter := m.Iterate()
-	var toDelete [][256]byte
-	for iter.Next(&key, &value) {
-		k := key // 拷贝
-		toDelete = append(toDelete, k)
-	}
-	if err := iter.Err(); err != nil {
-		return err
-	}
-	for _, k := range toDelete {
-		if err := m.Delete(&k); err != nil {
-			return err
-		}
-	}
-	return nil
+// makeLPMKey 构造 LPM_TRIE 的 key（4 字节 prefixlen 小端 + 256 字节路径）
+func makeLPMKey(path string) []byte {
+	keyBytes := make([]byte, 4+256)
+	prefixLen := uint32(len(path) * 8)
+	keyBytes[0] = byte(prefixLen)
+	keyBytes[1] = byte(prefixLen >> 8)
+	keyBytes[2] = byte(prefixLen >> 16)
+	keyBytes[3] = byte(prefixLen >> 24)
+	copy(keyBytes[4:], path)
+	return keyBytes
 }
 
 // Close 清理资源

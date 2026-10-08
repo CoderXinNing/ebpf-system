@@ -366,8 +366,12 @@ type HeartbeatRequest struct {
 	ProbeDetails      string                 `protobuf:"bytes,4,opt,name=probe_details,json=probeDetails,proto3" json:"probe_details,omitempty"`
 	BaselineState     string                 `protobuf:"bytes,5,opt,name=baseline_state,json=baselineState,proto3" json:"baseline_state,omitempty"`
 	BaselineRemaining int64                  `protobuf:"varint,6,opt,name=baseline_remaining,json=baselineRemaining,proto3" json:"baseline_remaining,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 动态规则同步状态（阶段 3）
+	RulesVersion   int64  `protobuf:"varint,7,opt,name=rules_version,json=rulesVersion,proto3" json:"rules_version,omitempty"`         // 当前生效的规则版本，0=无
+	RulesStatus    string `protobuf:"bytes,8,opt,name=rules_status,json=rulesStatus,proto3" json:"rules_status,omitempty"`             // synced / stale / unknown
+	RulesLastCheck int64  `protobuf:"varint,9,opt,name=rules_last_check,json=rulesLastCheck,proto3" json:"rules_last_check,omitempty"` // 上次成功比对的时间戳
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *HeartbeatRequest) Reset() {
@@ -438,6 +442,27 @@ func (x *HeartbeatRequest) GetBaselineState() string {
 func (x *HeartbeatRequest) GetBaselineRemaining() int64 {
 	if x != nil {
 		return x.BaselineRemaining
+	}
+	return 0
+}
+
+func (x *HeartbeatRequest) GetRulesVersion() int64 {
+	if x != nil {
+		return x.RulesVersion
+	}
+	return 0
+}
+
+func (x *HeartbeatRequest) GetRulesStatus() string {
+	if x != nil {
+		return x.RulesStatus
+	}
+	return ""
+}
+
+func (x *HeartbeatRequest) GetRulesLastCheck() int64 {
+	if x != nil {
+		return x.RulesLastCheck
 	}
 	return 0
 }
@@ -1704,14 +1729,17 @@ const file_agent_service_proto_rawDesc = "" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x12\n" +
 	"\x04arch\x18\x02 \x01(\tR\x04arch\x12\x1f\n" +
 	"\vbtf_enabled\x18\x03 \x01(\bR\n" +
-	"btfEnabled\"\xeb\x01\n" +
+	"btfEnabled\"\xdd\x02\n" +
 	"\x10HeartbeatRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12#\n" +
 	"\ractive_probes\x18\x03 \x01(\x05R\factiveProbes\x12#\n" +
 	"\rprobe_details\x18\x04 \x01(\tR\fprobeDetails\x12%\n" +
 	"\x0ebaseline_state\x18\x05 \x01(\tR\rbaselineState\x12-\n" +
-	"\x12baseline_remaining\x18\x06 \x01(\x03R\x11baselineRemaining\"a\n" +
+	"\x12baseline_remaining\x18\x06 \x01(\x03R\x11baselineRemaining\x12#\n" +
+	"\rrules_version\x18\a \x01(\x03R\frulesVersion\x12!\n" +
+	"\frules_status\x18\b \x01(\tR\vrulesStatus\x12(\n" +
+	"\x10rules_last_check\x18\t \x01(\x03R\x0erulesLastCheck\"a\n" +
 	"\x11HeartbeatResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x122\n" +
 	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\xaf\x02\n" +

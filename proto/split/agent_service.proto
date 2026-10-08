@@ -51,6 +51,11 @@ message HeartbeatRequest {
     string probe_details = 4;
     string baseline_state = 5;
     int64 baseline_remaining = 6;
+
+    // 动态规则同步状态（阶段 3）
+    int64  rules_version = 7;   // 当前生效的规则版本，0=无
+    string rules_status  = 8;   // synced / stale / unknown
+    int64  rules_last_check = 9; // 上次成功比对的时间戳
 }
 
 message HeartbeatResponse {

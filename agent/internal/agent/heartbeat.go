@@ -39,6 +39,9 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 
 			log.Printf("💓 心跳发送中...")
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			// 动态规则状态（阶段 3）
+			rulesStatus, rulesVersion, rulesLastCheck := a.getRulesStatus()
+
 			resp, err := a.client.Heartbeat(a.getAuthContext(ctx), &pb.HeartbeatRequest{
 				AgentId:           a.id,
 				Timestamp:         time.Now().Unix(),
@@ -46,6 +49,9 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 				ProbeDetails:      a.getProbeDetailsJSON(),
 				BaselineState:     a.baseline.GetState().String(),
 				BaselineRemaining: int64(a.baseline.RemainingTime().Seconds()),
+				RulesVersion:      rulesVersion,
+				RulesStatus:       rulesStatus,
+				RulesLastCheck:    rulesLastCheck,
 			})
 			cancel()
 

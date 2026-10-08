@@ -68,6 +68,16 @@ type Agent struct {
 
 	// 自检事件埋点（sync.Map + atomic，热路径零分配）
 	probeEventTracker *probeEventTracker
+
+	// fileProbe 引用（规则热更新用）
+	fileProbe *plugins.FileProbe
+
+	// 动态规则状态（阶段 3）
+	rulesMu        sync.RWMutex
+	rulesVersion   int64
+	rulesSha256    string
+	rulesStatus    string // synced / stale / unknown
+	rulesLastCheck int64
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -254,6 +264,10 @@ func (a *Agent) Run(ctx context.Context) {
 
 	// 星轨进程树周期重建（每 60 秒）
 	go a.starRebuildLoop(ctx)
+
+	// 动态规则同步（阶段 3）
+	a.syncRulesOnStartup()  // 先加载本地缓存（避免启动期裸奔）
+	go a.rulesSyncLoop(ctx) // 后台定期从 Server 拉
 
 	// 心跳循环（阻塞直到 ctx 被取消）
 	a.runHeartbeatLoopWithCtx(ctx)
@@ -528,14 +542,15 @@ func (a *Agent) registerProbePlugins() {
 		},
 	))
 
-	// V3 file_access 探针
-	a.probeManager.Register(plugins.NewFileProbe(
+	// V3 file_access 探针（保留引用，供规则热更新）
+	a.fileProbe = plugins.NewFileProbe(
 		paths.Probe("file_access.o"),
 		agentHash,
 		func(pid uint32, comm string, filename string, correlationKey uint64) {
 			a.handleFileEventV3(pid, comm, filename, correlationKey)
 		},
-	))
+	)
+	a.probeManager.Register(a.fileProbe)
 
 	// V3 XDP 探针
 	a.probeManager.Register(plugins.NewXDPProbe(

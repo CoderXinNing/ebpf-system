@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"fmt"
 	"log"
 
 	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
@@ -71,6 +72,14 @@ func (p *FileProbe) Attach() error {
 
 func (p *FileProbe) UpdateRules(rules []framework.Rule) error {
 	return nil
+}
+
+// UpdateSensitivePaths 转发给底层 v3_loader.FileProbe（规则热更新用）
+func (p *FileProbe) UpdateSensitivePaths(exactPaths, prefixPaths []string) error {
+	if p.probe == nil {
+		return fmt.Errorf("探针未加载")
+	}
+	return p.probe.UpdateSensitivePaths(exactPaths, prefixPaths)
 }
 
 func (p *FileProbe) Stop() error {
