@@ -7,6 +7,8 @@ import (
 	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
+
+	"github.com/CoderXinNing/ebpf-system/internal/rules"
 )
 
 // FileProbe 是 V3 file_access 探针的适配器
@@ -70,10 +72,6 @@ func (p *FileProbe) Attach() error {
 	return nil
 }
 
-func (p *FileProbe) UpdateRules(rules []framework.Rule) error {
-	return nil
-}
-
 // IsLoaded 探针是否已加载完成（规则应用前需确认）
 func (p *FileProbe) IsLoaded() bool {
 	return p.loaded && p.probe != nil
@@ -119,3 +117,16 @@ func (p *FileProbe) PreCheck(caps *probe.AgentCapabilities) error {
 }
 
 var _ framework.PreChecker = (*FileProbe)(nil)
+
+// ApplyConfig 实现 framework.ConfigApplier
+func (p *FileProbe) ApplyConfig(rs *rules.RuleSet) error {
+	if rs.FileAccess == nil || rs.FileAccess.Rules == nil {
+		return nil
+	}
+	return p.UpdateSensitivePaths(
+		rs.FileAccess.Rules.SensitiveExact,
+		rs.FileAccess.Rules.SensitivePrefix,
+	)
+}
+
+var _ framework.ConfigApplier = (*FileProbe)(nil)

@@ -12,6 +12,8 @@ import (
 	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
+
+	"github.com/CoderXinNing/ebpf-system/internal/rules"
 )
 
 // TCPProbe 是 V3 TCP 探针的适配器
@@ -49,10 +51,6 @@ func (p *TCPProbe) Attach() error {
 
 	p.loaded = true
 	log.Printf("✅ V3 TCP 探针已通过插件框架加载")
-	return nil
-}
-
-func (p *TCPProbe) UpdateRules(rules []framework.Rule) error {
 	return nil
 }
 
@@ -114,3 +112,11 @@ func (p *TCPProbe) PreCheck(caps *probe.AgentCapabilities) error {
 }
 
 var _ framework.PreChecker = (*TCPProbe)(nil)
+
+// ApplyConfig 实现 framework.ConfigApplier
+// tcp 探针暂无配置项（预留）
+func (p *TCPProbe) ApplyConfig(rs *rules.RuleSet) error {
+	return nil
+}
+
+var _ framework.ConfigApplier = (*TCPProbe)(nil)

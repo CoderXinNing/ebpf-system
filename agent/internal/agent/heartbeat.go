@@ -2,11 +2,9 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"time"
 
-	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/plugins"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 )
@@ -83,26 +81,6 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 	}
 }
 
-// updateWhitelist 更新所有探针的白名单
-func (a *Agent) updateWhitelist(jsonData string) {
-	var processNames []string
-	if err := json.Unmarshal([]byte(jsonData), &processNames); err != nil {
-		log.Printf("⚠️ 白名单解析失败: %v", err)
-		return
-	}
-
-	// 遍历所有探针，更新白名单
-	for _, probeName := range []string{"exec_monitor", "bash_monitor", "tcp_monitor", "file_access"} {
-		if probeInst, exists := a.probeManager.Get(probeName); exists {
-			// 通过 UpdateRules 接口传递白名单
-			_ = probeInst.UpdateRules([]framework.Rule{
-				{Key: "whitelist", Value: jsonData, Op: "add"},
-			})
-		}
-	}
-	log.Printf("✅ 白名单已更新: %d 个进程", len(processNames))
-}
-
 func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 	switch cmd.Type {
 	case pb.ProbeCommand_SET_GROUP:
@@ -127,8 +105,8 @@ func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 			}
 		}
 	case pb.ProbeCommand_UNLOAD:
-		// 白名单更新命令：ProbeConfig 传 JSON 数组
-		log.Printf("📋 收到白名单更新: %s", cmd.ProbeConfig)
-		a.updateWhitelist(cmd.ProbeConfig)
+		// 兼容旧命令：不再使用
+		// 白名单/规则更新统一走 agent_rules（GetRulesFull）
+		log.Printf("⚠️ 收到已废弃的 UNLOAD 命令，忽略（请用规则下发）")
 	}
 }

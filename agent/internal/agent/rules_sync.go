@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/agent/internal/paths"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/internal/rules"
 	"github.com/CoderXinNing/ebpf-system/internal/rulesign"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
@@ -168,13 +169,30 @@ func (a *Agent) verifyAndApplyRules(content []byte, sigB64 string) (*rules.RuleS
 		prefixPaths = rs.SensitivePaths.PrefixPaths
 	}
 
+	// 遍历所有实现 ConfigApplier 的探针，分发规则
+	applied := 0
+	for _, p := range a.probeManager.List() {
+		ca, ok := p.(framework.ConfigApplier)
+		if !ok {
+			continue
+		}
+		if err := ca.ApplyConfig(&rs); err != nil {
+			log.Printf("⚠️ %s 应用规则失败: %v", p.Name(), err)
+			continue
+		}
+		applied++
+	}
+
+	// 兼容：file_access 的敏感路径（v1/v2 统一走 fileProbe）
 	if exactPaths != nil || prefixPaths != nil {
 		if err := a.fileProbe.UpdateSensitivePaths(exactPaths, prefixPaths); err != nil {
-			return nil, fmt.Errorf("应用规则失败: %w", err)
+			return nil, fmt.Errorf("应用敏感路径失败: %w", err)
 		}
 		log.Printf("📋 敏感路径已应用: 精确 %d 条, 前缀 %d 条",
 			len(exactPaths), len(prefixPaths))
 	}
+
+	log.Printf("📋 规则已分发到 %d 个探针", applied)
 
 	return &rs, nil
 }

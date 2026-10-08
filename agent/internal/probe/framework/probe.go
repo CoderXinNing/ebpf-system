@@ -6,14 +6,8 @@ import (
 	"fmt"
 
 	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
+	"github.com/CoderXinNing/ebpf-system/internal/rules"
 )
-
-// Rule 是动态下发的规则（黑白名单）
-type Rule struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-	Op    string `json:"op"` // add / remove / clear
-}
 
 // Probe 是所有 eBPF 探针必须实现的统一接口
 type Probe interface {
@@ -25,9 +19,6 @@ type Probe interface {
 
 	// Attach 挂载到内核
 	Attach() error
-
-	// UpdateRules 动态更新规则（黑白名单）
-	UpdateRules(rules []Rule) error
 
 	// Stop 卸载探针并清理资源
 	Stop() error
@@ -93,6 +84,14 @@ type SelfTestOptions struct {
 	TCPTarget         string
 	XDPFallbackTarget string
 	FileTarget        string
+}
+
+// ConfigApplier 可选接口：探针支持动态规则下发
+//
+// rules.RuleSet 是 Server 下发的完整规则快照（验签后）。
+// 每个探针只认自己的字段（FileAccess / Exec / TCP），其余忽略。
+type ConfigApplier interface {
+	ApplyConfig(rs *rules.RuleSet) error
 }
 
 // SelfTester 可选接口：探针实现一个"已知能被自己捕获的行为"。

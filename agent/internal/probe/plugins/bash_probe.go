@@ -6,6 +6,8 @@ import (
 	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
+
+	"github.com/CoderXinNing/ebpf-system/internal/rules"
 )
 
 // BashProbe 是 V3 bash 探针的适配器
@@ -47,10 +49,6 @@ func (p *BashProbe) Attach() error {
 	return nil
 }
 
-func (p *BashProbe) UpdateRules(rules []framework.Rule) error {
-	return nil
-}
-
 func (p *BashProbe) Stop() error {
 	if p.probe != nil {
 		p.probe.Close()
@@ -71,3 +69,11 @@ func (p *BashProbe) PreCheck(caps *probe.AgentCapabilities) error {
 }
 
 var _ framework.PreChecker = (*BashProbe)(nil)
+
+// ApplyConfig 实现 framework.ConfigApplier
+// bash 探针暂无配置项（预留）
+func (p *BashProbe) ApplyConfig(rs *rules.RuleSet) error {
+	return nil
+}
+
+var _ framework.ConfigApplier = (*BashProbe)(nil)

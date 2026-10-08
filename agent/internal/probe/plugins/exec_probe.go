@@ -1,7 +1,6 @@
 package plugins
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os/exec"
@@ -9,6 +8,8 @@ import (
 	probe "github.com/CoderXinNing/ebpf-system/agent/internal/probe"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
+
+	"github.com/CoderXinNing/ebpf-system/internal/rules"
 )
 
 // ExecProbe 是 V3 exec 探针的适配器
@@ -45,21 +46,6 @@ func (p *ExecProbe) Attach() error {
 
 	p.loaded = true
 	log.Printf("✅ V3 exec 探针已通过插件框架加载")
-	return nil
-}
-
-func (p *ExecProbe) UpdateRules(rules []framework.Rule) error {
-	for _, rule := range rules {
-		if rule.Key == "whitelist" {
-			var processNames []string
-			if err := json.Unmarshal([]byte(rule.Value), &processNames); err != nil {
-				return err
-			}
-			if p.probe != nil {
-				return p.probe.UpdateWhitelist(processNames)
-			}
-		}
-	}
 	return nil
 }
 
@@ -100,3 +86,17 @@ func (p *ExecProbe) PreCheck(caps *probe.AgentCapabilities) error {
 }
 
 var _ framework.PreChecker = (*ExecProbe)(nil)
+
+// ApplyConfig 实现 framework.ConfigApplier
+// exec 探针目前只用到 whitelist（comm 白名单）
+func (p *ExecProbe) ApplyConfig(rs *rules.RuleSet) error {
+	if rs.Exec == nil || rs.Exec.Whitelist == nil {
+		return nil
+	}
+	if p.probe == nil {
+		return nil // 未加载，静默跳过
+	}
+	return p.probe.UpdateWhitelist(rs.Exec.Whitelist.ExcludeComms)
+}
+
+var _ framework.ConfigApplier = (*ExecProbe)(nil)
