@@ -3,15 +3,12 @@ package v3_loader
 import (
 	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-	"golang.org/x/sys/unix"
 )
 
 // ConfigKey 配置枚举
@@ -24,84 +21,66 @@ const (
 
 // CollectMode 采集模式
 const (
-	CollectModeCount   uint64 = 0 // 计数模式
-	CollectModeDetail  uint64 = 1 // 明细模式
+	CollectModeCount  uint64 = 0 // 计数模式
+	CollectModeDetail uint64 = 1 // 明细模式
 )
 
 // TCPEventCallback TCP 事件回调
 type TCPEventCallback func(header *SentinelEventHeader, detail *TCPConnDetail)
 
-// ManualTracepointLink 手动管理 tracepoint fd
+// ManualTracepointLink 包装 cilium/ebpf 的 link.Link
+//
+// 历史：曾用 perf_event_open 手搓 attach（有 CPU 0 限制 + BPF_LINK 单挂限制），
+// 现改用 link.Tracepoint（BPF_LINK_CREATE 新 API，自动处理所有 CPU）。
 type ManualTracepointLink struct {
-	fd   int
-	link link.Link // kprobe 时使用
+	link link.Link
 }
 
 func (l *ManualTracepointLink) Close() error {
-	if l.fd >= 0 {
-		err := unix.Close(l.fd)
-		l.fd = -1
-		return err
+	if l.link != nil {
+		return l.link.Close()
 	}
 	return nil
 }
 
-// attachTracepointManual 手动读取 tracepoint ID 并 attach
+// attachTracepointManual 用 cilium/ebpf 的 link.Tracepoint attach
+//
+// tracepointPath 形如：/sys/kernel/debug/tracing/events/<group>/<name>
+// 内部拆出 group + name 传给 link.Tracepoint（BPF_LINK_CREATE 新 API）。
 func attachTracepointManual(prog *ebpf.Program, tracepointPath string) (*ManualTracepointLink, error) {
-	idBytes, err := os.ReadFile(tracepointPath + "/id")
+	// 解析 group + name
+	parts := strings.Split(strings.TrimRight(tracepointPath, "/"), "/")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("非法 tracepoint 路径: %s", tracepointPath)
+	}
+	name := parts[len(parts)-1]
+	group := parts[len(parts)-2]
+
+	l, err := link.Tracepoint(group, name, prog, nil)
 	if err != nil {
-		return nil, fmt.Errorf("读取 tracepoint ID 失败: %w", err)
-	}
-	tpID, err := strconv.Atoi(strings.TrimSpace(string(idBytes)))
-	if err != nil {
-		return nil, fmt.Errorf("解析 tracepoint ID 失败: %w", err)
+		return nil, fmt.Errorf("link.Tracepoint(%s/%s) 失败: %w", group, name, err)
 	}
 
-	log.Printf("📍 手动读取 tracepoint ID: %d", tpID)
-
-	attr := unix.PerfEventAttr{
-		Type:        unix.PERF_TYPE_TRACEPOINT,
-		Config:      uint64(tpID),
-		Sample_type: unix.PERF_SAMPLE_RAW,
-		Sample:      1,
-		Wakeup:      1,
-	}
-
-	fd, err := unix.PerfEventOpen(&attr, -1, 0, -1, unix.PERF_FLAG_FD_CLOEXEC)
-	if err != nil {
-		return nil, fmt.Errorf("perf_event_open 失败: %w", err)
-	}
-
-	if err := unix.IoctlSetInt(fd, unix.PERF_EVENT_IOC_SET_BPF, prog.FD()); err != nil {
-		unix.Close(fd)
-		return nil, fmt.Errorf("SET_BPF 失败: %w", err)
-	}
-
-	if err := unix.IoctlSetInt(fd, unix.PERF_EVENT_IOC_ENABLE, 0); err != nil {
-		unix.Close(fd)
-		return nil, fmt.Errorf("ENABLE 失败: %w", err)
-	}
-
-	log.Printf("✅ tracepoint attach 成功 (fd=%d, config=%d)", fd, tpID)
-	return &ManualTracepointLink{fd: fd}, nil
+	log.Printf("✅ tracepoint attach 成功: %s/%s", group, name)
+	return &ManualTracepointLink{link: l}, nil
 }
 
 // TCPProbe V3 TCP 探针
 type TCPProbe struct {
-	objPath     string
-	callback    TCPEventCallback
-	link        *ManualTracepointLink
-	objs        *tcpObjects
-	agentHash   uint32
+	objPath   string
+	callback  TCPEventCallback
+	link      *ManualTracepointLink
+	objs      *tcpObjects
+	agentHash uint32
 }
 
 type tcpObjects struct {
-	TraceConnect  *ebpf.Program `ebpf:"trace_connect"`
-	ConfigMap     *ebpf.Map     `ebpf:"config_map"`
-	SentinelEvents *ebpf.Map    `ebpf:"sentinel_events"`
-	SentinelWhitelist *ebpf.Map `ebpf:"sentinel_whitelist"`
-	PidConnStats  *ebpf.Map     `ebpf:"pid_conn_stats"`
-	ConnDetails   *ebpf.Map     `ebpf:"conn_details"`
+	TraceConnect      *ebpf.Program `ebpf:"trace_connect"`
+	ConfigMap         *ebpf.Map     `ebpf:"config_map"`
+	SentinelEvents    *ebpf.Map     `ebpf:"sentinel_events"`
+	SentinelWhitelist *ebpf.Map     `ebpf:"sentinel_whitelist"`
+	PidConnStats      *ebpf.Map     `ebpf:"pid_conn_stats"`
+	ConnDetails       *ebpf.Map     `ebpf:"conn_details"`
 }
 
 // NewTCPProbe 创建 TCP 探针
@@ -151,7 +130,7 @@ func (p *TCPProbe) Load() error {
 		return fmt.Errorf("attach kprobe 失败: %w", err)
 	}
 	log.Printf("✅ kprobe attach 成功")
-	p.link = &ManualTracepointLink{fd: -1, link: tp}
+	p.link = &ManualTracepointLink{link: tp}
 
 	// 启动 Ring Buffer 读取
 	rd, err := ringbuf.NewReader(p.objs.SentinelEvents)

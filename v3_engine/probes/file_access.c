@@ -13,6 +13,33 @@ struct {
 } file_events SEC(".maps");
 
 // ============================================
+// Agent 进程树懒惰加入（P1.9）
+// 位置说明：必须放在 bpf_core_read.h include 之后
+// ============================================
+static __always_inline int is_agent_tree_or_join(__u32 pid) {
+    if (pid == 0) return 0;
+    if (is_agent_tree(pid)) return 1;
+
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task) return 0;
+
+    struct task_struct *parent = NULL;
+    bpf_core_read(&parent, sizeof(parent), &task->real_parent);
+    if (!parent) return 0;
+
+    __u32 ppid = 0;
+    bpf_core_read(&ppid, sizeof(ppid), &parent->pid);
+    if (ppid == 0) return 0;
+
+    if (is_agent_tree(ppid)) {
+        __u8 v = 1;
+        bpf_map_update_elem(&agent_pids, &pid, &v, BPF_ANY);
+        return 1;
+    }
+    return 0;
+}
+
+// ============================================
 // 敏感路径匹配（动态 map）
 //
 // 1. 精确匹配：sensitive_exact (HASH)
@@ -47,6 +74,48 @@ static __always_inline int is_sensitive_path(const char *filename) {
 }
 
 // ============================================
+// Agent 进程树跟随（P1.9）
+//
+// ⚠️ 不用 sched_process_fork：
+//   Go 的 exec.Command 底层用 vfork 语义的 clone
+//   （CLONE_VM|CLONE_VFORK），不触发 sched_process_fork
+//   改用 sched_process_exec（execve 一定触发），查父进程
+//
+//   exec: 父在 agent_pids → 当前进程加入
+//   exit: 清理标记（防 pid 复用攻击）
+// ============================================
+SEC("tracepoint/sched/sched_process_exec")
+int trace_exec(struct trace_event_raw_sched_process_exec *ctx) {
+    __u32 pid = bpf_get_current_pid_tgid() >> 32;
+
+    // 查父进程
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    struct task_struct *parent = NULL;
+    bpf_core_read(&parent, sizeof(parent), &task->real_parent);
+    if (!parent) {
+        return 0;
+    }
+
+    __u32 ppid = 0;
+    bpf_core_read(&ppid, sizeof(ppid), &parent->pid);
+
+    if (is_agent_tree(ppid)) {
+        __u8 v = 1;
+        bpf_map_update_elem(&agent_pids, &pid, &v, BPF_ANY);
+    }
+    return 0;
+}
+
+SEC("tracepoint/sched/sched_process_exit")
+int trace_exit(void *ctx) {
+    // vmlinux.h 里无 trace_event_raw_sched_process_exit 结构
+    // exit tracepoint 时，当前进程就是退出的进程
+    __u32 pid = bpf_get_current_pid_tgid() >> 32;
+    bpf_map_delete_elem(&agent_pids, &pid);
+    return 0;
+}
+
+// ============================================
 // tracepoint 挂载（sys_enter_openat）
 // ============================================
 SEC("tracepoint/syscalls/sys_enter_openat")
@@ -54,6 +123,11 @@ int trace_openat(struct trace_event_raw_sys_enter *args) {
     __u32 pid = bpf_get_current_pid_tgid() >> 32;
     __u32 uid = bpf_get_current_uid_gid() & 0xFFFFFFFF;
     __u64 now = bpf_ktime_get_ns();
+
+    // Agent 自身进程树过滤（P1.9，懒惰加入）
+    if (is_agent_tree_or_join(pid)) {
+        return 0;
+    }
 
     char comm[16] = {};
     bpf_get_current_comm(&comm, sizeof(comm));

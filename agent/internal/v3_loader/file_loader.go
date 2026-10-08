@@ -3,6 +3,7 @@ package v3_loader
 import (
 	"fmt"
 	"log"
+	"os"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -18,6 +19,8 @@ type FileProbe struct {
 	objPath   string
 	callback  FileEventCallback
 	link      *ManualTracepointLink
+	linkFork  *ManualTracepointLink
+	linkExit  *ManualTracepointLink
 	objs      *fileObjects
 	agentHash uint32
 
@@ -30,11 +33,14 @@ type FileProbe struct {
 
 type fileObjects struct {
 	TraceOpenat       *ebpf.Program `ebpf:"trace_openat"`
+	TraceExec         *ebpf.Program `ebpf:"trace_exec"`
+	TraceExit         *ebpf.Program `ebpf:"trace_exit"`
 	ConfigMap         *ebpf.Map     `ebpf:"config_map"`
 	FileEvents        *ebpf.Map     `ebpf:"file_events"`
 	SentinelWhitelist *ebpf.Map     `ebpf:"sentinel_whitelist"`
 	SensitiveExact    *ebpf.Map     `ebpf:"sensitive_exact"`
 	SensitivePrefixes *ebpf.Map     `ebpf:"sensitive_prefixes"`
+	AgentPids         *ebpf.Map     `ebpf:"agent_pids"`
 }
 
 // NewFileProbe 创建 file_access 探针
@@ -69,13 +75,38 @@ func (p *FileProbe) Load() error {
 		return fmt.Errorf("写入 agent_hash 失败: %w", err)
 	}
 
-	// 手动 attach
+	// 写入自己 PID 到 agent_pids（P1.9：过滤 Agent 自身噪声）
+	agentPid := uint32(os.Getpid())
+	var flag uint8 = 1
+	if err := p.objs.AgentPids.Put(&agentPid, &flag); err != nil {
+		log.Printf("⚠️ 写入 agent_pids 失败: %v（P1.9 过滤不生效）", err)
+	} else {
+		log.Printf("✅ agent_pids 已标记自己 PID=%d（P1.9）", agentPid)
+	}
+
+	// 手动 attach（openat）
 	tp, err := attachTracepointManual(p.objs.TraceOpenat, "/sys/kernel/debug/tracing/events/syscalls/sys_enter_openat")
 	if err != nil {
 		p.objs.TraceOpenat.Close()
 		return fmt.Errorf("attach tracepoint 失败: %w", err)
 	}
 	p.link = tp
+
+	// 手动 attach（exec - Agent 进程树跟随）
+	tpExec, err := attachTracepointManual(p.objs.TraceExec, "/sys/kernel/debug/tracing/events/sched/sched_process_exec")
+	if err != nil {
+		log.Printf("⚠️ attach exec tracepoint 失败: %v（P1.9 子进程过滤不生效）", err)
+	} else {
+		p.linkFork = tpExec
+	}
+
+	// 手动 attach（exit - 清理标记）
+	tpExit, err := attachTracepointManual(p.objs.TraceExit, "/sys/kernel/debug/tracing/events/sched/sched_process_exit")
+	if err != nil {
+		log.Printf("⚠️ attach exit tracepoint 失败: %v", err)
+	} else {
+		p.linkExit = tpExit
+	}
 
 	// Ring Buffer 读取
 	rd, err := ringbuf.NewReader(p.objs.FileEvents)
@@ -202,6 +233,14 @@ func (p *FileProbe) Close() {
 	if p.link != nil {
 		p.link.Close()
 		p.link = nil
+	}
+	if p.linkFork != nil {
+		p.linkFork.Close()
+		p.linkFork = nil
+	}
+	if p.linkExit != nil {
+		p.linkExit.Close()
+		p.linkExit = nil
 	}
 	if p.objs != nil {
 		if p.objs.TraceOpenat != nil {

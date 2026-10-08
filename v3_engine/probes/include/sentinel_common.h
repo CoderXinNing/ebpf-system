@@ -111,6 +111,27 @@ struct {
 } sensitive_prefixes SEC(".maps");
 
 // ============================================
+// Agent 自身进程树标记（P1.9）
+//
+// 用途：过滤 Agent 自身行为产生的噪声
+// 生命周期：Agent 启动写自己 pid → fork hook 传播子进程 → exit hook 清理
+// PID 复用防护：exit hook 移除，避免 pid 被攻击者复用后误过滤
+// ============================================
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 1024);
+    __type(key, __u32);   // pid
+    __type(value, __u8);  // 1 = agent tree
+} agent_pids SEC(".maps");
+
+static __always_inline int is_agent_tree(__u32 pid) {
+    if (pid == 0) return 0;
+    __u8 *v = bpf_map_lookup_elem(&agent_pids, &pid);
+    return v && *v == 1;
+}
+
+
+// ============================================
 // Ring Buffer（所有探针共用）
 // ============================================
 struct {
