@@ -156,15 +156,24 @@ func (a *Agent) verifyAndApplyRules(content []byte, sigB64 string) (*rules.RuleS
 		log.Printf("⚠️ fileProbe 未初始化，规则暂时无法应用（启动过早）")
 		return &rs, nil
 	}
-	if rs.SensitivePaths != nil {
-		if err := a.fileProbe.UpdateSensitivePaths(
-			rs.SensitivePaths.ExactPaths,
-			rs.SensitivePaths.PrefixPaths,
-		); err != nil {
+	// 兼容 v1 和 v2 结构
+	var exactPaths, prefixPaths []string
+	if rs.FileAccess != nil && rs.FileAccess.Rules != nil {
+		// v2
+		exactPaths = rs.FileAccess.Rules.SensitiveExact
+		prefixPaths = rs.FileAccess.Rules.SensitivePrefix
+	} else if rs.SensitivePaths != nil {
+		// v1 兼容
+		exactPaths = rs.SensitivePaths.ExactPaths
+		prefixPaths = rs.SensitivePaths.PrefixPaths
+	}
+
+	if exactPaths != nil || prefixPaths != nil {
+		if err := a.fileProbe.UpdateSensitivePaths(exactPaths, prefixPaths); err != nil {
 			return nil, fmt.Errorf("应用规则失败: %w", err)
 		}
 		log.Printf("📋 敏感路径已应用: 精确 %d 条, 前缀 %d 条",
-			len(rs.SensitivePaths.ExactPaths), len(rs.SensitivePaths.PrefixPaths))
+			len(exactPaths), len(prefixPaths))
 	}
 
 	return &rs, nil

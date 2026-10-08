@@ -94,19 +94,21 @@ func (s *Service) EnsureDefault(ctx context.Context) error {
 		return nil // 已有规则
 	}
 
-	log.Printf("📋 首次启动：初始化默认规则")
+	log.Printf("📋 首次启动：初始化默认规则（v2 结构）")
 	def := &rules.RuleSet{
 		Version: 1,
-		SensitivePaths: &rules.SensitivePaths{
-			ExactPaths: []string{
-				"/etc/shadow",
-				"/etc/passwd",
-				"/etc/sudoers",
-			},
-			PrefixPaths: []string{
-				"/root/.ssh/",
-				"/home/",
-				"/var/log/auth/",
+		FileAccess: &rules.FileAccessRules{
+			Rules: &rules.FileAccessRulesInner{
+				SensitiveExact: []string{
+					"/etc/shadow",
+					"/etc/passwd",
+					"/etc/sudoers",
+				},
+				SensitivePrefix: []string{
+					"/root/.ssh/",
+					"/home/",
+					"/var/log/auth/",
+				},
 			},
 		},
 	}
