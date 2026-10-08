@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"time"
+
+	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/plugins"
 )
 
 // currentStarCorrID 返回任意一个活跃星轨 ID（兼容 flushEvents 的单值字段）
@@ -104,13 +106,43 @@ func (a *Agent) activateStar(payload string) {
 // checkStarExpire 遍历所有星轨，清理到期的
 func (a *Agent) checkStarExpire() {
 	a.starsMu.Lock()
-	defer a.starsMu.Unlock()
 	now := time.Now()
+	hadStars := len(a.stars) > 0
 	for id, st := range a.stars {
 		if now.After(st.EndAt) {
 			log.Printf("⭐ 星轨到期: corr=%s", id)
 			delete(a.stars, id)
 		}
+	}
+	remaining := len(a.stars)
+	a.starsMu.Unlock()
+
+	// 星轨从"有"变"无" → 切回 TCP 计数模式（省资源）
+	if hadStars && remaining == 0 {
+		a.switchTCPCollectMode(0)
+	}
+}
+
+// switchTCPCollectMode 切换 TCP 采集模式（带日志，失败不崩）
+// 0 = 计数（默认，省资源）
+// 1 = 明细（星轨激活时，全量上报）
+func (a *Agent) switchTCPCollectMode(mode uint64) {
+	tcpProbe, exists := a.probeManager.Get("tcp_monitor")
+	if !exists {
+		return
+	}
+	tp, ok := tcpProbe.(*plugins.TCPProbe)
+	if !ok {
+		return
+	}
+	if err := tp.SetCollectMode(mode); err != nil {
+		log.Printf("⚠️ TCP 切模式(%d)失败: %v", mode, err)
+		return
+	}
+	if mode == 0 {
+		log.Printf("✅ TCP 已切回计数模式（星轨全部过期）")
+	} else {
+		log.Printf("✅ TCP 已切明细模式")
 	}
 }
 

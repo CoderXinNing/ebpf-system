@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/plugins"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 )
 
@@ -95,15 +94,7 @@ func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 		if a.observationMgr != nil {
 			a.observationMgr.Upgrade("星轨激活")
 		}
-		if tcpProbe, exists := a.probeManager.Get("tcp_monitor"); exists {
-			if tp, ok := tcpProbe.(*plugins.TCPProbe); ok {
-				if err := tp.SetCollectMode(1); err != nil {
-					log.Printf("⚠️ TCP 切明细失败: %v", err)
-				} else {
-					log.Println("✅ TCP 已切明细模式")
-				}
-			}
-		}
+		a.switchTCPCollectMode(1)
 	case pb.ProbeCommand_UNLOAD:
 		// 兼容旧命令：不再使用
 		// 白名单/规则更新统一走 agent_rules（GetRulesFull）
