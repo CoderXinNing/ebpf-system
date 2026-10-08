@@ -19,7 +19,7 @@ type WebComponent struct {
 // webPattern Web组件识别模式
 type webPattern struct {
 	name         string
-	compType     string // 框架/服务器/静态资源
+	compType     string   // 框架/服务器/静态资源
 	jarKeywords  []string // jar包关键字
 	procKeywords []string // 进程关键字
 	pathKeywords []string // 路径关键字
@@ -189,11 +189,11 @@ func IdentifyWebComponents() []WebComponent {
 			}
 			if !found {
 				components = append(components, WebComponent{
-					Name:    svc.Name,
-					Type:    svc.Type,
-					Version: svc.Version,
-					PID:     svc.PID,
-					BasePath: svc.ExePath,
+					Name:       svc.Name,
+					Type:       svc.Type,
+					Version:    svc.Version,
+					PID:        svc.PID,
+					BasePath:   svc.ExePath,
 					ConfigPath: svc.ConfigPath,
 				})
 			}
@@ -234,14 +234,14 @@ func extractBasePath(cmdline, exePath string) string {
 // findWebConfigPath 查找Web组件配置文件
 func findWebConfigPath(name, basePath string) string {
 	configs := map[string][]string{
-		"Nginx":    {basePath + "/nginx.conf", "/etc/nginx/nginx.conf"},
-		"Apache":   {basePath + "/conf/httpd.conf", "/etc/apache2/apache2.conf"},
-		"Tomcat":   {basePath + "/conf/server.xml", "/etc/tomcat9/server.xml"},
+		"Nginx":      {basePath + "/nginx.conf", "/etc/nginx/nginx.conf"},
+		"Apache":     {basePath + "/conf/httpd.conf", "/etc/apache2/apache2.conf"},
+		"Tomcat":     {basePath + "/conf/server.xml", "/etc/tomcat9/server.xml"},
 		"SpringBoot": {basePath + "/application.properties", basePath + "/application.yml"},
-		"Django":   {basePath + "/settings.py"},
-		"Flask":    {basePath + "/app.py", basePath + "/wsgi.py"},
-		"Express":  {basePath + "/package.json"},
-		"PHP-FPM":  {"/etc/php/*/fpm/php-fpm.conf"},
+		"Django":     {basePath + "/settings.py"},
+		"Flask":      {basePath + "/app.py", basePath + "/wsgi.py"},
+		"Express":    {basePath + "/package.json"},
+		"PHP-FPM":    {"/etc/php/*/fpm/php-fpm.conf"},
 	}
 
 	if paths, ok := configs[name]; ok {
