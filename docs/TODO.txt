@@ -1,36 +1,43 @@
 AsterTrack 待办清单
 =================================================
-日期：2026-10-08
+日期：2026-10-08（会话结束更新）
 说明：按优先级排序，跨会话跟踪
 =================================================
-
-
-【P0 · 当前散落未提交】
-─────────────────────────────────────
-
-[ ] 清理 .bak 残留（10 个文件）
-[ ] file_access.c 删 bpf_printk 调试
-[ ] commit P1.9 + link.Tracepoint 改动
 
 
 【P1 · 阶段 0：清基础（1-2 天）】
 ─────────────────────────────────────
 
-[ ] P1.9 A1 完成（改用户态主动标记方案）
-    - Agent 包装 exec.Command
-    - cmd.Start() 后写 agent_pids map
-    - PPID 校验（防误标）
-    - (PID, start_time) 双因子（防复用）
-    - 汇总上报 heartbeat
+[x] P1.9 A1 完成（用户态主动标记）✅ 2026-10-08
+    - RunAndMark + PPID 校验（已实现）
+    - 31 处 exec.Command 替换（已完成）
+    - agent_pids 启动清空 + 周期清理（已完成）
+    ⚠️ 待做：(PID, start_time) 双因子（防 PID 复用）
+    ⚠️ 待做：汇总上报 heartbeat
 
-[ ] tcp 模式回落
-    - 星轨过期时 SetCollectMode(0)
-    - 查：谁负责切回
+[x] tcp 模式回落 ✅ 2026-10-08
+    - switchTCPCollectMode 统一入口
+    - checkStarExpire 星轨全过期切回 0
 
 [ ] 白名单决策
     - A：启用（+ UI + DB）
     - B：删掉（清死代码）
     - 决策待定
+
+
+【已完成 · 2026-10-08】
+─────────────────────────────────────
+
+[x] 规则体系整改（4 阶段）
+    - A: JSON v1 → v2（探针分节）
+    - B1: ConfigApplier 接口
+    - B2: TCP sensitive_ports 下发
+    - C: 防抖 + recover + 熔断
+
+[x] link.Tracepoint 修复（替代手搓 perf_event）
+[x] P1.9 A1（用户态主动标记）
+[x] tcp 模式回落
+[x] 文档整合（PROJECT-STATUS + EDR-CORRELATION-v3.1 + RULES-APPLY-DESIGN + TODO）
 
 
 【P1 · 阶段 1：血缘表 + 锚点（3-5 天）】
@@ -94,13 +101,6 @@ AsterTrack 待办清单
 
 【P2 · 其他问题】
 ─────────────────────────────────────
-
-[ ] collector 剩余 8 处 exec.Command 未走 RunAndMark
-    - 位置：package.go(4) / system.go(3) / account.go(1)
-    - 形式：cmd := exec.Command(...) 后跟 .Start/.Wait/Pipe
-    - 需要新 helper：StartAndMark（返回 *exec.Cmd 供调用方 Wait）
-    - 优先级：P2（whoami 是主要噪声源，已解决）
-
 
 [ ] file_access 过滤太宽
     - /home/ 前缀导致 236 条/5分钟

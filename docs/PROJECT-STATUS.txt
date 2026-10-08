@@ -1,6 +1,6 @@
 AsterTrack 项目现状盘点
 =================================================
-日期：2026-10-08
+日期：2026-10-08（会话结束更新）
 用途：新会话/新协作者快速了解项目
 =================================================
 
@@ -71,16 +71,11 @@ ebpf-sentinel/
 【三、当前 commit 状态】
 
 分支：main
-HEAD：df77fca（docs: P1.9 Agent 自身/系统行为误报方案）
+HEAD：86042d5（fix(star): 星轨过期后 TCP 切回计数模式）
 origin/main：同
 
-未提交的改动（散着，待处理）：
-  M agent/internal/v3_loader/file_loader.go     ← P1.9 改动
-  M agent/internal/v3_loader/tcp_loader.go      ← link.Tracepoint 重构
-  M v3_engine/probes/file_access.c              ← P1.9 + bpf_printk 调试
-  M v3_engine/probes/file_access.o
-  M v3_engine/probes/include/sentinel_common.h  ← agent_pids map
-  + 10 个 .bak-* 文件（调试残留）
+工作区：干净
+今天完成的工作已全部 commit
 
 
 【四、已完成能力】
@@ -120,6 +115,22 @@ origin/main：同
   - mutation_end 不再触发新星轨
   - migration GRANT + 约定文档
   - link.Tracepoint（替代手搓 perf_event）
+
+七、规则体系整改（2026-10-08）
+  - 阶段 A：JSON 结构 v1 → v2（探针分节 + rules/whitelist）
+  - 阶段 B1：ConfigApplier 接口 + 5 插件整改
+  - 阶段 B2：TCP sensitive_ports 走规则下发
+  - 阶段 C：防抖 + recover + 熔断（5 个护栏）
+
+八、P1.9 A1：Agent 子进程过滤（2026-10-08）
+  - 用户态主动标记（RunAndMark + PPID 校验）
+  - collector 31 处 exec.Command 全部替换
+  - agent_pids 启动清空 + 周期清理死 PID
+  - 效果：whoami 等子进程不再触发假告警
+
+九、tcp 模式回落修复（2026-10-08）
+  - 星轨过期时自动切回计数模式
+  - switchTCPCollectMode 统一入口
 
 
 【五、半成品（做到一半）】
