@@ -74,6 +74,11 @@ func (p *FileProbe) UpdateRules(rules []framework.Rule) error {
 	return nil
 }
 
+// IsLoaded 探针是否已加载完成（规则应用前需确认）
+func (p *FileProbe) IsLoaded() bool {
+	return p.loaded && p.probe != nil
+}
+
 // UpdateSensitivePaths 转发给底层 v3_loader.FileProbe（规则热更新用）
 func (p *FileProbe) UpdateSensitivePaths(exactPaths, prefixPaths []string) error {
 	if p.probe == nil {

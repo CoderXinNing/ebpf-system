@@ -22,6 +22,8 @@ const (
 )
 
 // syncRulesOnStartup 启动时：优先加载本地缓存（已验签），避免启动期"裸奔"
+//
+// 时序：探针 Attach 是异步的，需等 fileProbe 就绪才能应用规则
 func (a *Agent) syncRulesOnStartup() {
 	content, sig, err := loadRulesCache()
 	if err != nil {
@@ -30,15 +32,30 @@ func (a *Agent) syncRulesOnStartup() {
 		return
 	}
 
+	// 等探针就绪（最多 15 秒）
+	for i := 0; i < 30; i++ {
+		if a.fileProbe != nil && a.fileProbe.IsLoaded() {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
 	rs, err := a.verifyAndApplyRules(content, sig)
 	if err != nil {
-		a.setRulesStatus(RulesStatusUnknown, 0, "")
-		log.Printf("⚠️ 本地规则缓存验签失败: %v（拒绝加载）", err)
+		// 区分"验签失败"和"应用失败"（探针未就绪是应用问题，不是安全问题）
+		if a.fileProbe == nil || !a.fileProbe.IsLoaded() {
+			log.Printf("⚠️ 本地规则暂未应用（探针未就绪）: %v", err)
+			a.setRulesStatus(RulesStatusUnknown, 0, "")
+		} else {
+			log.Printf("⚠️ 本地规则缓存校验失败: %v（拒绝加载）", err)
+			a.setRulesStatus(RulesStatusUnknown, 0, "")
+		}
 		return
 	}
 
-	a.setRulesStatus(RulesStatusSynced, rs.Version, "")
-	log.Printf("📋 启动加载本地规则: version=%d", rs.Version)
+	sha256hex, _ := rules.Hash(rs)
+	a.setRulesStatus(RulesStatusSynced, rs.Version, sha256hex)
+	log.Printf("📋 启动加载本地规则: version=%d sha256=%s...", rs.Version, sha256hex[:16])
 }
 
 // syncRulesFromServer 主动从 Server 拉取规则（比对版本 → 拉全量 → 验签 → 应用）
