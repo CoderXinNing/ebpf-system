@@ -165,7 +165,15 @@ func (p *FileProbe) UpdateWhitelist(processNames []string) error {
 //
 // 清空策略：不用 Iterate（cilium/ebpf 对 LPM_TRIE 的 Iterate 有 key size 问题），
 // 改为记录"上次写入的 keys"，本次逐条 Delete 后再写新的。
-func (p *FileProbe) UpdateSensitivePaths(exactPaths, prefixPaths []string) error {
+func (p *FileProbe) UpdateSensitivePaths(exactPaths, prefixPaths []string) (err error) {
+	// 阶段 C：panic recover（防 map 操作 panic 崩 Agent）
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("规则更新 panic（已恢复）: %v", r)
+			log.Printf("❌ UpdateSensitivePaths panic: %v", r)
+		}
+	}()
+
 	if p.objs == nil || p.objs.SensitiveExact == nil || p.objs.SensitivePrefixes == nil {
 		return fmt.Errorf("探针未加载")
 	}

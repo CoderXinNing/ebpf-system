@@ -78,6 +78,11 @@ type Agent struct {
 	rulesSha256    string
 	rulesStatus    string // synced / stale / unknown
 	rulesLastCheck int64
+
+	// 规则应用防护（阶段 C）
+	rulesLastApplyAt   time.Time // 上次成功 apply 时间（防抖）
+	rulesApplyFailures int       // 连续失败次数（熔断）
+	rulesGateClosed    bool      // 熔断状态
 }
 
 func New(cfg *config.AgentConfig) *Agent {

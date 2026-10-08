@@ -61,6 +61,14 @@ const (
 	// BaselinePersistPeriod 基线持久化周期
 	BaselinePersistPeriod = 5 * time.Minute
 
+	// ========== 规则应用防护（阶段 C）==========
+
+	// RulesApplyMinInterval 最小应用间隔（防抖：连续快改只应用最终一次）
+	RulesApplyMinInterval = 3 * time.Second
+
+	// RulesApplyFailThreshold 连续失败阈值（触发熔断）
+	RulesApplyFailThreshold = 3
+
 	// ========== 事件上报 ==========
 
 	// EventFlushInterval 事件队列 flush 周期

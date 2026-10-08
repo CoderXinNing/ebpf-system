@@ -113,14 +113,22 @@ func (a *Agent) syncRulesFromServer(ctx context.Context) error {
 		return nil
 	}
 
-	// 4. 验签 + 应用 + 写缓存
+	// 4. 检查闸门（防抖 + 熔断）
+	if err := a.checkApplyGate(); err != nil {
+		log.Printf("⚠️ 规则应用被闸门拦截: %v", err)
+		return nil // 不算失败——不是应用本身失败
+	}
+
+	// 5. 验签 + 应用
 	rs, err := a.verifyAndApplyRules([]byte(fullResp.Content), fullResp.Signature)
 	if err != nil {
+		a.markApplyFailure()
 		a.markRulesStale()
 		return fmt.Errorf("规则验签/应用失败: %w", err)
 	}
+	a.markApplySuccess()
 
-	// 5. 写本地缓存
+	// 6. 写本地缓存
 	if err := saveRulesCache([]byte(fullResp.Content), fullResp.Signature); err != nil {
 		log.Printf("⚠️ 规则缓存写入失败: %v", err)
 	}
@@ -195,6 +203,55 @@ func (a *Agent) verifyAndApplyRules(content []byte, sigB64 string) (*rules.RuleS
 	log.Printf("📋 规则已分发到 %d 个探针", applied)
 
 	return &rs, nil
+}
+
+// ========== 应用防护（阶段 C）==========
+
+// checkApplyGate 检查规则应用闸门（防抖 + 熔断）
+//
+// 返回 nil 表示可以应用；非 nil 表示拒绝及原因
+func (a *Agent) checkApplyGate() error {
+	a.rulesMu.Lock()
+	defer a.rulesMu.Unlock()
+
+	if a.rulesGateClosed {
+		return fmt.Errorf("规则应用已熔断（连续失败 %d 次）", a.rulesApplyFailures)
+	}
+
+	if !a.rulesLastApplyAt.IsZero() {
+		elapsed := time.Since(a.rulesLastApplyAt)
+		if elapsed < RulesApplyMinInterval {
+			return fmt.Errorf("距上次应用 %v < %v，跳过",
+				elapsed.Round(time.Millisecond), RulesApplyMinInterval)
+		}
+	}
+
+	return nil
+}
+
+// markApplySuccess 标记应用成功
+func (a *Agent) markApplySuccess() {
+	a.rulesMu.Lock()
+	defer a.rulesMu.Unlock()
+
+	if a.rulesApplyFailures > 0 {
+		log.Printf("✅ 规则应用恢复（前 %d 次失败）", a.rulesApplyFailures)
+	}
+	a.rulesLastApplyAt = time.Now()
+	a.rulesApplyFailures = 0
+	a.rulesGateClosed = false
+}
+
+// markApplyFailure 标记应用失败
+func (a *Agent) markApplyFailure() {
+	a.rulesMu.Lock()
+	defer a.rulesMu.Unlock()
+
+	a.rulesApplyFailures++
+	if a.rulesApplyFailures >= RulesApplyFailThreshold && !a.rulesGateClosed {
+		a.rulesGateClosed = true
+		log.Printf("❌ 规则应用连续失败 %d 次，熔断（需人工介入）", a.rulesApplyFailures)
+	}
 }
 
 // ========== 本地缓存 ==========
