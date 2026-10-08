@@ -6,3 +6,5 @@ server/static/agent-linux-amd64
 certs/
 .bak-cert-*/
 agent/data/baseline.json
+agent/data/rules.json
+agent/data/rules.sig
