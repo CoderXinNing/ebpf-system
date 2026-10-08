@@ -1,0 +1,151 @@
+规则下发与 Apply 机制设计
+=================================================
+日期：2026-10-08
+状态：定稿，待实施
+=================================================
+
+
+【核心问题】
+规则频繁修改 → Agent 频繁更新 C map → 可能抖动
+解决：源头控制（前端草稿 + Apply）+ Agent 兜底（防抖 + 闸门）
+
+
+【整体流程】
+
+前端：
+  编辑规则 → 本地草稿（不下发）
+  点"Apply" → 一次性提交完整快照
+
+Server：
+  接收完整快照 → 版本校验（乐观锁）→ 签名 → 下发
+
+Agent：
+  收到 → 验签 → 解析 → 分发到各探针 → 更新 C map
+  带防抖 + recover + 闸门兜底
+
+
+【数据存储】
+一个 JSON（不分文件），存 DB agent_rules
+内部结构：探针分节 + 每节 rules/whitelist
+
+{
+  "version": 2,
+  "file_access": {
+    "rules": {
+      "sensitive_exact": [...],
+      "sensitive_prefix": [...]
+    },
+    "whitelist": {
+      "exclude_comms": ["cron", "logrotate"]
+    }
+  },
+  "exec": {
+    "rules": {"min_cmdline_len": 1},
+    "whitelist": {"exclude_comms": ["systemd"]}
+  },
+  "tcp": {
+    "rules": {"sensitive_ports": [...]},
+    "whitelist": {"exclude_ips": [...]}
+  }
+}
+
+
+【迁移】
+v1 → v2：
+  旧字段 sensitive_paths → 移到 file_access.rules 下
+  Server 侧自动升级
+  旧 Agent 不认 v2 → 保持 v1 兼容（读旧字段）
+
+
+【Apply 机制】
+
+前端：
+  - 草稿本地存（localStorage 或 pinia）
+  - "Apply" 按钮一次性提交完整快照
+  - diff 预览（改了哪些）
+  - 冲突提示（版本变了）
+
+Server：
+  - Apply API 带"基于哪个版本"
+  - 乐观锁：如果当前版本 ≠ 用户基于的版本 → 拒绝
+  - 签名 → 写 DB → 通知在线 Agent
+
+Agent：
+  - 收到规则 → 验签 → 应用（带防抖）
+  - 心跳带 rules_version（已有）
+  - Server 汇总"哪些 Agent 已生效"
+
+
+【Agent 侧防护（5 补丁）】
+
+1. 防抖（3 秒）
+   收到新规则 → 不立即应用
+   等 3 秒 → 无新规则才应用
+   避免连续改 → 只应用最终态
+
+2. panic recover
+   UpdateSensitivePaths 加 defer recover
+   即使 map 操作 panic，Agent 不崩
+
+3. 最小更新间隔
+   距上次 apply 不足 1 秒 → 拒绝，排队
+   兜底防极端循环
+
+4. 健康闸门
+   连续失败 3 次 → 进入"静默模式"
+   停止接收规则更新，保持旧规则
+   上报 Server：本 Agent 规则更新异常
+
+5. 规则数量上限
+   单探针规则 > 1024 → 拒绝
+   防"导入 100 万条打爆内存"
+
+
+【前端职责】
+- 草稿本地存
+- Apply 一次性提交
+- diff 预览
+- 版本冲突提示
+
+
+【Server 职责】
+- Apply API + 乐观锁
+- 签名（复用 rulesign）
+- 通知在线 Agent
+- 汇总"哪些 Agent 已生效 v2"
+
+
+【Agent 职责】
+- 验签（复用）
+- 解析 JSON → 分发各探针
+- 防抖 + recover + 闸门
+- 心跳上报 rules_version
+
+
+【RBAC（暂不细分）】
+现状：只有"管理员"
+待设计：rules.write / probe.deploy / baseline.reset 等原子权限
+触发：引入多角色（operator / viewer / auditor）时
+优先级：P2
+
+
+【工作评估】
+
+阶段 A：JSON 结构升级（v1 → v2）+ Server 兼容    1 天
+阶段 B：Agent 侧分发（各探针 Update 方法）       1 天
+阶段 C：Agent 侧防抖 + recover + 闸门            1 天
+阶段 D：Server Apply API + 乐观锁                1 天
+阶段 E：前端草稿 + Apply + diff 预览             1-2 天
+阶段 F：Server Agent 状态汇总 + UI               1 天
+
+总计：5-6 天
+
+
+【跟现有能力的关系】
+- 复用：rulesign（签名）、agent_rules 表、心跳 rules_version
+- 升级：content JSON 结构 v1 → v2
+- 新增：Apply API、前端草稿、乐观锁、防抖、闸门
+
+=================================================
+END
+=================================================
