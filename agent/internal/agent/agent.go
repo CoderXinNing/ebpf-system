@@ -265,6 +265,9 @@ func (a *Agent) Run(ctx context.Context) {
 	// 探针自检循环
 	go a.probeSelfTestLoop(ctx)
 
+	// agent_pids 死 PID 清理循环（P1.9）
+	go a.agentPidCleanupLoop(ctx)
+
 	// TCP 突变检测循环
 	go a.tcpAnomalyLoop(ctx)
 
@@ -1046,6 +1049,28 @@ func (a *Agent) analyzeTCPAnomalies() {
 					Detail:      reason,
 					Timestamp:   time.Now().Unix(),
 				})
+			}
+		}
+	}
+}
+
+// agentPidCleanupLoop 定期清理 agent_pids 里的死 PID
+// 兜底 exit hook 的遗漏
+func (a *Agent) agentPidCleanupLoop(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if a.fileProbe == nil {
+				continue
+			}
+			if n, err := a.fileProbe.CleanupDeadPids(); err != nil {
+				log.Printf("⚠️ agent_pids 清理失败: %v", err)
+			} else if n > 0 {
+				log.Printf("🧹 agent_pids 清理 %d 个死 PID", n)
 			}
 		}
 	}

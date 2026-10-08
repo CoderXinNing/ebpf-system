@@ -108,8 +108,6 @@ int trace_exec(struct trace_event_raw_sched_process_exec *ctx) {
 
 SEC("tracepoint/sched/sched_process_exit")
 int trace_exit(void *ctx) {
-    // vmlinux.h 里无 trace_event_raw_sched_process_exit 结构
-    // exit tracepoint 时，当前进程就是退出的进程
     __u32 pid = bpf_get_current_pid_tgid() >> 32;
     bpf_map_delete_elem(&agent_pids, &pid);
     return 0;

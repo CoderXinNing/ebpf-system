@@ -75,6 +75,12 @@ func (p *FileProbe) Load() error {
 		return fmt.Errorf("写入 agent_hash 失败: %w", err)
 	}
 
+	// 清空 agent_pids（防老 Agent 残留死 PID 累积）
+	// BPF map 不随进程重启清空，pkill 时可能残留
+	if err := clearMap(p.objs.AgentPids); err != nil {
+		log.Printf("⚠️ 清空 agent_pids 失败: %v", err)
+	}
+
 	// 写入自己 PID 到 agent_pids（P1.9：过滤 Agent 自身噪声）
 	agentPid := uint32(os.Getpid())
 	var flag uint8 = 1
@@ -149,6 +155,83 @@ func (p *FileProbe) MarkAgentPid(pid uint32) error {
 	}
 	var v uint8 = 1
 	return p.objs.AgentPids.Put(&pid, &v)
+}
+
+// clearMap 清空 map（遍历删除所有 key）
+func clearMap(m *ebpf.Map) error {
+	keySize := int(m.KeySize())
+	valueSize := int(m.ValueSize())
+	if keySize <= 0 || valueSize <= 0 {
+		return fmt.Errorf("无效的 key/value 大小: %d/%d", keySize, valueSize)
+	}
+
+	key := make([]byte, keySize)
+	value := make([]byte, valueSize)
+
+	iter := m.Iterate()
+	var toDelete [][]byte
+	for iter.Next(&key, &value) {
+		k := make([]byte, len(key))
+		copy(k, key)
+		toDelete = append(toDelete, k)
+	}
+	if err := iter.Err(); err != nil {
+		return err
+	}
+	for _, k := range toDelete {
+		if err := m.Delete(k); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CleanupDeadPids 清理 agent_pids 里已退出的 PID
+//
+// 用途：兜底 exit hook 的遗漏（Go fork 时序/printk 缓冲等问题）
+// 每 60s 调用一次，扫一遍 map，不在 /proc/<pid> 里的删除
+func (p *FileProbe) CleanupDeadPids() (int, error) {
+	if p.objs == nil || p.objs.AgentPids == nil {
+		return 0, nil
+	}
+
+	// 收集所有 key
+	keySize := int(p.objs.AgentPids.KeySize())
+	valueSize := int(p.objs.AgentPids.ValueSize())
+	if keySize <= 0 || valueSize <= 0 {
+		return 0, nil
+	}
+
+	key := make([]byte, keySize)
+	value := make([]byte, valueSize)
+
+	var deadPids []uint32
+	iter := p.objs.AgentPids.Iterate()
+	for iter.Next(&key, &value) {
+		if len(key) < 4 {
+			continue
+		}
+		pid := uint32(key[0]) | uint32(key[1])<<8 | uint32(key[2])<<16 | uint32(key[3])<<24
+		if pid == 0 {
+			continue
+		}
+		// 检查 /proc/<pid> 是否存在
+		if _, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); os.IsNotExist(err) {
+			deadPids = append(deadPids, pid)
+		}
+	}
+	if err := iter.Err(); err != nil {
+		return 0, err
+	}
+
+	// 删除死 PID
+	cleaned := 0
+	for _, pid := range deadPids {
+		if err := p.objs.AgentPids.Delete(&pid); err == nil {
+			cleaned++
+		}
+	}
+	return cleaned, nil
 }
 
 // UpdateWhitelist 更新白名单

@@ -77,6 +77,14 @@ func (p *FileProbe) IsLoaded() bool {
 	return p.loaded && p.probe != nil
 }
 
+// CleanupDeadPids 转发（P1.9：清理死 PID）
+func (p *FileProbe) CleanupDeadPids() (int, error) {
+	if p.probe == nil {
+		return 0, nil
+	}
+	return p.probe.CleanupDeadPids()
+}
+
 // MarkAgentPid 转发给底层（P1.9：标记 Agent 子进程）
 func (p *FileProbe) MarkAgentPid(pid uint32) error {
 	if p.probe == nil {

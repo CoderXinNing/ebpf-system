@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -153,8 +152,7 @@ func collectMemoryInfo() MemoryInfo {
 func collectDiskInfo() []DiskInfo {
 	var disks []DiskInfo
 
-	cmd := exec.Command("df", "-B", "M")
-	output, err := cmd.Output()
+	output, err := RunAndMark("df", "-B", "M")
 	if err != nil {
 		return disks
 	}
@@ -203,8 +201,7 @@ func collectNetworkInfo() []NetworkInfo {
 			netInfo.MAC = strings.TrimSpace(string(macData))
 		}
 
-		cmd := exec.Command("ip", "-4", "addr", "show", name)
-		output, err := cmd.Output()
+		output, err := RunAndMark("ip", "-4", "addr", "show", name)
 		if err == nil {
 			for _, line := range strings.Split(string(output), "\n") {
 				if strings.Contains(line, "inet ") {
@@ -247,8 +244,7 @@ func collectServices() []ServiceInfo {
 	var services []ServiceInfo
 
 	// 尝试systemd
-	cmd := exec.Command("systemctl", "list-unit-files", "--type=service", "--state=enabled", "--no-legend")
-	output, err := cmd.Output()
+	output, err := RunAndMark("systemctl", "list-unit-files", "--type=service", "--state=enabled", "--no-legend")
 	if err != nil {
 		// systemd不可用，尝试读取/etc/init.d（SysV）
 		return collectSysVServices()

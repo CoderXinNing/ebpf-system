@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"net"
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -174,8 +173,7 @@ func getLastLogins() map[string]loginInfo {
 	result := make(map[string]loginInfo)
 
 	// 使用 last 命令获取登录记录（解析 /var/log/wtmp）
-	cmd := exec.Command("last", "-i", "-n", "100")
-	output, err := cmd.Output()
+	output, err := RunAndMark("last", "-i", "-n", "100")
 	if err != nil {
 		return result
 	}

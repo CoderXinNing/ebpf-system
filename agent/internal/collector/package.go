@@ -2,7 +2,6 @@ package collector
 
 import (
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -46,8 +45,7 @@ func collectDebPackages() []PackageInfo {
 		return packages
 	}
 
-	cmd := exec.Command("dpkg-query", "-W", "-f=${Package}\t${Version}\n")
-	output, err := cmd.Output()
+	output, err := RunAndMark("dpkg-query", "-W", "-f=${Package}\t${Version}\n")
 	if err != nil {
 		return packages
 	}
@@ -73,8 +71,7 @@ func collectRPMPackages() []PackageInfo {
 		return packages
 	}
 
-	cmd := exec.Command("rpm", "-qa", "--queryformat=%{NAME}\t%{VERSION}-%{RELEASE}\n")
-	output, err := cmd.Output()
+	output, err := RunAndMark("rpm", "-qa", "--queryformat=%{NAME}\t%{VERSION}-%{RELEASE}\n")
 	if err != nil {
 		return packages
 	}
@@ -100,8 +97,7 @@ func collectAlpinePackages() []PackageInfo {
 		return packages
 	}
 
-	cmd := exec.Command("apk", "info", "-v")
-	output, err := cmd.Output()
+	output, err := RunAndMark("apk", "info", "-v")
 	if err != nil {
 		return packages
 	}
@@ -132,8 +128,7 @@ func collectPacmanPackages() []PackageInfo {
 		return packages
 	}
 
-	cmd := exec.Command("pacman", "-Q")
-	output, err := cmd.Output()
+	output, err := RunAndMark("pacman", "-Q")
 	if err != nil {
 		return packages
 	}
