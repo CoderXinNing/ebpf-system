@@ -2,13 +2,12 @@ package collector
 
 import (
 	"os"
-	"os/exec"
 	"strings"
 )
 
 // 系统启动时间
 func GetSystemBootTime() string {
-	out, err := exec.Command("uptime", "-s").Output()
+	out, err := RunAndMark("uptime", "-s")
 	if err != nil {
 		return "-"
 	}
@@ -25,7 +24,7 @@ type DiskUsage struct {
 
 func CollectDiskUsage() []DiskUsage {
 	var usages []DiskUsage
-	out, err := exec.Command("df", "-BM").Output()
+	out, err := RunAndMark("df", "-BM")
 	if err != nil {
 		return usages
 	}
@@ -62,12 +61,12 @@ func CollectDiskUsage() []DiskUsage {
 
 // 网卡详细信息
 type NetworkDetail struct {
-	Name   string `json:"name"`
-	MAC    string `json:"mac"`
+	Name   string   `json:"name"`
+	MAC    string   `json:"mac"`
 	IPs    []string `json:"ips"`
-	Speed  string `json:"speed"`
-	Duplex string `json:"duplex"`
-	MTU    string `json:"mtu"`
+	Speed  string   `json:"speed"`
+	Duplex string   `json:"duplex"`
+	MTU    string   `json:"mtu"`
 }
 
 func CollectNetworkDetails() []NetworkDetail {
@@ -97,7 +96,7 @@ func CollectNetworkDetails() []NetworkDetail {
 		}
 
 		// IP
-		out, _ := exec.Command("ip", "-4", "addr", "show", name).Output()
+		out, _ := RunAndMark("ip", "-4", "addr", "show", name)
 		for _, line := range strings.Split(string(out), "\n") {
 			if strings.Contains(line, "inet ") {
 				f := strings.Fields(strings.TrimSpace(line))
@@ -108,7 +107,7 @@ func CollectNetworkDetails() []NetworkDetail {
 		}
 
 		// Speed / Duplex (需要ethtool)
-		if out, err := exec.Command("ethtool", name).Output(); err == nil {
+		if out, err := RunAndMark("ethtool", name); err == nil {
 			for _, line := range strings.Split(string(out), "\n") {
 				line = strings.TrimSpace(line)
 				if strings.HasPrefix(line, "Speed:") {
@@ -128,7 +127,7 @@ func CollectNetworkDetails() []NetworkDetail {
 
 // DNS和网关
 type NetworkGateway struct {
-	Gateway string `json:"gateway"`
+	Gateway string   `json:"gateway"`
 	DNS     []string `json:"dns"`
 }
 
@@ -136,7 +135,7 @@ func CollectGatewayDNS() *NetworkGateway {
 	ng := &NetworkGateway{}
 
 	// 默认网关
-	out, err := exec.Command("ip", "route", "show", "default").Output()
+	out, err := RunAndMark("ip", "route", "show", "default")
 	if err == nil {
 		fields := strings.Fields(string(out))
 		for i, f := range fields {

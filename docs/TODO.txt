@@ -95,6 +95,13 @@ AsterTrack 待办清单
 【P2 · 其他问题】
 ─────────────────────────────────────
 
+[ ] collector 剩余 8 处 exec.Command 未走 RunAndMark
+    - 位置：package.go(4) / system.go(3) / account.go(1)
+    - 形式：cmd := exec.Command(...) 后跟 .Start/.Wait/Pipe
+    - 需要新 helper：StartAndMark（返回 *exec.Cmd 供调用方 Wait）
+    - 优先级：P2（whoami 是主要噪声源，已解决）
+
+
 [ ] file_access 过滤太宽
     - /home/ 前缀导致 236 条/5分钟
     - 评估是否收窄

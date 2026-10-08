@@ -1,7 +1,6 @@
 package collector
 
 import (
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,7 +12,7 @@ var pkgSizeOnce sync.Once
 func loadPkgSizes() {
 	pkgSizeOnce.Do(func() {
 		pkgSizeCache = make(map[string]int64)
-		out, err := exec.Command("dpkg-query", "-W", "-f", "${Package}\t${Installed-Size}\n").Output()
+		out, err := RunAndMark("dpkg-query", "-W", "-f", "${Package}\t${Installed-Size}\n")
 		if err != nil {
 			return
 		}

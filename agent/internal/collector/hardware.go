@@ -3,7 +3,6 @@ package collector
 import (
 	"bufio"
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -19,21 +18,21 @@ func CollectHardwareInfo() *HardwareInfo {
 	hw := &HardwareInfo{}
 
 	// dmidecode 获取硬件信息
-	if out, err := exec.Command("dmidecode", "-s", "system-manufacturer").Output(); err == nil {
+	if out, err := RunAndMark("dmidecode", "-s", "system-manufacturer"); err == nil {
 		hw.Manufacturer = strings.TrimSpace(string(out))
 	}
-	if out, err := exec.Command("dmidecode", "-s", "system-product-name").Output(); err == nil {
+	if out, err := RunAndMark("dmidecode", "-s", "system-product-name"); err == nil {
 		hw.Model = strings.TrimSpace(string(out))
 	}
-	if out, err := exec.Command("dmidecode", "-s", "system-serial-number").Output(); err == nil {
+	if out, err := RunAndMark("dmidecode", "-s", "system-serial-number"); err == nil {
 		hw.SerialNumber = strings.TrimSpace(string(out))
 	}
-	if out, err := exec.Command("dmidecode", "-s", "system-uuid").Output(); err == nil {
+	if out, err := RunAndMark("dmidecode", "-s", "system-uuid"); err == nil {
 		hw.UUID = strings.TrimSpace(string(out))
 	}
 
 	// 系统启动时间
-	if out, err := exec.Command("uptime", "-s").Output(); err == nil {
+	if out, err := RunAndMark("uptime", "-s"); err == nil {
 		hw.BootTime = strings.TrimSpace(string(out))
 	}
 
@@ -79,13 +78,13 @@ func CollectKernelModuleDetails() []KernelModuleDetail {
 		}
 
 		// modinfo 获取详细信息
-		if out, err := exec.Command("modinfo", "-n", name).Output(); err == nil {
+		if out, err := RunAndMark("modinfo", "-n", name); err == nil {
 			detail.Path = strings.TrimSpace(string(out))
 		}
-		if out, err := exec.Command("modinfo", "-d", name).Output(); err == nil {
+		if out, err := RunAndMark("modinfo", "-d", name); err == nil {
 			detail.Description = strings.TrimSpace(string(out))
 		}
-		if out, err := exec.Command("modinfo", "-F", "version", name).Output(); err == nil {
+		if out, err := RunAndMark("modinfo", "-F", "version", name); err == nil {
 			detail.Version = strings.TrimSpace(string(out))
 		}
 

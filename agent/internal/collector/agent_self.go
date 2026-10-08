@@ -2,7 +2,6 @@ package collector
 
 import (
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -28,7 +27,7 @@ func CollectAgentSelfInfo() *AgentSelfInfo {
 }
 
 func getCurrentUser() string {
-	out, err := exec.Command("whoami").Output()
+	out, err := RunAndMark("whoami")
 	if err != nil {
 		return "unknown"
 	}

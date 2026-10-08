@@ -15,6 +15,7 @@ import (
 	"crypto/x509"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/actor"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/baseline"
+	"github.com/CoderXinNing/ebpf-system/agent/internal/collector"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/config"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/paths"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe"
@@ -254,6 +255,12 @@ func (a *Agent) Run(ctx context.Context) {
 			a.baseline.Persist()
 		}
 	}()
+
+	// 注入 PidMarker（P1.9：Agent 子进程过滤）
+	if a.fileProbe != nil {
+		collector.SetPidMarker(a.fileProbe)
+		log.Printf("✅ PidMarker 已注入 collector（P1.9）")
+	}
 
 	// 探针自检循环
 	go a.probeSelfTestLoop(ctx)

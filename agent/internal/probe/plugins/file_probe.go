@@ -77,6 +77,14 @@ func (p *FileProbe) IsLoaded() bool {
 	return p.loaded && p.probe != nil
 }
 
+// MarkAgentPid 转发给底层（P1.9：标记 Agent 子进程）
+func (p *FileProbe) MarkAgentPid(pid uint32) error {
+	if p.probe == nil {
+		return fmt.Errorf("探针未加载")
+	}
+	return p.probe.MarkAgentPid(pid)
+}
+
 // UpdateSensitivePaths 转发给底层 v3_loader.FileProbe（规则热更新用）
 func (p *FileProbe) UpdateSensitivePaths(exactPaths, prefixPaths []string) error {
 	if p.probe == nil {

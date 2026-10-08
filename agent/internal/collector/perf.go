@@ -4,18 +4,17 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"os/exec"
 	"strings"
 )
 
 type PerfData struct {
-	CPUPercent    float64 `json:"cpu_percent"`
-	MemPercent    float64 `json:"mem_percent"`
-	MemUsedMB     int     `json:"mem_used_mb"`
-	MemTotalMB    int     `json:"mem_total_mb"`
-	DiskUsage     []DiskPerf `json:"disk_usage"`
-	NetBytesRecv  int64  `json:"net_bytes_recv"`
-	NetBytesSent  int64  `json:"net_bytes_sent"`
+	CPUPercent   float64    `json:"cpu_percent"`
+	MemPercent   float64    `json:"mem_percent"`
+	MemUsedMB    int        `json:"mem_used_mb"`
+	MemTotalMB   int        `json:"mem_total_mb"`
+	DiskUsage    []DiskPerf `json:"disk_usage"`
+	NetBytesRecv int64      `json:"net_bytes_recv"`
+	NetBytesSent int64      `json:"net_bytes_sent"`
 }
 
 type DiskPerf struct {
@@ -92,7 +91,7 @@ func getMemInfo() (percent float64, usedMB int, totalMB int) {
 
 func getDiskPerf() []DiskPerf {
 	var disks []DiskPerf
-	out, err := exec.Command("df", "-BM").Output()
+	out, err := RunAndMark("df", "-BM")
 	if err != nil {
 		return disks
 	}

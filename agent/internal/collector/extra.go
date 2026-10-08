@@ -3,7 +3,6 @@ package collector
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -45,7 +44,7 @@ func GetProcessStartTime(pid int) string {
 // 软件包大小（KB）
 func GetPackageSize(name string) int64 {
 	// dpkg
-	out, err := exec.Command("dpkg-query", "-W", "-f=${Installed-Size}", name).Output()
+	out, err := RunAndMark("dpkg-query", "-W", "-f=${Installed-Size}", name)
 	if err == nil {
 		s := strings.TrimSpace(string(out))
 		if n, err := parseInt(s); err == nil {
@@ -53,7 +52,7 @@ func GetPackageSize(name string) int64 {
 		}
 	}
 	// rpm
-	out, err = exec.Command("rpm", "-q", "--queryformat=%{SIZE}", name).Output()
+	out, err = RunAndMark("rpm", "-q", "--queryformat=%{SIZE}", name)
 	if err == nil {
 		s := strings.TrimSpace(string(out))
 		if n, err := parseInt(s); err == nil {
@@ -74,7 +73,7 @@ func CollectServiceStatus() []ServiceStatus {
 	var services []ServiceStatus
 
 	// systemd
-	out, err := exec.Command("systemctl", "list-unit-files", "--type=service", "--state=enabled", "--no-legend").Output()
+	out, err := RunAndMark("systemctl", "list-unit-files", "--type=service", "--state=enabled", "--no-legend")
 	if err != nil {
 		return services
 	}
@@ -88,7 +87,7 @@ func CollectServiceStatus() []ServiceStatus {
 
 		// 查运行状态
 		active := "unknown"
-		statusOut, err := exec.Command("systemctl", "is-active", name).Output()
+		statusOut, err := RunAndMark("systemctl", "is-active", name)
 		if err == nil {
 			active = strings.TrimSpace(string(statusOut))
 		}
@@ -106,7 +105,7 @@ func CollectServiceStatus() []ServiceStatus {
 // Jar包采集
 type JarPackage struct {
 	Name       string `json:"name"`
-	Type       string `json:"type"`       // 应用程序 / 依赖包
+	Type       string `json:"type"` // 应用程序 / 依赖包
 	Executable bool   `json:"executable"`
 	Version    string `json:"version"`
 	Path       string `json:"path"`
@@ -154,19 +153,19 @@ func CollectJarPackages() []JarPackage {
 
 // Python包
 type PythonPackage struct {
-	Name  string `json:"name"`
+	Name    string `json:"name"`
 	Version string `json:"version"`
-	Path string `json:"path"`
-	Scope string `json:"scope"` // global / user
+	Path    string `json:"path"`
+	Scope   string `json:"scope"` // global / user
 }
 
 func CollectPythonPackages() []PythonPackage {
 	var pkgs []PythonPackage
 
 	// pip list
-	out, err := exec.Command("pip3", "list", "--format=columns").Output()
+	out, err := RunAndMark("pip3", "list", "--format=columns")
 	if err != nil {
-		out, err = exec.Command("pip", "list", "--format=columns").Output()
+		out, err = RunAndMark("pip", "list", "--format=columns")
 	}
 	if err != nil {
 		// 降级：从系统包管理器获取
@@ -215,7 +214,7 @@ func CollectNpmPackages() []NpmPackage {
 	var pkgs []NpmPackage
 
 	// npm list -g
-	out, err := exec.Command("npm", "list", "-g", "--depth=0").Output()
+	out, err := RunAndMark("npm", "list", "-g", "--depth=0")
 	if err != nil {
 		return pkgs
 	}
@@ -242,16 +241,16 @@ func CollectNpmPackages() []NpmPackage {
 func collectPythonFromPkg() []PythonPackage {
 	var pkgs []PythonPackage
 	// dpkg
-	out, err := exec.Command("dpkg-query", "-W", "-f=${Package}\t${Version}\n").Output()
+	out, err := RunAndMark("dpkg-query", "-W", "-f=${Package}\t${Version}\n")
 	if err == nil {
 		for _, line := range strings.Split(string(out), "\n") {
 			fields := strings.Split(line, "\t")
 			if len(fields) >= 2 && strings.HasPrefix(fields[0], "python3-") {
 				pkgs = append(pkgs, PythonPackage{
-					Name: strings.TrimPrefix(fields[0], "python3-"),
+					Name:    strings.TrimPrefix(fields[0], "python3-"),
 					Version: fields[1],
-					Scope: "system",
-					Path: "-",
+					Scope:   "system",
+					Path:    "-",
 				})
 			}
 		}

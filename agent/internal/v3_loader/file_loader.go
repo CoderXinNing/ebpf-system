@@ -142,6 +142,15 @@ func (p *FileProbe) Load() error {
 	return nil
 }
 
+// MarkAgentPid 把一个 PID 加入 agent_pids map（P1.9：过滤 Agent 子进程）
+func (p *FileProbe) MarkAgentPid(pid uint32) error {
+	if p.objs == nil || p.objs.AgentPids == nil {
+		return fmt.Errorf("探针未加载")
+	}
+	var v uint8 = 1
+	return p.objs.AgentPids.Put(&pid, &v)
+}
+
 // UpdateWhitelist 更新白名单
 func (p *FileProbe) UpdateWhitelist(processNames []string) error {
 	if p.objs == nil || p.objs.SentinelWhitelist == nil {
