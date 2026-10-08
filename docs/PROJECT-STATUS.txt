@@ -1,0 +1,222 @@
+AsterTrack 项目现状盘点
+=================================================
+日期：2026-10-08
+用途：新会话/新协作者快速了解项目
+=================================================
+
+
+【一、项目概述】
+
+AsterTrack 是分布式 eBPF EDR 系统。
+  - Agent：Go + eBPF（5 探针），部署在被监控主机
+  - Server：Go + PostgreSQL，中央管理 + 关联分析
+  - 前端：Vue3 + naive-ui
+
+核心能力：
+  - 探针采集（exec/file/bash/tcp/xdp）
+  - 星轨关联（攻击链追踪）
+  - 动态规则（敏感路径下发 + 签名）
+  - 自检机制（探针健康）
+
+架构分层：
+  C 层（eBPF）    → 采集 + 内核态过滤
+  Agent 层（Go）  → 血缘 + 关联 + 上报
+  Server 层（Go） → 关联分析 + 规则 + 存储
+  前端（Vue）     → 可视化
+
+
+【二、目录结构】
+
+ebpf-sentinel/
+├── agent/
+│   ├── cmd/main.go
+│   ├── configs/agent.toml
+│   └── internal/
+│       ├── agent/         核心（事件/星轨/自检/血缘）
+│       ├── collector/     资产采集
+│       ├── config/
+│       ├── enroll/
+│       ├── paths/         统一路径
+│       ├── probe/
+│       │   ├── framework/ Probe 接口 + SelfTester + PreChecker
+│       │   └── plugins/   5 个探针适配器
+│       └── v3_loader/     eBPF 加载器
+├── server/
+│   ├── cmd/main.go
+│   ├── configs/
+│   └── internal/
+│       ├── ca/            证书生成/加载（Bundle）
+│       ├── grpcservice/   gRPC 实现
+│       ├── handler/       HTTP
+│       ├── middleware/    mTLS L1-L4
+│       ├── paths/
+│       ├── repository/psql/
+│       ├── rulessvc/      规则发布
+│       └── service/       星轨服务
+├── internal/              共享包（Agent/Server）
+│   ├── brand/             品牌常量
+│   ├── rules/             规则结构 + Canonical
+│   └── rulesign/          签名/验签
+├── proto/
+│   ├── split/             .proto 源
+│   └── pb/                生成物
+├── v3_engine/probes/      eBPF C 代码
+├── web-vue/src/           前端
+├── certs/                 gitignore（运行时生成）
+├── docs/                  本文档
+├── legacy/                历史代码（Go 忽略）
+└── bin/                   gitignore
+
+
+【三、当前 commit 状态】
+
+分支：main
+HEAD：df77fca（docs: P1.9 Agent 自身/系统行为误报方案）
+origin/main：同
+
+未提交的改动（散着，待处理）：
+  M agent/internal/v3_loader/file_loader.go     ← P1.9 改动
+  M agent/internal/v3_loader/tcp_loader.go      ← link.Tracepoint 重构
+  M v3_engine/probes/file_access.c              ← P1.9 + bpf_printk 调试
+  M v3_engine/probes/file_access.o
+  M v3_engine/probes/include/sentinel_common.h  ← agent_pids map
+  + 10 个 .bak-* 文件（调试残留）
+
+
+【四、已完成能力】
+
+一、探针自检机制（Day A/B/C）
+  - framework.SelfTester 接口
+  - ProbeDetail 状态机
+  - 自检循环（5min）+ 连续2次失败→loaded-silent
+  - 前端探针管理页
+
+二、星轨精准追踪（G1/G2）
+  - Server: corrToPid 反向索引
+  - Agent: StarTrace + 多星轨并行（max 50）
+  - Matches 严格化（ancestors 不参与匹配）
+  - 心跳下发 root_pid
+
+三、硬编码重构
+  - paths（ASTERTRACK_ROOT 环境变量）
+  - constants（时间常量集中）
+  - brand（品牌/SPIFFE 常量）
+  - 端口推导（enrollment 回报 grpc_addr）
+
+四、敏感路径动态化（阶段 1/2/3）
+  - 阶段 1：C 层双 map（HASH 精确 + LPM_TRIE 前缀）
+  - 阶段 2：Server 端签名 + agent_rules 表 + gRPC
+  - 阶段 3：Agent 拉取 + 验签 + 热更新 + 本地缓存
+  - 默认规则自举（version=1）
+
+五、资产采集优化
+  - /etc/passwd 缓存（300+ → 12 次/周期）
+  - uid 映射缓存
+
+六、其他修复
+  - capability_level 映射（full→xdp / basic→cmdb）
+  - loadAgentID 持久化兜底
+  - gRPC 资产保存错误可见
+  - mutation_end 不再触发新星轨
+  - migration GRANT + 约定文档
+  - link.Tracepoint（替代手搓 perf_event）
+
+
+【五、半成品（做到一半）】
+
+1. P1.9 A1 —— Agent 子进程过滤
+   现状：
+     - C 层已加 agent_pids map + is_agent_tree_or_join
+     - link.Tracepoint 替代手搓 perf_event（修复 CPU 限制）
+     - 但 Go 的 exec.Command 用 clone3/vfork 绕过 tracepoint
+     - 子进程（whoami 等）无法自动加入 map
+   待做：
+     - 改"用户态主动标记"方案
+     - PPID 校验 + start_time 双因子
+     - 清理 bpf_printk 调试
+     - commit
+
+2. 血缘表
+   现状：只有 correlationManager（按 pid）
+   缺：
+     - (pid, start_time_ns) 复合键
+     - is_anchor 字段
+     - exec/bash 不找父锚点
+     - 5 探针锚点逻辑不统一
+
+3. 白名单
+   现状：代码有（sentinel_whitelist map + C 判断）
+   缺：config 未启用、DB 0 行、无 UI
+
+4. tcp 模式回落
+   现状：星轨激活切明细（collect_mode=1），但星轨过期没切回 0
+   后果：卡在明细模式，一直上报
+
+
+【六、待开工（按 v3.1 方案）】
+
+阶段 0：清基础（1-2 天）
+  - P1.9 A1 完成（改用户态主动标记）
+  - tcp 模式回落
+  - file_access.c 调试残留清理
+  - 白名单决策
+
+阶段 1：血缘表 + 锚点（3-5 天）
+阶段 2：L2 序列规则（3-5 天）
+阶段 3：LBE + Guardian（1-2 周）
+阶段 4：跨主机关联（3-5 天）
+阶段 5：强制观测位掩码（1-2 天）
+
+远期：
+  - LSM 拦截（未预留，只占位枚举值）
+  - 容器兼容（评估 7-10 天）
+  - 编排引擎（v3.1 的 L2 是其 MVP）
+  - Client 数据加解密（P2，1-2 周）
+
+
+【七、关键约定】
+
+1. SPIFFE 域名冻结：spiffe://astertrack/agent/<id> 不能改
+2. 时间常量集中：agent/internal/agent/constants.go
+3. 路径统一：用 paths.Join(...)
+4. 品牌统一：用 internal/brand
+5. DB migration：必须用 sentinel 用户执行 + 末尾加 GRANT
+6. go build ./... 只检查语法，要 -o 生成二进制
+7. certs/ 和 agent/data/ 是 gitignore
+8. execve 的 filename 是占位符，真实命令在 details
+
+
+【八、环境信息】
+
+服务：
+  Server: ./bin/server --config server/configs/server.toml
+  Agent:  ./bin/agent --config agent/configs/agent.toml
+  前端:   cd web-vue && bash -l -c 'nvm use 20 && npm run dev -- --host 0.0.0.0'
+
+数据库：PostgreSQL sentinel
+  - agents / agent_rules / events_2026_XX / cmdb_assets / ...
+  - agent_rules: version=1 默认规则
+
+证书：
+  - CA: AsterTrack CA（2026-09-24 生成）
+  - 本机 Agent: agent-obgfyuh4vphibkdtw6ekz2gsc4
+  - mTLS: strict_mtls = true
+
+环境变量：
+  - ASTERTRACK_ROOT（可选，默认 cwd）
+  - PATH 需含 /root/.nvm/versions/node/v20.20.2/bin（前端用）
+
+
+【九、已知问题】
+
+1. Go 的 exec.Command 用 clone3 绕过 sched_process_fork/exec tracepoint
+2. postgres/sentinel 用户权限（003-005 migration 漏 GRANT，已补）
+3. nvm 在非交互 shell 不加载（.bashrc 有 early return）
+4. paths.Join 在 Init 之前求值会出错（时序问题，已修）
+5. XDP 全量提交（P0，与保命信道设计脱节）
+6. file_access 过滤太宽（/home/ 前缀，236 条/5分钟）
+7. star-timeline TODO 已并入本文档（见"待开工"）
+
+=================================================
+END
+=================================================
