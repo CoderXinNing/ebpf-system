@@ -202,6 +202,15 @@ func (a *Agent) verifyAndApplyRules(content []byte, sigB64 string) (*rules.RuleS
 
 	log.Printf("📋 规则已分发到 %d 个探针", applied)
 
+	// TCP 敏感端口 → 更新 anomaly detector（不在探针内部，Agent 直接管理）
+	if rs.TCP != nil && rs.TCP.Rules != nil && a.tcpAnomaly != nil {
+		ports := rs.TCP.Rules.SensitivePorts
+		if len(ports) > 0 {
+			a.tcpAnomaly.SetSensitivePorts(ports)
+			log.Printf("📋 TCP 敏感端口已更新: %d 个", len(ports))
+		}
+	}
+
 	return &rs, nil
 }
 

@@ -10,19 +10,19 @@ import (
 type TCPAnomalyDetector struct {
 	mu sync.Mutex
 
-	windowSec       int      // 窗口大小（秒）
-	portThreshold   int      // 端口多样性阈值
-	ipThreshold     int      // IP 多样性阈值
-	sensitivePorts  map[uint16]bool // 敏感端口集合
+	windowSec      int             // 窗口大小（秒）
+	portThreshold  int             // 端口多样性阈值
+	ipThreshold    int             // IP 多样性阈值
+	sensitivePorts map[uint16]bool // 敏感端口集合
 
 	// PID → 窗口内连接记录
 	connRecords map[uint32]*ConnWindow
 }
 
 type ConnWindow struct {
-	Ports     map[uint16]bool // 窗口内出现过的端口
-	IPs       map[uint32]bool // 窗口内出现过的 IP
-	LastSeen  time.Time
+	Ports    map[uint16]bool // 窗口内出现过的端口
+	IPs      map[uint32]bool // 窗口内出现过的 IP
+	LastSeen time.Time
 }
 
 func NewTCPAnomalyDetector(windowSec, portThreshold, ipThreshold int, sensitivePorts []uint16) *TCPAnomalyDetector {
@@ -37,6 +37,19 @@ func NewTCPAnomalyDetector(windowSec, portThreshold, ipThreshold int, sensitiveP
 		sensitivePorts: sp,
 		connRecords:    make(map[uint32]*ConnWindow),
 	}
+}
+
+// SetSensitivePorts 更新敏感端口集合（规则下发用）
+//
+// 线程安全：与 RecordConnection 共用 mu
+func (d *TCPAnomalyDetector) SetSensitivePorts(ports []uint16) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	sp := make(map[uint16]bool, len(ports))
+	for _, p := range ports {
+		sp[p] = true
+	}
+	d.sensitivePorts = sp
 }
 
 // RecordConnection 记录一次连接，返回是否触发突变

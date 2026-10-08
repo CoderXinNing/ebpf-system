@@ -111,6 +111,11 @@ func (s *Service) EnsureDefault(ctx context.Context) error {
 				},
 			},
 		},
+		TCP: &rules.TCPRules{
+			Rules: &rules.TCPRulesInner{
+				SensitivePorts: []uint16{22, 3389, 445, 21, 1433, 3306, 6379, 5985, 8080, 8443},
+			},
+		},
 	}
 	_, err = s.Publish(ctx, def, "system:init")
 	return err
