@@ -240,6 +240,33 @@ origin/main：同
     - 改名后 API/路由/组件路径全改（WhitelistView → ProbeExcludeCommsView）
     - 仅 npm run build 通过，未在浏览器中人工验证增删/展示
 
+11. 探针排除名单只接了 exec（半成品）
+    现状：
+      - C 层 4 探针（exec/bash/file_access/tcp）都引用了 sentinel_exclude_comms map
+      - Go 层只有 exec_probe.ApplyConfig 真正调用 UpdateExcludeComms
+      - bash_probe / file_probe / tcp_probe 的 ApplyConfig 是空实现
+      - RebuildFromDB 只填 rs.Exec.Exclude
+      - 前端单页一份 comm 名单，语义模糊
+    目标设计（3 维度，各自独立）：
+      - exec + bash：共享一份 comm 排除（进程/命令维度）
+      - file_access：独立一份 comm 排除（噪音源过滤，如 psql 正常读 /etc/shadow）
+      - tcp：独立一份 IP 排除（comm 维度对 tcp 无意义）→ 见 #12
+    DB 组织（方案乙，已拍板）：
+      - exec+bash 共用：现有 probe_exclude_comms 表（复用）
+      - file_access：新建 probe_exclude_comms_file_access
+      - tcp：新建 probe_exclude_ips
+
+12. TCP 排除名单维度重构（独立子任务）
+    现状：
+      - C 层 tcp_monitor.c 按 comm 查 sentinel_exclude_comms
+      - Go 层 rules.TCPExclude.IPs 按 IP 定义
+      - 两处维度不一致
+    目标：
+      - 新建 C map sentinel_exclude_ips（LPM_TRIE，支持 CIDR）
+      - 改 tcp_monitor.c 判断（src/dst IP 命中即排除）
+      - Go 侧新增 tcp_loader.UpdateExcludeIPs
+      - rules.TCPExclude.IPs 保持不变
+
 =================================================
 END
 =================================================
