@@ -172,6 +172,12 @@ func (h *Handler) SetRemoveProbeExcludeCommsFunc(fn func(string) error) {
 	h.RemoveProbeExcludeCommsFunc = fn
 }
 
+// SetRebuildRulesFunc 设置规则重建回调
+// Add/Remove 探针排除名单后触发，把变化合并进 RuleSet 并重新签名下发
+func (h *Handler) SetRebuildRulesFunc(fn func() error) {
+	h.RebuildRulesFunc = fn
+}
+
 // SetUpdateAlertStatusFunc 设置告警状态更新回调
 func (h *Handler) SetUpdateAlertStatusFunc(fn func([]int64, string) error) {
 	h.UpdateAlertStatusFunc = fn

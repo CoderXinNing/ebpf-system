@@ -379,6 +379,15 @@ func main() {
 		grpcSvc.SetRulesService(rulesSvc)
 	}
 
+	// 装配规则重建回调：探针排除名单 Add/Remove 后触发
+	// 流程：handler 更新 DB → RebuildFromDB 合并 + 签名 → 写 agent_rules 新版本
+	//      → Agent 心跳拉到新版本 → 应用新规则
+	if h != nil && rulesSvc != nil {
+		h.SetRebuildRulesFunc(func() error {
+			return rulesSvc.RebuildFromDB(context.Background(), "admin")
+		})
+	}
+
 	// 从 DB 加载已有 Agent（Server 重启后恢复内存状态）
 	// 注入 gRPC 端口给 Handler（enrollment 时回报给 Agent）
 	if h != nil {

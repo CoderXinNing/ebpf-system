@@ -36,17 +36,17 @@ func New(repo *psql.PSQL, caKeyPath string) (*Service, error) {
 
 // Publish 发布新版本规则（校验 → canonical → hash → 签名 → 写 DB）
 func (s *Service) Publish(ctx context.Context, rs *rules.RuleSet, createdBy string) (int64, error) {
-	if err := rules.Validate(rs); err != nil {
-		return 0, fmt.Errorf("规则校验失败: %w", err)
-	}
-
-	// 版本自增（如果未指定）
+	// 版本自增（如果未指定）——必须在 Validate 前，否则 rs.Version=0 会被校验拦死
 	if rs.Version <= 0 {
 		cur, _, err := s.repo.GetAgentRulesVersion(ctx)
 		if err != nil {
 			return 0, err
 		}
 		rs.Version = cur + 1
+	}
+
+	if err := rules.Validate(rs); err != nil {
+		return 0, fmt.Errorf("规则校验失败: %w", err)
 	}
 
 	canonical, err := rules.Canonical(rs)

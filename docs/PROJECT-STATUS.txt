@@ -227,6 +227,18 @@ origin/main：同
 5. XDP 全量提交（P0，与保命信道设计脱节）
 6. file_access 过滤太宽（/home/ 前缀，236 条/5分钟）
 7. star-timeline TODO 已并入本文档（见"待开工"）
+8. 规则变更最长 5 分钟生效
+   - agent rulesSyncLoop 每 5 分钟轮询
+   - 心跳响应未做"版本不一致通知"
+   - 优化方向：server 心跳响应比对 agent 上报的 RulesVersion，
+     不一致时通过 Commands 下发"请拉规则"提示 → 秒级生效
+9. main.go 探针/告警两层数据源共用
+   - h.ProbeExcludeComms（探针层）与 alertEngine.SetWhitelist（告警层）
+     共用一份数据源（main.go 启动回填处）
+   - 两层语义不同，未来规则引擎接入前必须拆开
+10. 前端探针排除名单页未做浏览器实测
+    - 改名后 API/路由/组件路径全改（WhitelistView → ProbeExcludeCommsView）
+    - 仅 npm run build 通过，未在浏览器中人工验证增删/展示
 
 =================================================
 END
