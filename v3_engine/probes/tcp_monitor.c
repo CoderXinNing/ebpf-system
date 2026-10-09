@@ -49,11 +49,9 @@ static __always_inline int parse_sockaddr(struct sockaddr *addr, struct tcp_conn
     long ret1 = bpf_probe_read_user(&sin_port, 2, (void *)addr + 2);
     long ret2 = bpf_probe_read_user(&sin_addr, 4, (void *)addr + 4);
     if (ret1 != 0 || ret2 != 0) {
-        bpf_printk("parse fail: ret1=%ld ret2=%ld", ret1, ret2);
         return -1;
     }
-    
-    bpf_printk("parse ok: addr=%llu port=%u ip=%u", (unsigned long long)addr, sin_port, sin_addr);
+
     detail->dst_port = __builtin_bswap16(sin_port);
     detail->dst_ip = __builtin_bswap32(sin_addr);
     

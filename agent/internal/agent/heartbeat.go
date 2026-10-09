@@ -8,10 +8,6 @@ import (
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 )
 
-func (a *Agent) runHeartbeatLoop() {
-	a.runHeartbeatLoopWithCtx(context.Background())
-}
-
 func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 	ticker := time.NewTicker(a.cfg.Agent.HeartbeatInterval)
 	defer ticker.Stop()
@@ -35,7 +31,7 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 			}
 
 			log.Printf("💓 心跳发送中...")
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			// 动态规则状态（阶段 3）
 			rulesStatus, rulesVersion, rulesLastCheck := a.getRulesStatus()
 
@@ -45,7 +41,7 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 				agentPidCount = a.fileProbe.CountAgentPids()
 			}
 
-			resp, err := a.client.Heartbeat(a.getAuthContext(ctx), &pb.HeartbeatRequest{
+			resp, err := a.client.Heartbeat(a.getAuthContext(rpcCtx), &pb.HeartbeatRequest{
 				AgentId:             a.id,
 				Timestamp:           time.Now().Unix(),
 				ActiveProbes:        a.getActiveProbeCount(),
@@ -112,9 +108,7 @@ func (a *Agent) handleCommand(cmd *pb.ProbeCommand) {
 			a.observationMgr.Upgrade("星轨激活")
 		}
 		a.switchTCPCollectMode(1)
-	case pb.ProbeCommand_UNLOAD:
-		// 兼容旧命令：不再使用
-		// 白名单/规则更新统一走 agent_rules（GetRulesFull）
-		log.Printf("⚠️ 收到已废弃的 UNLOAD 命令，忽略（请用规则下发）")
+	default:
+		log.Printf("⚠️ 收到未知命令类型: %v，忽略", cmd.Type)
 	}
 }
