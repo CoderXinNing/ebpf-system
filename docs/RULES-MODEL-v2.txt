@@ -1,0 +1,165 @@
+AsterTrack 规则模型 v2（每 Agent 独立 + 模板）
+=================================================
+日期：2026-10-09
+状态：设计定稿，待实施
+替代：RULES-APPLY-DESIGN.txt 中的"全局一份"假设
+=================================================
+
+
+【一、演进原因】
+
+v1（旧）：agent_rules 全局一份，所有 Agent 共享
+问题：
+  - 无法按主机差异化（Nginx 主机 vs Tomcat 主机）
+  - 用户想排除某台机器的噪音，会影响所有机器
+  - 分发模型单一，无法做灰度
+
+v2（新）：
+  - 每 Agent 一份独立规则
+  - 模板用于初始化 / 批量应用
+  - 无 scope、无合并、无 version
+
+
+【二、核心模型】
+
+模板（rule_templates）
+  用途：新 Agent 激活时初始化；手动批量应用到多台
+  本质：一份预设规则 JSON，可编辑可复制
+
+Agent 规则（agent_rules）
+  用途：每台 Agent 独立一份完整规则
+  本质：独立、自洽、可单独签名
+  无继承、无合并、无优先级
+
+
+【三、表结构】
+
+rule_templates（新表）:
+  name        TEXT PRIMARY KEY
+  content     BYTEA NOT NULL        -- canonical JSON
+  sha256      TEXT NOT NULL
+  signature   TEXT NOT NULL
+  is_default  BOOLEAN NOT NULL DEFAULT false
+  created_by  TEXT
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  -- 部分唯一索引：is_default=true 只允许一行
+
+agent_rules（改造）:
+  id          BIGSERIAL PRIMARY KEY
+  agent_id    TEXT NOT NULL        -- 新增，主机标识
+  content     BYTEA NOT NULL
+  sha256      TEXT NOT NULL
+  signature   TEXT NOT NULL
+  created_by  TEXT
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  -- 删除 version 列
+  -- 唯一索引 (agent_id, sha256)
+  -- 现有 22 行历史数据全部 DELETE（e2e 测试产物，无价值）
+
+
+【四、核心流程】
+
+1. Agent 首次激活
+   Agent 注册成功
+     → Server 查 agent_rules 有无该 agent_id
+     → 无：从 is_default=true 的模板复制一份写入
+     → 有：跳过
+   （best-effort，失败记日志，不回滚注册）
+
+2. Agent 拉取规则（gRPC GetRulesFull）
+   按 agent_id 直读 agent_rules 最新一行
+   返回 content + sha256 + signature
+   Agent 验签后 ApplyConfig
+
+3. 心跳
+   HeartbeatResponse.rules_hash = 该 Agent 的 sha256
+   Agent 比对本地 hash
+     不一致 → 触发 rulesSyncTrigger 拉取
+
+4. Apply（单机）
+   POST /api/agents/:id/rules/apply
+   Body: {expected_sha256, ruleset}
+   Server 比对当前 sha256
+     一致 → 签名 + 写新行
+     不一致 → 409 Conflict
+
+5. Apply（模板批量）
+   POST /api/rules/templates/:name/apply-to-agents
+   Body: {agent_ids: [...]} 或 {all: true}
+   前端二次确认（"将覆盖 N 台主机的规则，不可撤销"）
+   后端：给每个 agent_id 写一份模板内容的副本
+
+
+【五、API 清单】
+
+模板管理：
+  GET    /api/rules/templates              列模板
+  POST   /api/rules/templates              建模板
+  PUT    /api/rules/templates/:name        改模板
+  DELETE /api/rules/templates/:name        删模板
+  POST   /api/rules/templates/:name/apply-to-agents  批量应用
+
+Agent 规则：
+  GET    /api/agents/:id/rules             读该 Agent 完整规则
+  POST   /api/agents/:id/rules/apply       写（带 expected_sha256）
+
+废弃候选（下一轮清理）：
+  /api/probe-exclude/*                      三维度细粒度 API
+  /api/probe-exclude/apply                  三维度统一 Apply
+  /api/probe-exclude/all                    三维度读
+  → 保留到前端切到新 API 后
+
+gRPC：
+  GetRulesFull(req.AgentId)                按 agent_id 直读
+  HeartbeatResponse.rules_hash             替换 rules_version
+
+
+【六、与 RULES-APPLY-DESIGN.txt 的关系】
+
+RULES-APPLY-DESIGN 设计于"全局一份"假设下：
+  阶段 A/B/C 已实施（JSON v2 结构、ConfigApplier、防抖）
+  阶段 D/E/F 未实施
+
+v2 模型下：
+  阶段 D（Server Apply API）→ 改为 per-agent + 模板批量
+  阶段 E（前端草稿 + Apply）→ 不变（前端只负责草稿态）
+  阶段 F（Server 汇总）     → 改为"某模板被应用到哪些 Agent"
+
+结论：RULES-APPLY-DESIGN 阶段 A/B/C 继续有效；
+      阶段 D/F 被本设计覆盖；
+      阶段 E（前端草稿模式）不变。
+
+
+【七、设计决策记录（2026-10-09 拍板）】
+
+- 抛弃 YAML，全结构化 JSON
+- 抛弃 scope 列：每 Agent 天然独立，无需"这条规则属于谁"
+- 抛弃 version 列：SHA256 完全替代（内容标识 + 乐观锁 + Agent 比对）
+- 内容没变 = sha256 没变 = 不写新行（天然去重）
+- 前端只负责草稿/预测，Apply 才真正下发
+- 批量应用模板：前端二次确认，后端全量覆盖，不做状态判断
+- 模板改动不影响已有 Agent，只对"未来激活"或"手动批量应用"生效
+- 无"全局规则"概念
+- 标签/分组是 UI 显示层，下发按 agent_id
+- 新 Agent 激活时 Server 自动绑定默认模板（best-effort）
+
+遗留问题：
+- 前端形态未定（三 Tab / 一页多区块）
+- 标签/分组查询接口待设计
+- 旧 /api/probe-exclude/* 系列何时清理
+
+
+【八、工作量估算】
+
+  migration 008 + schema                0.5 天
+  rulessvc 重构（PublishToAgent/Template）  1 天
+  gRPC 改造（GetRulesFull + Heartbeat）   0.5 天
+  handler + 路由（模板 + Agent）          1 天
+  Agent 侧 hash 缓存                      0.5 天
+  注册触发 EnsureAgentRule                0.5 天
+  e2e + 文档                              0.5 天
+  合计：4-5 天
+
+=================================================
+END
+=================================================

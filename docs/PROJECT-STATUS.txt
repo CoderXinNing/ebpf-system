@@ -174,6 +174,11 @@ origin/main：同
 详见 TODO.txt【P1 · 阶段 0-5】。
 本文档只记录"当前状态 + 半成品 + 已知问题 + 环境约定"。
 
+规则模型 v2（每 Agent 独立 + 模板）：
+  - 设计定稿见 docs/RULES-MODEL-v2.txt
+  - 覆盖 RULES-APPLY-DESIGN.txt 阶段 D/F
+  - 预估 4-5 天
+
 【七、关键约定】
 
 1. SPIFFE 域名冻结：spiffe://astertrack/agent/<id> 不能改

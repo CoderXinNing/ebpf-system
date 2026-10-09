@@ -68,6 +68,46 @@ AsterTrack 待办清单
 [x] 文档整合（PROJECT-STATUS + EDR-CORRELATION-v3.1 + RULES-APPLY-DESIGN + TODO）
 
 
+【P1.10 · 规则模型 v2（每 Agent 独立 + 模板）（4-5 天）】
+─────────────────────────────────────
+
+设计定稿：docs/RULES-MODEL-v2.txt
+
+[ ] migration 008：
+    - 建 rule_templates 表（含 is_default 部分唯一索引）
+    - agent_rules 加 agent_id、删 version、清现有 22 行
+    - 建 (agent_id, sha256) 唯一索引
+
+[ ] rulessvc 重构：
+    - PublishToAgent(ctx, agentId, rs, createdBy)
+    - PublishToTemplate(ctx, name, rs, createdBy)
+    - GetAgentRules(ctx, agentId)
+    - GetTemplate(ctx, name)
+    - EnsureDefaultTemplate(ctx)        首次启动自举
+    - EnsureAgentRule(ctx, agentId)     激活时调
+
+[ ] gRPC：
+    - GetRulesFull 按 agent_id 直读
+    - HeartbeatResponse.rules_hash 替换 rules_version
+
+[ ] handler + 路由：
+    - GET  /api/agents/:id/rules
+    - POST /api/agents/:id/rules/apply（带 expected_sha256）
+    - GET/POST/PUT/DELETE /api/rules/templates
+    - POST /api/rules/templates/:name/apply-to-agents
+
+[ ] Agent 侧：
+    - rules_sync 缓存文件从 version 改为 hash
+    - 心跳字段改 rules_hash
+
+[ ] 注册触发 EnsureAgentRule
+
+[ ] e2e + 文档
+
+废弃候选（下一轮清理）：
+  /api/probe-exclude/* 系列（保留至前端切换完成）
+
+
 【P1 · 阶段 1：血缘表 + 锚点（3-5 天）】
 ─────────────────────────────────────
 
