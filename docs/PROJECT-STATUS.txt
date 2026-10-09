@@ -135,17 +135,9 @@ origin/main：同
 
 【五、半成品（做到一半）】
 
-1. P1.9 A1 —— Agent 子进程过滤
-   现状：
-     - C 层已加 agent_pids map + is_agent_tree_or_join
-     - link.Tracepoint 替代手搓 perf_event（修复 CPU 限制）
-     - 但 Go 的 exec.Command 用 clone3/vfork 绕过 tracepoint
-     - 子进程（whoami 等）无法自动加入 map
-   待做：
-     - 改"用户态主动标记"方案
-     - PPID 校验 + start_time 双因子
-     - 清理 bpf_printk 调试
-     - commit
+1. ~~P1.9 A1 —— Agent 子进程过滤~~ ✅ 已完成（见【四、已完成能力】八）
+   参考 commit：5c5f12b / fe77d6b / cf323c4
+   #5 收尾（心跳汇总）于 2026-10-09 完成，见 TODO
 
 2. 血缘表
    现状：只有 correlationManager（按 pid）
@@ -159,9 +151,8 @@ origin/main：同
    现状：代码有（sentinel_exclude_comms map + C 判断）+ DB probe_exclude_comms 表
    缺：config 未启用、DB 0 行、UI 已接（探针排除名单页）
 
-4. tcp 模式回落
-   现状：星轨激活切明细（collect_mode=1），但星轨过期没切回 0
-   后果：卡在明细模式，一直上报
+4. ~~tcp 模式回落~~ ✅ 已完成（见【四、已完成能力】九）
+   参考 commit：86042d5
 
 
 【六、待开工（按 v3.1 方案）】
@@ -227,15 +218,15 @@ origin/main：同
 5. XDP 全量提交（P0，与保命信道设计脱节）
 6. file_access 过滤太宽（/home/ 前缀，236 条/5分钟）
 7. star-timeline TODO 已并入本文档（见"待开工"）
-8. 规则变更最长 5 分钟生效
-   - agent rulesSyncLoop 每 5 分钟轮询
-   - 心跳响应未做"版本不一致通知"
-   - 优化方向：server 心跳响应比对 agent 上报的 RulesVersion，
-     不一致时通过 Commands 下发"请拉规则"提示 → 秒级生效
+8. 规则变更生效路径 ✅ 2026-10-09 已加秒级快路径
+   - 快路径：server 心跳响应比对 RulesVersion，不一致则置 rules_stale
+     → agent 立即触发一次拉取（验证：同秒完成，见 5fba534）
+   - 兜底：agent rulesSyncLoop 每 5 分钟轮询（保留，DB 权威不变）
+   - 原优化方向（走 Commands）未采用——改用独立 bool 字段，语义更清晰
 9. main.go 探针/告警两层数据源共用
-   - h.ProbeExcludeComms（探针层）与 alertEngine.SetWhitelist（告警层）
-     共用一份数据源（main.go 启动回填处）
-   - 两层语义不同，未来规则引擎接入前必须拆开
+   - 现状（2026-10-09 确认）：main.go:568-573 启动回填处一份 list
+     同时赋给 h.ProbeExcludeComms 和 alertEngine.SetWhitelist
+   - 两层语义不同，拆开是 #11/#12 三维度重构的前提 → 下一轮首选
 10. 前端探针排除名单页未做浏览器实测
     - 改名后 API/路由/组件路径全改（WhitelistView → ProbeExcludeCommsView）
     - 仅 npm run build 通过，未在浏览器中人工验证增删/展示

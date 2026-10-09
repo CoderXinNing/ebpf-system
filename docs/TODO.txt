@@ -12,8 +12,8 @@ AsterTrack 待办清单
     - RunAndMark + PPID 校验（已实现）
     - 31 处 exec.Command 替换（已完成）
     - agent_pids 启动清空 + 周期清理（已完成）
-    ⚠️ 待做：(PID, start_time) 双因子（防 PID 复用）
-    ⚠️ 待做：汇总上报 heartbeat
+    - (PID, start_time) 双因子 ✅ 2026-10-09（cf323c4）
+    - 汇总上报 heartbeat ✅ 2026-10-09（5fba534）
 
 [x] tcp 模式回落 ✅ 2026-10-08
     - switchTCPCollectMode 统一入口
