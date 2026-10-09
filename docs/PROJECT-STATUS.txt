@@ -1,6 +1,6 @@
 AsterTrack 项目现状盘点
 =================================================
-日期：2026-10-08（会话结束更新）
+日期：2026-10-09（最近更新）
 用途：新会话/新协作者快速了解项目
 =================================================
 
@@ -71,7 +71,8 @@ ebpf-sentinel/
 【三、当前 commit 状态】
 
 分支：main
-HEAD：86042d5（fix(star): 星轨过期后 TCP 切回计数模式）
+HEAD：d6897bd（docs: 统一新增条目标点 + 修正 TODO P3 节结构）
+最近提交链：d6897bd → 7c33ae8 → 64edaa3（pre-commit hook）
 origin/main：同
 
 工作区：干净
@@ -132,14 +133,23 @@ origin/main：同
   - 星轨过期时自动切回计数模式
   - switchTCPCollectMode 统一入口
 
+十、P1.9 A1 收尾（2026-10-09）
+  - (PID, start_time_ticks) 双因子（cf323c4）
+  - agent_pids 心跳汇总（5fba534）
+  - CountAgentPids（v3_loader + plugins 转发）
+  - Server log 落库（暂不建表）
+
+十一、规则秒级生效（2026-10-09，8b7012e）
+  - HeartbeatResponse.rules_stale + Agent rulesSyncTrigger channel
+  - Server 心跳响应比对 RulesVersion，不一致 → 置 stale
+  - Agent 收到后立即触发一次拉取
+  - 验证：POST 名单 → 版本 +1 → 同秒触发拉取 + 应用
+  - 原方案（走 Commands）未采用；5 分钟轮询保留为兜底
+
 
 【五、半成品（做到一半）】
 
-1. ~~P1.9 A1 —— Agent 子进程过滤~~ ✅ 已完成（见【四、已完成能力】八）
-   参考 commit：5c5f12b / fe77d6b / cf323c4
-   #5 收尾（心跳汇总）于 2026-10-09 完成，见 TODO
-
-2. 血缘表
+1. 血缘表
    现状：只有 correlationManager（按 pid）
    缺：
      - (pid, start_time_ns) 复合键
@@ -147,34 +157,22 @@ origin/main：同
      - exec/bash 不找父锚点
      - 5 探针锚点逻辑不统一
 
-3. 探针排除名单
-   现状：代码有（sentinel_exclude_comms map + C 判断）+ DB probe_exclude_comms 表
-   缺：config 未启用、DB 0 行、UI 已接（探针排除名单页）
+2. 探针排除名单
+   现状：C 层 5 探针（exec/bash/file_access/tcp/dns）引用 sentinel_exclude_comms；
+        其中 dns 探针整体搁置（无 Go loader / 无插件），本轮明确豁免。
+        exec/bash/file_access/tcp 纳入三维度重构。
+   Go 层 ApplyConfig 实况（2026-10-09 核实）：
+     exec_probe  → UpdateExcludeComms ✅
+     bash_probe  → return nil（空）
+     tcp_probe   → return nil（空）
+     file_probe  → 只调 UpdateSensitivePaths，未调 UpdateExcludeComms
+   DB：probe_exclude_comms（0 行），无 file_access / ips 子表
+   UI：已接（ProbeExcludeCommsView），未浏览器实测
 
-4. ~~tcp 模式回落~~ ✅ 已完成（见【四、已完成能力】九）
-   参考 commit：86042d5
+【六、待开工】
 
-
-【六、待开工（按 v3.1 方案）】
-
-阶段 0：清基础（1-2 天）
-  - P1.9 A1 完成（改用户态主动标记）
-  - tcp 模式回落
-  - file_access.c 调试残留清理
-  - 探针排除名单决策
-
-阶段 1：血缘表 + 锚点（3-5 天）
-阶段 2：L2 序列规则（3-5 天）
-阶段 3：LBE + Guardian（1-2 周）
-阶段 4：跨主机关联（3-5 天）
-阶段 5：强制观测位掩码（1-2 天）
-
-远期：
-  - LSM 拦截（未预留，只占位枚举值）
-  - 容器兼容（评估 7-10 天）
-  - 编排引擎（v3.1 的 L2 是其 MVP）
-  - Client 数据加解密（P2，1-2 周）
-
+详见 TODO.txt【P1 · 阶段 0-5】。
+本文档只记录"当前状态 + 半成品 + 已知问题 + 环境约定"。
 
 【七、关键约定】
 
@@ -186,9 +184,11 @@ origin/main：同
 6. go build ./... 只检查语法，要 -o 生成二进制
 7. certs/ 和 agent/data/ 是 gitignore
 8. execve 的 filename 是占位符，真实命令在 details
-9. pre-commit hook（本地状态，不随仓库）
-   - 安装：bash scripts/install-hooks.sh
-   - 生效：git config core.hooksPath scripts/hooks（写 .git/config，不跟踪）
+9. pre-commit hook
+   - hook 脚本随仓库：scripts/hooks/pre-commit（64edaa3 引入）
+   - core.hooksPath 需每台机器手动设：git config core.hooksPath scripts/hooks
+     （该配置写入 .git/config，不跟踪）
+   - 当前机器已生效
    - 跳过：SKIP_HOOKS=1 git commit ... 或 git commit --no-verify
    - 检查：.bak-* / gofmt / go build ./... / go vet / migration GRANT / 文档漂移警告
    - ⚠️ 新机器 clone 后必跑 install-hooks.sh，否则 hook 不生效
@@ -217,21 +217,25 @@ origin/main：同
 
 【九、已知问题】
 
-1. Go 的 exec.Command 用 clone3 绕过 sched_process_fork/exec tracepoint
+1. [已规避] Go 的 exec.Command 用 clone3 绕过 tracepoint
+   已通过 P1.9 A1 用户态主动标记（RunAndMark + PPID 校验）规避假告警；
+   内核行为未变，后续若引入非 Agent 发起的 clone3 场景需重新评估。
 2. postgres/sentinel 用户权限（003-005 migration 漏 GRANT，已补）
 3. nvm 在非交互 shell 不加载（.bashrc 有 early return）
 4. paths.Join 在 Init 之前求值会出错（时序问题，已修）
 5. XDP 全量提交（P0，与保命信道设计脱节）
 6. file_access 过滤太宽（/home/ 前缀，236 条/5分钟）
 7. star-timeline TODO 已并入本文档（见"待开工"）
-8. 规则变更生效路径 ✅ 2026-10-09 已加秒级快路径
+8. [已解决] 规则变更生效路径（2026-10-09）
    - 快路径：server 心跳响应比对 RulesVersion，不一致则置 rules_stale
      → agent 立即触发一次拉取（验证：同秒完成，见 5fba534）
    - 兜底：agent rulesSyncLoop 每 5 分钟轮询（保留，DB 权威不变）
    - 原优化方向（走 Commands）未采用——改用独立 bool 字段，语义更清晰
-9. main.go 探针/告警两层数据源共用
-   - 现状（2026-10-09 确认）：main.go:568-573 启动回填处一份 list
-     同时赋给 h.ProbeExcludeComms 和 alertEngine.SetWhitelist
+9. 探针/告警两层数据源共用（定位修正）
+   - 原记录 "main.go:568-573" 与实际不符（agent/cmd/main.go 仅 127 行）
+   - 实际位置：server/cmd/main.go:573 alertEngine.SetWhitelist(list)
+     定义：server/internal/alert/engine.go:58-59
+   - 上游 list 来源待补（下一轮 server/cmd/main.go:560-580 段确认）
    - 两层语义不同，拆开是 #11/#12 三维度重构的前提 → 下一轮首选
 10. 前端探针排除名单页未做浏览器实测
     - 改名后 API/路由/组件路径全改（WhitelistView → ProbeExcludeCommsView）
@@ -239,11 +243,17 @@ origin/main：同
 
 11. 探针排除名单只接了 exec（半成品）
     现状：
-      - C 层 4 探针（exec/bash/file_access/tcp）都引用了 sentinel_exclude_comms map
-      - Go 层只有 exec_probe.ApplyConfig 真正调用 UpdateExcludeComms
-      - bash_probe / file_probe / tcp_probe 的 ApplyConfig 是空实现
+      - C 层 5 探针引用 sentinel_exclude_comms：exec/bash/file_access/tcp/dns
+        其中 dns 探针整体搁置（无 Go loader / 无插件），本轮豁免
+        exec/bash/file_access/tcp 纳入三维度重构
+      - Go 层 ApplyConfig 实况（2026-10-09 核实）：
+          exec_probe  → UpdateExcludeComms ✅
+          bash_probe  → return nil（空）
+          tcp_probe   → return nil（空）
+          file_probe  → 只调 UpdateSensitivePaths，未调 UpdateExcludeComms
       - RebuildFromDB 只填 rs.Exec.Exclude
       - 前端单页一份 comm 名单，语义模糊
+      - DB：probe_exclude_comms（0 行），无 file_access / ips 子表
     目标设计（3 维度，各自独立）：
       - exec + bash：共享一份 comm 排除（进程/命令维度）
       - file_access：独立一份 comm 排除（噪音源过滤，如 psql 正常读 /etc/shadow）

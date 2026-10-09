@@ -1,6 +1,6 @@
 AsterTrack 待办清单
 =================================================
-日期：2026-10-08（会话结束更新）
+日期：2026-10-09（最近更新）
 说明：按优先级排序，跨会话跟踪
 =================================================
 
@@ -156,9 +156,13 @@ AsterTrack 待办清单
 [ ] 死代码清理
     - legacy/ 保留（守则要求）
     - _disabled 保留
-    - 检查 v3_loader/test_* 三个测试目录
+    - v3_loader/test_exec_v3、test_probe_v2、test_tcp_mode
+      （三个 21M ELF 二进制，已被 git 跟踪，用 git rm）
 
-[ ] HANDOVER.md 更新或删除（8-1 已过期）
+[ ] HANDOVER.md 删除
+    - 358 行，最后更新 2026-09-01
+    - 内容已被 PROJECT-STATUS 覆盖
+    - 处置：git rm HANDOVER.md
 
 [ ] localhost 老 Agent re-enrollment（172.16.2.142）
 
