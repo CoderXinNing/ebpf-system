@@ -523,6 +523,11 @@ AsterTrack 项目主文档
         C1c 阶段 C：废表（1 小时，观察一周后）
         设计：DESIGN.txt §2
         预估：4-5 天
+        吸收任务：
+          - TODO #11 前端三维度页
+            原：前端接 /api/probe-exclude/all + /apply
+            新：改接 /api/agents/:id/rules/apply
+                 （因为 P1.10 废掉 probe_exclude API）
 
     C2  P1.11 删除联动加固
         设计：DESIGN.txt §4
@@ -540,7 +545,11 @@ AsterTrack 项目主文档
 
     C5  跨主机关联
         设计：DESIGN.txt §1.9
-        现状：骨架存在，核心匹配未做
+        现状：骨架存在（star_service.go: GlobalCorrelationMap /
+              MergeGlobal），核心匹配未做
+        吸收任务：
+          - TODO P4「全局 ID + 分布式关联（远期）」
+            （远期项，跨主机关联是它的第一步）
         预估：3-5 天
 
     C6  强制观测位掩码
@@ -565,6 +574,10 @@ AsterTrack 项目主文档
         设计：DESIGN.txt §1.10
         前置：L2 是 MVP
 
+    C11 前端星轨页优化
+        现状：154 进程 / 271 事件加载慢
+        预估：2-3 天
+
     C12 DNS 探针启用
         现状：C 代码存在（dns_monitor.c），无 Go loader、无插件
         搁置：用户明确暂不动
@@ -575,10 +588,6 @@ AsterTrack 项目主文档
         设计：TCP 探针升级为 HTTP 层解析
         性质：远期
         预估：待评估
-
-    C11 前端星轨页优化
-        现状：154 进程 / 271 事件加载慢
-        预估：2-3 天
 
   D 已作废（历史文档错误 / 已解决）
   ────────────────────────────────
