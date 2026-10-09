@@ -153,3 +153,64 @@ func (h *Handler) RemoveExcludeIP(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{"success": true, "message": "tcp IP 排除已移除"})
 }
+
+// ============================================
+// 统一 Apply（三维度一次提交）
+// 见 RULES-APPLY-DESIGN.txt（阶段 E 简化版）
+// ============================================
+
+// ApplyProbeExcludeRequest 三维度 Apply 请求体
+type ApplyProbeExcludeRequest struct {
+	ExecBashComms   []string `json:"exec_bash_comms"`
+	FileAccessComms []string `json:"file_access_comms"`
+	TCPIPs          []string `json:"tcp_ips"`
+}
+
+// GetAllExcludes 一次性返回三维度当前内容（前端加载初值用）
+func (h *Handler) GetAllExcludes(c *gin.Context) {
+	if h.GetAllExcludesFunc == nil {
+		c.JSON(500, gin.H{"error": "未配置"})
+		return
+	}
+	execComms, fileComms, ips, err := h.GetAllExcludesFunc()
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{
+		"exec_bash_comms":   execComms,
+		"file_access_comms": fileComms,
+		"tcp_ips":           ips,
+	})
+}
+
+// ApplyProbeExclude 三维度一次性全量替换 + 触发 RebuildFromDB
+//
+// 语义：请求体即最终态，空数组 = 清空该维度。
+// 成功返回新的 agent_rules 版本（前端可显示）。
+func (h *Handler) ApplyProbeExclude(c *gin.Context) {
+	var req ApplyProbeExcludeRequest
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "请求格式错误"})
+		return
+	}
+
+	if h.ReplaceAllExcludesFunc == nil {
+		c.JSON(500, gin.H{"error": "未配置"})
+		return
+	}
+	if err := h.ReplaceAllExcludesFunc(req.ExecBashComms, req.FileAccessComms, req.TCPIPs); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	if h.RebuildRulesFunc != nil {
+		if err := h.RebuildRulesFunc(); err != nil {
+			log.Printf("⚠️ 重建规则失败: %v", err)
+			c.JSON(500, gin.H{"error": "规则重建失败: " + err.Error()})
+			return
+		}
+	}
+
+	c.JSON(200, gin.H{"success": true, "message": "已应用并下发"})
+}

@@ -145,3 +145,95 @@ func (p *PSQL) RemoveExcludeIP(ctx context.Context, ip string) error {
 	}
 	return nil
 }
+
+// ============================================
+// 统一 Apply：一次性读三表 / 全量替换三表
+//
+// 语义：前端点 Apply 时提交"最终态"，后端事务内
+//      DELETE + INSERT 三表，任一步失败整体回滚。
+// 见 RULES-APPLY-DESIGN.txt（阶段 E 的简化版）
+// ============================================
+
+// GetAllExcludes 一次性返回三维度排除名单
+//
+// 顺序：execComms（exec+bash 共享）/ fileComms / tcpIPs
+func (p *PSQL) GetAllExcludes(ctx context.Context) ([]string, []string, []string, error) {
+	execComms, err := p.ListProbeExcludeComms(ctx)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("读 exec+bash 失败: %w", err)
+	}
+	fileComms, err := p.ListFileAccessExcludeComms(ctx)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("读 file_access 失败: %w", err)
+	}
+	tcpIPs, err := p.ListExcludeIPs(ctx)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("读 tcp IP 失败: %w", err)
+	}
+	return execComms, fileComms, tcpIPs, nil
+}
+
+// ReplaceAllExcludes 事务内全量替换三维度排除名单
+//
+// 语义：传入的三个列表就是最终态，空切片 = 清空该维度。
+// 失败整体回滚，不留中间态。
+func (p *PSQL) ReplaceAllExcludes(ctx context.Context, execComms, fileComms, tcpIPs []string, createdBy string) error {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("开启事务失败: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// ---- exec+bash ----
+	if _, err := tx.Exec(ctx, `DELETE FROM probe_exclude_comms`); err != nil {
+		return fmt.Errorf("清空 exec+bash 失败: %w", err)
+	}
+	for _, comm := range execComms {
+		if comm == "" {
+			continue
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO probe_exclude_comms (comm, reason, created_by)
+			 VALUES ($1, $2, $3)`,
+			comm, "apply", createdBy); err != nil {
+			return fmt.Errorf("写入 exec+bash [%s] 失败: %w", comm, err)
+		}
+	}
+
+	// ---- file_access ----
+	if _, err := tx.Exec(ctx, `DELETE FROM probe_exclude_comms_file_access`); err != nil {
+		return fmt.Errorf("清空 file_access 失败: %w", err)
+	}
+	for _, comm := range fileComms {
+		if comm == "" {
+			continue
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO probe_exclude_comms_file_access (comm, reason, created_by)
+			 VALUES ($1, $2, $3)`,
+			comm, "apply", createdBy); err != nil {
+			return fmt.Errorf("写入 file_access [%s] 失败: %w", comm, err)
+		}
+	}
+
+	// ---- tcp IP ----
+	if _, err := tx.Exec(ctx, `DELETE FROM probe_exclude_ips`); err != nil {
+		return fmt.Errorf("清空 tcp IP 失败: %w", err)
+	}
+	for _, ip := range tcpIPs {
+		if ip == "" {
+			continue
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO probe_exclude_ips (ip, reason, created_by)
+			 VALUES ($1, $2, $3)`,
+			ip, "apply", createdBy); err != nil {
+			return fmt.Errorf("写入 tcp IP [%s] 失败: %w", ip, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("提交事务失败: %w", err)
+	}
+	return nil
+}

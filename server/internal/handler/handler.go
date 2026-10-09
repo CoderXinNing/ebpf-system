@@ -42,15 +42,19 @@ type Handler struct {
 	ListExcludeIPsFunc               func() ([]string, error)
 	AddExcludeIPFunc                 func(ip, reason string) error
 	RemoveExcludeIPFunc              func(ip string) error
-	RebuildRulesFunc                 func() error                                                            // 排除名单更新回调
-	ListStarEventsFunc               func(corrID string) ([]map[string]interface{}, error)                   // PSQL 攻击链查询
-	GetLatestAssetFunc               func(agentID string) (interface{}, interface{}, interface{}, error)     // PSQL 资产查询
-	SaveAssetFunc                    func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
-	GetAllAssetsFunc                 func(agentID string) (map[string]interface{}, error)                    // 所有资产类型
-	SaveTypedAssetFunc               func(agentID, assetType, assetName string, data interface{}) error      // 保存指定类型资产
-	GetSettingFunc                   func(key string) (string, error)
-	SetSettingFunc                   func(key, value string) error
-	ListSettingsFunc                 func() (map[string]string, error)
+
+	// 统一 Apply（三维度一次性提交）
+	GetAllExcludesFunc     func() (execComms, fileComms, ips []string, err error)
+	ReplaceAllExcludesFunc func(execComms, fileComms, ips []string) error
+	RebuildRulesFunc       func() error                                                            // 排除名单更新回调
+	ListStarEventsFunc     func(corrID string) ([]map[string]interface{}, error)                   // PSQL 攻击链查询
+	GetLatestAssetFunc     func(agentID string) (interface{}, interface{}, interface{}, error)     // PSQL 资产查询
+	SaveAssetFunc          func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
+	GetAllAssetsFunc       func(agentID string) (map[string]interface{}, error)                    // 所有资产类型
+	SaveTypedAssetFunc     func(agentID, assetType, assetName string, data interface{}) error      // 保存指定类型资产
+	GetSettingFunc         func(key string) (string, error)
+	SetSettingFunc         func(key, value string) error
+	ListSettingsFunc       func() (map[string]string, error)
 
 	// Enrollment（Day 1-3）
 	GenerateTokenFunc func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error)
@@ -210,6 +214,16 @@ func (h *Handler) SetRemoveExcludeIPFunc(fn func(ip string) error) {
 	h.RemoveExcludeIPFunc = fn
 }
 
+// SetGetAllExcludesFunc 设置三维度一次读回调
+func (h *Handler) SetGetAllExcludesFunc(fn func() ([]string, []string, []string, error)) {
+	h.GetAllExcludesFunc = fn
+}
+
+// SetReplaceAllExcludesFunc 设置三维度全量替换回调
+func (h *Handler) SetReplaceAllExcludesFunc(fn func([]string, []string, []string) error) {
+	h.ReplaceAllExcludesFunc = fn
+}
+
 // SetRebuildRulesFunc 设置规则重建回调
 // Add/Remove 探针排除名单后触发，把变化合并进 RuleSet 并重新签名下发
 func (h *Handler) SetRebuildRulesFunc(fn func() error) {
@@ -340,6 +354,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/probe-exclude-ips", h.rbacMiddleware("probes", "read"), h.ListExcludeIPs)
 		api.POST("/probe-exclude-ips", h.rbacMiddleware("probes", "write"), h.AddExcludeIP)
 		api.DELETE("/probe-exclude-ips", h.rbacMiddleware("probes", "write"), h.RemoveExcludeIP)
+
+		// 统一 Apply（前端一页三维度用）
+		api.GET("/probe-exclude/all", h.rbacMiddleware("probes", "read"), h.GetAllExcludes)
+		api.POST("/probe-exclude/apply", h.rbacMiddleware("probes", "write"), h.ApplyProbeExclude)
 
 		api.GET("/alerts", func(c *gin.Context) {
 			log.Printf("DEBUG: ListAlertsFunc = %v", h.ListAlertsFunc != nil)

@@ -315,6 +315,12 @@ func main() {
 			h.SetRemoveExcludeIPFunc(func(ip string) error {
 				return psqlDB.RemoveExcludeIP(context.Background(), ip)
 			})
+			h.SetGetAllExcludesFunc(func() ([]string, []string, []string, error) {
+				return psqlDB.GetAllExcludes(context.Background())
+			})
+			h.SetReplaceAllExcludesFunc(func(execComms, fileComms, ips []string) error {
+				return psqlDB.ReplaceAllExcludes(context.Background(), execComms, fileComms, ips, "admin")
+			})
 			h.SetUpdateAlertStatusFunc(func(ids []int64, status string) error {
 				return psqlDB.UpdateAlertStatus(context.Background(), ids, status)
 			})
