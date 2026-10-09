@@ -34,15 +34,23 @@ type Handler struct {
 	RemoveProbeExcludeCommsFunc func(comm string) error
 	ProbeExcludeComms           []string // 探针排除名单（comm 列表）
 	ProbeExcludeCommsUpdateFunc func([]string)
-	RebuildRulesFunc            func() error                                                            // 排除名单更新回调
-	ListStarEventsFunc          func(corrID string) ([]map[string]interface{}, error)                   // PSQL 攻击链查询
-	GetLatestAssetFunc          func(agentID string) (interface{}, interface{}, interface{}, error)     // PSQL 资产查询
-	SaveAssetFunc               func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
-	GetAllAssetsFunc            func(agentID string) (map[string]interface{}, error)                    // 所有资产类型
-	SaveTypedAssetFunc          func(agentID, assetType, assetName string, data interface{}) error      // 保存指定类型资产
-	GetSettingFunc              func(key string) (string, error)
-	SetSettingFunc              func(key, value string) error
-	ListSettingsFunc            func() (map[string]string, error)
+
+	// 三维度 #11/#12：file_access 独立 comm + tcp 独立 IP
+	ListFileAccessExcludeCommsFunc   func() ([]string, error)
+	AddFileAccessExcludeCommsFunc    func(comm, reason string) error
+	RemoveFileAccessExcludeCommsFunc func(comm string) error
+	ListExcludeIPsFunc               func() ([]string, error)
+	AddExcludeIPFunc                 func(ip, reason string) error
+	RemoveExcludeIPFunc              func(ip string) error
+	RebuildRulesFunc                 func() error                                                            // 排除名单更新回调
+	ListStarEventsFunc               func(corrID string) ([]map[string]interface{}, error)                   // PSQL 攻击链查询
+	GetLatestAssetFunc               func(agentID string) (interface{}, interface{}, interface{}, error)     // PSQL 资产查询
+	SaveAssetFunc                    func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
+	GetAllAssetsFunc                 func(agentID string) (map[string]interface{}, error)                    // 所有资产类型
+	SaveTypedAssetFunc               func(agentID, assetType, assetName string, data interface{}) error      // 保存指定类型资产
+	GetSettingFunc                   func(key string) (string, error)
+	SetSettingFunc                   func(key, value string) error
+	ListSettingsFunc                 func() (map[string]string, error)
 
 	// Enrollment（Day 1-3）
 	GenerateTokenFunc func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error)
@@ -172,6 +180,36 @@ func (h *Handler) SetRemoveProbeExcludeCommsFunc(fn func(string) error) {
 	h.RemoveProbeExcludeCommsFunc = fn
 }
 
+// SetListFileAccessExcludeCommsFunc 设置 file_access 独立 comm 查询回调
+func (h *Handler) SetListFileAccessExcludeCommsFunc(fn func() ([]string, error)) {
+	h.ListFileAccessExcludeCommsFunc = fn
+}
+
+// SetAddFileAccessExcludeCommsFunc 设置 file_access 独立 comm 添加回调
+func (h *Handler) SetAddFileAccessExcludeCommsFunc(fn func(comm, reason string) error) {
+	h.AddFileAccessExcludeCommsFunc = fn
+}
+
+// SetRemoveFileAccessExcludeCommsFunc 设置 file_access 独立 comm 移除回调
+func (h *Handler) SetRemoveFileAccessExcludeCommsFunc(fn func(comm string) error) {
+	h.RemoveFileAccessExcludeCommsFunc = fn
+}
+
+// SetListExcludeIPsFunc 设置 tcp 独立 IP 查询回调
+func (h *Handler) SetListExcludeIPsFunc(fn func() ([]string, error)) {
+	h.ListExcludeIPsFunc = fn
+}
+
+// SetAddExcludeIPFunc 设置 tcp 独立 IP 添加回调
+func (h *Handler) SetAddExcludeIPFunc(fn func(ip, reason string) error) {
+	h.AddExcludeIPFunc = fn
+}
+
+// SetRemoveExcludeIPFunc 设置 tcp 独立 IP 移除回调
+func (h *Handler) SetRemoveExcludeIPFunc(fn func(ip string) error) {
+	h.RemoveExcludeIPFunc = fn
+}
+
 // SetRebuildRulesFunc 设置规则重建回调
 // Add/Remove 探针排除名单后触发，把变化合并进 RuleSet 并重新签名下发
 func (h *Handler) SetRebuildRulesFunc(fn func() error) {
@@ -294,6 +332,14 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/probe-exclude-comms", h.rbacMiddleware("probes", "read"), h.ListProbeExcludeComms)
 		api.POST("/probe-exclude-comms", h.rbacMiddleware("probes", "write"), h.AddProbeExcludeComms)
 		api.DELETE("/probe-exclude-comms/:comm", h.rbacMiddleware("probes", "write"), h.RemoveProbeExcludeComms)
+
+		// 三维度 #11/#12
+		api.GET("/probe-exclude-comms-file-access", h.rbacMiddleware("probes", "read"), h.ListFileAccessExcludeComms)
+		api.POST("/probe-exclude-comms-file-access", h.rbacMiddleware("probes", "write"), h.AddFileAccessExcludeComms)
+		api.DELETE("/probe-exclude-comms-file-access/:comm", h.rbacMiddleware("probes", "write"), h.RemoveFileAccessExcludeComms)
+		api.GET("/probe-exclude-ips", h.rbacMiddleware("probes", "read"), h.ListExcludeIPs)
+		api.POST("/probe-exclude-ips", h.rbacMiddleware("probes", "write"), h.AddExcludeIP)
+		api.DELETE("/probe-exclude-ips", h.rbacMiddleware("probes", "write"), h.RemoveExcludeIP)
 
 		api.GET("/alerts", func(c *gin.Context) {
 			log.Printf("DEBUG: ListAlertsFunc = %v", h.ListAlertsFunc != nil)

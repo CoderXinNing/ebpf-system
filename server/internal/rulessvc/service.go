@@ -89,10 +89,18 @@ func (s *Service) GetFull(ctx context.Context) (*psql.AgentRuleRecord, error) {
 //
 // 用途：探针排除名单 handler 的 Add/Remove 后调用，把变化同步到 agent_rules
 func (s *Service) RebuildFromDB(ctx context.Context, createdBy string) error {
-	// 1. 读排除名单
+	// 1. 读三维度排除名单
 	excludeComms, err := s.repo.ListProbeExcludeComms(ctx)
 	if err != nil {
-		return fmt.Errorf("读排除名单失败: %w", err)
+		return fmt.Errorf("读 exec+bash 排除名单失败: %w", err)
+	}
+	fileAccessComms, err := s.repo.ListFileAccessExcludeComms(ctx)
+	if err != nil {
+		return fmt.Errorf("读 file_access 排除名单失败: %w", err)
+	}
+	tcpIPs, err := s.repo.ListExcludeIPs(ctx)
+	if err != nil {
+		return fmt.Errorf("读 tcp IP 排除名单失败: %w", err)
 	}
 
 	// 2. 读当前最新 RuleSet（保留 file_access 等其他规则）
@@ -113,7 +121,8 @@ func (s *Service) RebuildFromDB(ctx context.Context, createdBy string) error {
 		rs = defaultRules()
 	}
 
-	// 3. 合并排除名单到 Exec.Exclude（语义：排除 comm）
+	// 3. 合并 exec+bash 共享 comm 排除
+	//    （bash 无独立 JSON 节，读 rs.Exec.Exclude；见 PROJECT-STATUS #11）
 	if rs.Exec == nil {
 		rs.Exec = &rules.ExecRules{}
 	}
@@ -121,10 +130,26 @@ func (s *Service) RebuildFromDB(ctx context.Context, createdBy string) error {
 		Comms: excludeComms,
 	}
 
-	// 4. 清空 Version，让 Publish 自动自增
+	// 4. 合并 file_access 独立 comm 排除
+	if rs.FileAccess == nil {
+		rs.FileAccess = &rules.FileAccessRules{}
+	}
+	rs.FileAccess.Exclude = &rules.FileAccessExclude{
+		Comms: fileAccessComms,
+	}
+
+	// 5. 合并 tcp 独立 IP 排除
+	if rs.TCP == nil {
+		rs.TCP = &rules.TCPRules{}
+	}
+	rs.TCP.Exclude = &rules.TCPExclude{
+		IPs: tcpIPs,
+	}
+
+	// 6. 清空 Version，让 Publish 自动自增
 	rs.Version = 0
 
-	// 5. Publish
+	// 7. Publish
 	_, err = s.Publish(ctx, rs, createdBy)
 	return err
 }

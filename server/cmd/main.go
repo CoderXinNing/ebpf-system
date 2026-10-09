@@ -296,6 +296,25 @@ func main() {
 			h.SetRemoveProbeExcludeCommsFunc(func(comm string) error {
 				return psqlDB.RemoveProbeExcludeComms(context.Background(), comm)
 			})
+
+			h.SetListFileAccessExcludeCommsFunc(func() ([]string, error) {
+				return psqlDB.ListFileAccessExcludeComms(context.Background())
+			})
+			h.SetAddFileAccessExcludeCommsFunc(func(comm, reason string) error {
+				return psqlDB.AddFileAccessExcludeComms(context.Background(), comm, reason, "admin")
+			})
+			h.SetRemoveFileAccessExcludeCommsFunc(func(comm string) error {
+				return psqlDB.RemoveFileAccessExcludeComms(context.Background(), comm)
+			})
+			h.SetListExcludeIPsFunc(func() ([]string, error) {
+				return psqlDB.ListExcludeIPs(context.Background())
+			})
+			h.SetAddExcludeIPFunc(func(ip, reason string) error {
+				return psqlDB.AddExcludeIP(context.Background(), ip, reason, "admin")
+			})
+			h.SetRemoveExcludeIPFunc(func(ip string) error {
+				return psqlDB.RemoveExcludeIP(context.Background(), ip)
+			})
 			h.SetUpdateAlertStatusFunc(func(ids []int64, status string) error {
 				return psqlDB.UpdateAlertStatus(context.Background(), ids, status)
 			})
