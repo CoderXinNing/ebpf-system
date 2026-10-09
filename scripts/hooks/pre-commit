@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# AsterTrack pre-commit hook
+#   安装：bash scripts/install-hooks.sh
+#   跳过：SKIP_HOOKS=1 git commit ...  或  git commit --no-verify
+#
+# 检查项：
+#   0. .bak-* 被 staged              → 拦截
+#   1. gofmt（staged .go，显式列文件） → 拦截
+#   2. go build ./...                 → 拦截
+#   3. go vet agent/server/internal   → 拦截
+#   4. migration 缺 GRANT             → 拦截
+#   5. 核心代码改动但 docs 未同步      → 仅警告
+
+set -euo pipefail
+
+if [ -t 1 ]; then
+  RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; CYA=$'\033[36m'; RST=$'\033[0m'
+else
+  RED=""; GRN=""; YEL=""; CYA=""; RST=""
+fi
+ok()   { printf '%s✓%s %s\n'   "$GRN" "$RST" "$*"; }
+warn() { printf '%s⚠%s %s\n'   "$YEL" "$RST" "$*"; }
+fail() { printf '%s✗%s %s\n'   "$RED" "$RST" "$*"; }
+sec()  { printf '\n%s── %s ──%s\n' "$CYA" "$*" "$RST"; }
+
+[ "${SKIP_HOOKS:-0}" = "1" ] && { warn "SKIP_HOOKS=1，跳过"; exit 0; }
+
+cd "$(git rev-parse --show-toplevel)"
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$STAGED" ] && exit 0
+
+GO_FILES=$(printf '%s\n' "$STAGED" | grep -E '\.go$'          || true)
+SQL_FILES=$(printf '%s\n' "$STAGED" | grep -E '\.sql$'         || true)
+BAK_FILES=$(printf '%s\n' "$STAGED" | grep -E '\.bak-'         || true)
+DOC_STAGED=$(printf '%s\n' "$STAGED" | grep -E '^docs/.*\.txt$' || true)
+
+# 0. .bak-*
+if [ -n "$BAK_FILES" ]; then
+  sec "拦截 .bak-*"
+  fail "备份文件不应提交（用 git 分支/stash）："
+  printf '%s\n' "$BAK_FILES" | sed 's/^/    /'
+  say=""
+  printf '\n  git rm --cached <file>   # 从索引移除，保留工作区\n'
+  exit 1
+fi
+
+# 1. gofmt
+if [ -n "$GO_FILES" ]; then
+  sec "gofmt"
+  UNFMT=$(gofmt -l $GO_FILES 2>/dev/null || true)
+  if [ -n "$UNFMT" ]; then
+    fail "以下文件未格式化："
+    printf '%s\n' "$UNFMT" | sed 's/^/    /'
+    printf '\n  修复：gofmt -w %s\n' "$(printf '%s ' $UNFMT)"
+    exit 1
+  fi
+  ok "通过"
+fi
+
+# 2. go build ./...
+if [ -n "$GO_FILES" ]; then
+  sec "go build ./..."
+  if ! OUT=$(go build ./... 2>&1); then
+    fail "编译失败："; printf '%s\n' "$OUT" | sed 's/^/    /'; exit 1
+  fi
+  ok "通过"
+fi
+
+# 3. go vet
+if [ -n "$GO_FILES" ]; then
+  sec "go vet"
+  if ! OUT=$(go vet ./agent/... ./server/... ./internal/... 2>&1); then
+    fail "vet 失败："; printf '%s\n' "$OUT" | sed 's/^/    /'; exit 1
+  fi
+  ok "通过"
+fi
+
+# 4. migration GRANT
+if [ -n "$SQL_FILES" ]; then
+  sec "migration GRANT"
+  MISS=""
+  for f in $SQL_FILES; do
+    case "$f" in
+      *migrations/*) grep -qi 'GRANT' "$f" || MISS="${MISS}${f}"$'\n' ;;
+    esac
+  done
+  if [ -n "$MISS" ]; then
+    fail "以下 migration 缺 GRANT："
+    printf '%s' "$MISS" | sed 's/^/    /'
+    printf '\n  末尾加：GRANT SELECT,INSERT,UPDATE,DELETE ON <table> TO sentinel;\n'
+    exit 1
+  fi
+  ok "通过"
+fi
+
+# 5. 文档漂移（仅警告）
+CORE=$(printf '%s\n' "$STAGED" \
+  | grep -E '^(agent/internal/(agent|v3_loader|probe)/|server/internal/|proto/)' || true)
+if [ -n "$CORE" ] && [ -z "$DOC_STAGED" ]; then
+  sec "文档漂移提示"
+  warn "核心代码有改动，但 docs/*.txt 未同步"
+  warn "考虑更新：docs/PROJECT-STATUS.txt / docs/TODO.txt"
+  warn "（不阻塞提交）"
+fi
+
+sec "全部检查通过"
+exit 0
