@@ -78,7 +78,7 @@ int BPF_KPROBE(trace_connect, int fd, struct sockaddr *uservaddr, int addrlen) {
     char comm[16] = {};
     bpf_get_current_comm(&comm, sizeof(comm));
     
-    // 2. 白名单过滤（如果启用）
+    // 2. 白名单过滤（如果启用）—— comm 维度
     __u64 exclude_enabled = get_config_value(CONFIG_EXCLUDE_COMMS);
     if (exclude_enabled == 1) {
         __u8 *allowed = bpf_map_lookup_elem(&sentinel_exclude_comms, comm);
@@ -86,11 +86,28 @@ int BPF_KPROBE(trace_connect, int fd, struct sockaddr *uservaddr, int addrlen) {
             return 0;
         }
     }
-    
+
     // 3. 解析目标地址
     struct tcp_conn_detail detail = {};
     if (uservaddr) {
         parse_sockaddr((struct sockaddr *)uservaddr, &detail);
+    }
+
+    // 3b. IP 维度排除（LPM_TRIE，支持 CIDR）
+    //     仅检查 dst_ip（connect 的目标），src 由对端决定，不在此处
+    //
+    // 字节序说明：
+    //   parse_sockaddr 读出的 sin_addr 是网络字节序，
+    //   经 __builtin_bswap32 后 detail.dst_ip 变为主机字节序。
+    //   LPM_TRIE 的 key.ip 要求网络字节序，故再 bswap32 转回。
+    //   （Go 侧写入时用 net.IP.To4() 直接是网络字节序，与本处对齐）
+    if (detail.dst_ip != 0) {
+        __u32 be_ip = __builtin_bswap32(detail.dst_ip);
+        struct lpm_ip_key xkey = { .prefixlen = 32, .ip = be_ip };
+        __u8 *xallowed = bpf_map_lookup_elem(&sentinel_xip, &xkey);
+        if (xallowed && *xallowed == 1) {
+            return 0;
+        }
     }
     
     // 4. 更新连接统计

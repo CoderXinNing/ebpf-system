@@ -80,6 +80,28 @@ struct {
 } sentinel_exclude_comms SEC(".maps");
 
 // ============================================
+// TCP IP 排除名单（LPM_TRIE，支持 CIDR）
+//
+// 命名：sentinel_xip（短名），因内核 BPF map 名上限 15 字符，
+//       sentinel_exclude_ips 会截成 sentinel_exclud，与上面撞名。
+//       bpftool 调试时靠 ID 区分。
+// 用途：tcp 探针独立 IP 维度排除（comm 维度对 tcp 无意义）
+// ============================================
+
+struct lpm_ip_key {
+    __u32 prefixlen;   // CIDR 位数（0-32），0 表示匹配所有
+    __u32 ip;          // 网络字节序 IPv4
+} __attribute__((packed));
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
+    __uint(max_entries, 4096);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
+    __type(key, struct lpm_ip_key);
+    __type(value, __u8);
+} sentinel_xip SEC(".maps");
+
+// ============================================
 // 敏感路径动态规则（file_access 使用）
 //
 // 双 map 设计原因：
