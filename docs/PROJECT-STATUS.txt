@@ -186,12 +186,12 @@ origin/main：同
 6. go build ./... 只检查语法，要 -o 生成二进制
 7. certs/ 和 agent/data/ 是 gitignore
 8. execve 的 filename 是占位符，真实命令在 details
-9. pre-commit hook(本地状态,不随仓库)
-   - 安装:bash scripts/install-hooks.sh
-   - 生效:git config core.hooksPath scripts/hooks(写 .git/config,不跟踪)
-   - 跳过:SKIP_HOOKS=1 git commit ... 或 git commit --no-verify
-   - 检查:.bak-* / gofmt / go build ./... / go vet / migration GRANT / 文档漂移警告
-   - ⚠️ 新机器 clone 后必跑 install-hooks.sh,否则 hook 不生效
+9. pre-commit hook（本地状态，不随仓库）
+   - 安装：bash scripts/install-hooks.sh
+   - 生效：git config core.hooksPath scripts/hooks（写 .git/config，不跟踪）
+   - 跳过：SKIP_HOOKS=1 git commit ... 或 git commit --no-verify
+   - 检查：.bak-* / gofmt / go build ./... / go vet / migration GRANT / 文档漂移警告
+   - ⚠️ 新机器 clone 后必跑 install-hooks.sh，否则 hook 不生效
 
 
 【八、环境信息】
