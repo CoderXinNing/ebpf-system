@@ -1,0 +1,276 @@
+AsterTrack 状态对账（Reconciliation）
+=================================================
+日期：2026-10-09
+定位：唯一事实源。其他文档与本文档冲突时，以本文档为准。
+     其他文档保留为"设计协商历史"，不再作为状态查询入口。
+性质：DB schema + 文档漂移 + 已协商变更 + 待验证，四合一。
+=================================================
+
+
+【零、真相来源声明】
+
+  本文档以 PostgreSQL sentinel 库实际 schema 与数据为锚点。
+  所有历史文档（PROJECT-STATUS / RULES-MODEL-v2 / DB-DELETE-CASCADE / ...）
+  与 DB 冲突时，以 DB 为准，历史文档需修订。
+
+  验证命令模板：
+    sudo -u postgres psql -d sentinel -c "\d <表名>"
+
+
+【一、DB 当前表清单（28 张，2026-10-09 核实）】
+
+  agent_current_state
+  agent_rules                    ← 待改造（008a/008b）
+  agents                         ← 待加 deleted_at（009）
+  alerts
+  audit_logs                     ← 已存在（历史文档误记为"需建"）
+  baseline_snapshots
+  baselines
+  cmdb_assets
+  enrollment_tokens
+  events
+  events_2026_09_archive         ← 仍有独立 CASCADE（历史文档误记为"脱离"）
+  events_2026_10
+  events_2026_11
+  events_2026_12
+  events_2027_01
+  host_groups
+  log_settings
+  playbooks
+  probe_configs
+  probe_exclude_comms            ← 待 DROP（008b）
+  probe_exclude_comms_file_access ← 待 DROP（008b）
+  probe_exclude_ips              ← 待 DROP（008b）
+  probe_templates
+  role_permissions
+  roles
+  rules
+  sessions
+  users
+
+  未存在但历史文档提到：
+    rule_templates               ← 待 CREATE（008a）
+
+
+【二、关键表 schema（已核实部分）】
+
+  2.1 agents
+    列：
+      id, agent_id, hostname, display_name, ip_addr, location, owner,
+      version, group_id, token_hash, capability_level, active_probes,
+      probe_details(jsonb), baseline_state, learning_started_at,
+      learning_duration, first_seen, last_seen, framework(jsonb),
+      kernel_info(jsonb), version_lock, created_at, updated_at,
+      public_key_der(bytea), public_key_hash(bytea), machine_id,
+      mac_address, cert_serial, cert_expires_at, revoked_at
+    关键：
+      - UNIQUE (agent_id)
+      - revoked_at 是 L4 证书撤销专用（非软删除）
+      - 无 deleted_at → 009 需新增
+    被 CASCADE 引用（删 agents 行会级联清）：
+      agent_current_state / alerts / baselines / baseline_snapshots /
+      cmdb_assets / events / events_2026_09_archive / probe_configs
+
+  2.2 agent_rules
+    列：id, version, content(text), sha256(varchar64), signature(text),
+        created_by(varchar64), created_at
+    索引：pkey(id), idx_agent_rules_version(version DESC)
+    数据：23 行（id 5~27，e2e 产物）
+    缺：agent_id 列、(agent_id, sha256) 唯一索引 → 008a/008b
+
+  2.3 audit_logs（已存在，无需建）
+    列：id, session_id, username, action, detail, before_value(jsonb),
+        after_value(jsonb), result, ip, user_agent, capability_level,
+        created_at
+    FK：session_id → sessions(id) ON DELETE SET NULL
+    CHECK：result ∈ {success,failure}
+           capability_level ∈ {lsm,xdp,ebpf,cmdb}
+    索引：created_at DESC / username / capability_level
+
+  2.4 probe_exclude_*（三张，0 行）
+    计划 DROP（008b）
+
+  2.5 events_2026_09_archive
+    FK agent_id → agents ON DELETE CASCADE（与历史文档矛盾，重要）
+
+
+【三、文档 vs DB 差异清单】
+
+  | # | 文档 | 文档写 | DB 实 | 处置 |
+  |---|------|-------|------|------|
+  | 1 | RULES-MODEL-v2 | content BYTEA | content TEXT | 改文档 |
+  | 2 | RULES-MODEL-v2 | agent_rules 22 行 | 23 行 | 改文档 |
+  | 3 | RULES-MODEL-v2 | rules_hash 替换 rules_version | 实际字段是 rules_stale | 改文档 |
+  | 4 | DB-DELETE-CASCADE | 归档表脱离 CASCADE | 归档表仍有独立 CASCADE | 改文档 |
+  | 5 | DB-DELETE-CASCADE | 需要建 audit_logs | 已存在 | 改文档 |
+  | 6 | DB-DELETE-CASCADE | 复用 revoked_at 软删除 | revoked_at 是证书撤销专用 | 改文档 |
+  | 7 | PROJECT-STATUS #9 | main.go:573 SetWhitelist | 方法不存在 | 改文档 |
+  | 8 | RULES-MODEL-v2 | (agent_id,sha256) 唯一索引 | 现无此索引 | 待 008b |
+
+
+【四、已协商的 DB 变更（定稿）】
+
+  4.1 migration 008a（加法，可回滚）
+    - CREATE TABLE rule_templates
+    - ALTER TABLE agent_rules ADD COLUMN agent_id VARCHAR(64)（nullable）
+    - 保留 version 列，不 drop 任何表
+    - 数据迁移：现有 23 行 + probe_exclude_* 三表内容
+      → 写入 rule_templates 一条 is_default=true
+    - GRANT
+
+  4.2 migration 008b（减法，008a 部署 + 观察一周后）
+    - DELETE FROM agent_rules WHERE agent_id IS NULL
+    - ALTER TABLE agent_rules ALTER COLUMN agent_id SET NOT NULL
+    - DROP INDEX idx_agent_rules_version
+    - ALTER TABLE agent_rules DROP COLUMN version
+    - CREATE UNIQUE INDEX idx_agent_rules_agent_sha ON (agent_id, sha256)
+    - CREATE INDEX idx_agent_rules_agent_created ON (agent_id, created_at DESC)
+    - DROP TABLE probe_exclude_comms / _file_access / _ips
+
+  4.3 migration 009（P1.11）
+    - ALTER TABLE agents ADD COLUMN deleted_at TIMESTAMPTZ
+    - CREATE INDEX idx_agents_deleted_at WHERE deleted_at IS NOT NULL
+    - audit_logs 已存在，不建
+    - revoked_at 语义保持（证书撤销）；软删除时同时设
+    - 删除 API 加 RBAC admin-only
+    - 软删除后 Agent 重注册走 UPSERT
+      （ON CONFLICT agent_id DO UPDATE，条件 deleted_at IS NOT NULL）
+
+
+【五、核验结果（2026-10-09 已跑完）】
+
+  5.1 events 分区
+    events 主表 relispartition=f（普通表，不带分区）
+    events_2026_09_archive  relispartition=f（已脱离，DETACH 成功）
+    events_2026_10/11/12、events_2027_01  relispartition=t
+    各分区含 8 个索引（pkey / agent_id / agent_id_timestamp /
+    correlation_id / event_hash / probe_name / source_channel / timestamp）
+
+  5.2 引用 agents 的 12 张表（全部 CASCADE）
+    events / events_2026_10 / _11 / _12 / _2027_01
+    events_2026_09_archive  ← 归档表仍有 CASCADE
+    alerts / baselines / baseline_snapshots
+    probe_configs / cmdb_assets / agent_current_state
+
+  5.3 数据量
+    agents                   6
+    agent_rules             23（e2e 产物，008 清空）
+    audit_logs               0（空表，从未接入）
+    alerts                1252
+    events_2026_10     375,616
+    events_2026_09_archive 351,439
+
+  5.4 probe_exclude_* 三表 schema
+    （用户已确认过，probe_exclude_comms 0 行；另两表 0 行）
+
+  5.5 agents 状态
+    只有 agent-obgfyuh4vphibkdtw6ekz2gsc4 活跃（last_seen 2026-10-09）
+    其余 5 台 last_seen 停在 2026-09-23/24
+    无任何 revoked_at 有值（L4 撤销从未使用）
+
+  5.6 gRPC 字段
+    agent_service.proto:56  int64 rules_version = 7;  // AgentStatus，上报用
+    agent_service.proto:70  bool  rules_stale  = 3;   // HeartbeatResponse
+    无 rules_hash 字段（v2 待加）
+
+【五·补、核验带来的文档修正】
+
+  RULES-MODEL-v2.txt 需修正：
+    - Heartbeat 迁移目标不是"替换 rules_version"，
+      而是"新增 rules_hash，替换 rules_stale 的布尔语义；
+       rules_version 保留（上报当前生效版本用）"
+
+  PROJECT-STATUS.txt 需修正：
+    - 半成品 2 "Go 层 ApplyConfig 实况"一段：
+      exec/bash/tcp/file_access 4 个全部接通，
+      旧描述"bash 空 / tcp 空 / file 只调 UpdateSensitivePaths"作废
+
+【六、其他文档定位（综合排查后重新定位）】
+
+  跑以下命令，把输出回填到本章节：
+
+  5.1 events 与月分区的继承关系
+    sudo -u postgres psql -d sentinel -c "
+      SELECT c.relname, c.relispartition,
+             pg_get_expr(c.relpartbound, c.oid) AS bound
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relname LIKE 'events%'
+      ORDER BY c.relname;"
+
+  5.2 events 主表 schema
+    sudo -u postgres psql -d sentinel -c "\d events"
+    sudo -u postgres psql -d sentinel -c "\d events_2026_10"
+
+  5.3 其他 CASCADE 表 schema（删 Agent 时涉及）
+    sudo -u postgres psql -d sentinel -c "\d alerts"
+    sudo -u postgres psql -d sentinel -c "\d baselines"
+    sudo -u postgres psql -d sentinel -c "\d baseline_snapshots"
+    sudo -u postgres psql -d sentinel -c "\d cmdb_assets"
+    sudo -u postgres psql -d sentinel -c "\d agent_current_state"
+    sudo -u postgres psql -d sentinel -c "\d probe_configs"
+
+  5.4 probe_exclude_* 实际 schema
+    sudo -u postgres psql -d sentinel -c "\d probe_exclude_comms"
+    sudo -u postgres psql -d sentinel -c "\d probe_exclude_comms_file_access"
+    sudo -u postgres psql -d sentinel -c "\d probe_exclude_ips"
+
+  5.5 数据量（估算删除耗时）
+    sudo -u postgres psql -d sentinel -c "
+      SELECT 'events_2026_10' AS t, count(*) FROM events_2026_10
+      UNION ALL SELECT 'events_2026_09_archive', count(*) FROM events_2026_09_archive
+      UNION ALL SELECT 'events_2026_11', count(*) FROM events_2026_11;"
+
+  5.6 audit_logs 现有数据量
+    sudo -u postgres psql -d sentinel -c "SELECT count(*) FROM audit_logs;"
+
+  5.7 agents 6 台的 revoked_at / last_seen
+    sudo -u postgres psql -d sentinel -c "
+      SELECT agent_id, hostname, last_seen, revoked_at
+      FROM agents ORDER BY last_seen DESC;"
+
+  5.8 enrollment_tokens / sessions schema（审计 FK 依赖）
+    sudo -u postgres psql -d sentinel -c "\d enrollment_tokens"
+    sudo -u postgres psql -d sentinel -c "\d sessions"
+
+
+【六、其他文档定位（综合排查后重新定位）】
+
+  PROJECT-STATUS.txt
+    定位：项目现状盘点（每轮更新）
+    保留，但"已知问题 #9"标作废；"半成品 1/2"迁入本文档后精简
+
+  RULES-MODEL-v2.txt
+    定位：P1.10 设计定稿
+    保留，作为设计参考；状态以本文档 §4.1/4.2 为准
+
+  DB-DELETE-CASCADE.txt
+    定位：P1.11 设计协商历史
+    保留，作为设计参考；状态以本文档 §4.3 为准
+    高/中危分析有两处错误，本文档 §3 已修正
+
+  RULES-APPLY-DESIGN.txt
+    定位：v1 时代设计历史
+    阶段 A/B/C 有效；D/F 被 v2 覆盖；E 待 P1.10 后重做
+
+  EDR-CORRELATION-v3.1.txt
+    定位：架构定稿
+    保留不变
+
+  TODO.txt
+    定位：待办清单
+    保留，但按 Phase A/B/C 重分类
+
+  DB-RECONCILIATION.txt（本文档）
+    定位：唯一事实源 / 对账锚点
+    任何"当前状态"问题 → 先查本文档
+
+
+【七、下一步动作】
+
+  1. 跑第五章全部命令，输出回填至对应小节
+  2. 依据 §3 差异清单修订其他文档（A1 任务）
+  3. 开始 Phase A3（file_access 过滤收窄）
+
+=================================================
+END
+=================================================
