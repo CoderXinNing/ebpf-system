@@ -1,0 +1,172 @@
+AsterTrack 删除联动分析（Agent 对象）
+=================================================
+日期：2026-10-09
+性质：设计协商产出，待实施
+关联：DB-SCHEMA-SNAPSHOT（若后续生成）
+=================================================
+
+
+【一、背景】
+
+用户需求：删除一台 Agent 时，系统所有关于它的信息要一起清掉。
+场景：误注册、Agent 退役、换机重装。
+关注：DB 层是否已经天然支持，应用层还需要做什么。
+
+
+【二、现状：CASCADE 已覆盖的表】
+
+删除 agents 表中一行，DB 自动级联清理以下表：
+
+表名                    外键行为
+────────────────────────────────
+agent_current_state     CASCADE
+alerts                  CASCADE
+baselines               CASCADE
+baseline_snapshots      CASCADE
+cmdb_assets             CASCADE
+probe_configs           CASCADE
+events                  CASCADE（含所有月分区）
+events_2026_10          CASCADE
+events_2026_11          CASCADE
+events_2026_12          CASCADE
+
+结论：应用层不需要"遍历所有表 DELETE"，DB 已做。
+      只需在删除前：通知在线 Agent + 记审计。
+
+
+【三、发现的问题】
+
+🔴 高危 1：删除会锁全表几十秒
+────────────────────────────────
+
+现状：
+  events_2026_10 有 35 万行，一台 Agent 可能占几万行
+  DELETE agents → CASCADE 到 events_2026_10 → 删几万行
+  → 表级锁 → 其他 Agent 写入阻塞
+
+后果：
+  删一台 Agent，所有其他 Agent 的事件写入卡死
+  事件写入超时 → Agent 侧丢事件 / 报错
+
+触发场景：
+  生产环境有 N 台 Agent，删其中一台
+
+建议方案（下一轮）：
+  软删除 + 后台异步清理
+  1. agents 加 deleted_at 列
+  2. 删除动作 = UPDATE agents SET deleted_at = now()
+  3. 后台任务（每 5 分钟）分批清理：
+     - 先通知在线 Agent 停止上报
+     - 分批删除 events 分区中该 agent 的数据（每次 1000 行）
+     - 最后物理删除 agents 行
+  4. 期间该 Agent 在 UI 上标灰不可操作
+
+
+🔴 高危 2：归档表脱离 CASCADE
+────────────────────────────────
+
+现状：
+  events_2026_09_archive（351439 行）已 DETACH
+  不再受 events 的 CASCADE 影响
+
+问题：
+  删除 Agent A 时，归档表里 Agent A 的 9 月数据不会被清
+  时间越久，归档表累积越多"幽灵数据"（引用不存在的 agent_id）
+
+三种处理策略（待拍板）：
+  A. 接受孤儿数据
+     - 牺牲一致性，换取证能力
+     - 归档表只增不减，永不清理
+  B. 归档表也定时清理
+     - 后台任务定期比对 agents 表，删孤儿
+     - 复杂度高，需要反查 agent_id
+  C. 归档时把 agent_id 转成不可变 ID
+     - 归档表不引用 agents，无外键
+     - 删除 Agent 不影响归档
+     - 需要业务层识别"这是已删 Agent 的历史数据"
+
+建议：A（短期）+ C（长期）
+
+
+🟡 中危 3：三张表无 agent_id，当前不涉及
+────────────────────────────────
+
+  agent_rules          无 agent_id（v2 改造时加）
+  probe_exclude_comms  无 agent_id（v2 改造时决定是否加）
+  probe_exclude_comms_file_access  同上
+  probe_exclude_ips    同上
+  enrollment_tokens    与 agent_id 无关（是给未注册机器的令牌）
+
+当前无问题。v2 模型（RULES-MODEL-v2.txt）实施时一起考虑。
+
+
+【四、其它隐患】
+
+隐患 A：无软删除
+  agents 表无 deleted_at 列
+  硬删即永久，误删不可恢复
+
+隐患 B：无审计
+  删除 Agent 这个动作本身未记录
+  谁删的、何时删的、为何删的——全无痕
+
+隐患 C：删除流程未标准化
+  当前依赖 DB CASCADE
+  应用层没有集中的 DeleteAgentEverywhere 函数
+  未来加表容易漏
+
+隐患 D：归档表命名未标准化
+  events_2026_09_archive 是手工创建
+  后续归档应统一命名规则（如 events_YYYY_MM_archive）
+  见 psql.go runCleanup 已实现该规则
+
+
+【五、下一轮建议方案】
+
+按优先级：
+
+P1. 立即：删除前通知在线 Agent
+     - 在 agents 删除 API 里，先给在线 Agent 发 signal
+     - 让它停止上报 + 清本地缓存
+     - 再执行删除
+
+P2. 短期：软删除 + 异步清理
+     - agents 加 deleted_at 列
+     - 删除 = 标记 + 异步分批物理清
+
+P3. 短期：审计
+     - 删除动作写入 audit_logs
+     - 记录操作人、时间、agent_id
+
+P4. 中期：归档表孤儿处理
+     - 策略 A 或 C，视合规需求
+
+P5. 中期：统一删除函数
+     - server/internal/service/agent_lifecycle.go
+     - func DeleteAgentEverywhere(ctx, agentID string) error
+     - 集中处理：通知 → 审计 → 软删 → 异步清
+
+P6. 长期：归档表版本化
+     - agent_id 转不可变 ID，归档表独立
+
+
+【六、工作量估算】
+
+P1 通知在线 Agent                0.5 天
+P2 软删除 + 异步清理             1 天
+P3 审计                          0.5 天
+P4 归档孤儿处理                  0.5 天
+P5 统一删除函数                  0.5 天
+P6 归档表版本化（视需求）        1-2 天
+合计：3.5-5 天
+
+
+【七、待拍板】
+
+1. 归档表孤儿策略：A / B / C？
+2. 软删除后是否需要"恢复"功能？
+3. 删除是否有权限控制（仅 admin？operator 可删？）？
+
+=================================================
+END
+=================================================
