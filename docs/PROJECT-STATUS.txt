@@ -241,7 +241,7 @@ origin/main：同
     - 改名后 API/路由/组件路径全改（WhitelistView → ProbeExcludeCommsView）
     - 仅 npm run build 通过，未在浏览器中人工验证增删/展示
 
-11. 探针排除名单只接了 exec（半成品）
+11. [后端已完成，前端待接入] 探针排除名单三维度
     e2e 基线（2026-10-09 17:07）：
       - exec 单探针链路通过（v11→v12，map 1283 出现 sleep）
     e2e 三维度（2026-10-09 17:18，#11/#12 完成后）：
@@ -275,6 +275,14 @@ origin/main：同
       - exec+bash 共用：现有 probe_exclude_comms 表（复用）
       - file_access：新建 probe_exclude_comms_file_access
       - tcp：新建 probe_exclude_ips
+    ✅ 后端 2026-10-09 完成（commits 7ac99e5 → d6290a8）：
+      - migration 007 已应用
+      - C 层 sentinel_xip（LPM_TRIE）已加载
+      - 3 个 ApplyConfig 全部接通
+      - server 6 个 API + RebuildFromDB 三节合并
+      - e2e 通过（见上方基线）
+    ⏳ 前端未接入：仍是单页一份 comm 名单，需拆三维度页
+    ⏳ #9 浏览器实测待前端接入后做
 
 12. TCP 排除名单维度重构（独立子任务）
     现状：

@@ -33,6 +33,17 @@ AsterTrack 待办清单
     - B：删掉（清死代码）
     - 决策待定
 
+[ ] #11 前端三维度页
+    - 后端已完成（见 PROJECT-STATUS #11）
+    - exec+bash 共享一份 comm 页
+    - file_access 独立一份 comm 页
+    - tcp 独立一份 IP 页（支持 CIDR）
+    - 接 6 个新 API：/probe-exclude-comms-file-access, /probe-exclude-ips
+
+[ ] #9 前端三维度页浏览器实测（依赖 #11 前端）
+    - 改名后组件路径已变（WhitelistView → ProbeExcludeCommsView）
+    - 仅 npm run build 通过
+
 
 【已完成 · 2026-10-08】
 ─────────────────────────────────────
@@ -153,11 +164,8 @@ AsterTrack 待办清单
     现状：仅本地 pre-commit，新机器不装就失效
     目标：push 时强制跑一遍，不依赖本地配置
 
-[ ] 死代码清理
-    - legacy/ 保留（守则要求）
-    - _disabled 保留
-    - v3_loader/test_exec_v3、test_probe_v2、test_tcp_mode
-      （三个 21M ELF 二进制，已被 git 跟踪，用 git rm）
+[x] 死代码清理 ✅ 2026-10-09
+    - v3_loader/test_exec_v3、test_probe_v2、test_tcp_mode 已删
 
 [ ] HANDOVER.md 删除
     - 358 行，最后更新 2026-09-01
