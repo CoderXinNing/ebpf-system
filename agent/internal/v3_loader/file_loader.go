@@ -433,3 +433,26 @@ func (p *FileProbe) Close() {
 		p.objs = nil
 	}
 }
+
+// CountAgentPids 返回当前 agent_pids map 条数（P1.9 A1 心跳汇总用）
+// 只数不删，比 CleanupDeadPids 轻。
+func (p *FileProbe) CountAgentPids() int {
+	if p.objs == nil || p.objs.AgentPids == nil {
+		return 0
+	}
+	keySize := int(p.objs.AgentPids.KeySize())
+	valueSize := int(p.objs.AgentPids.ValueSize())
+	if keySize <= 0 || valueSize <= 0 {
+		return 0
+	}
+
+	key := make([]byte, keySize)
+	value := make([]byte, valueSize) // 不能传 nil（daed68f 已踩坑）
+
+	count := 0
+	iter := p.objs.AgentPids.Iterate()
+	for iter.Next(&key, &value) {
+		count++
+	}
+	return count
+}

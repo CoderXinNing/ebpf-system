@@ -60,7 +60,7 @@ func (a *Agent) syncRulesOnStartup() {
 }
 
 // syncRulesFromServer 主动从 Server 拉取规则（比对版本 → 拉全量 → 验签 → 应用）
-func (a *Agent) syncRulesFromServer(ctx context.Context) error {
+func (a *Agent) syncRulesFromServer(ctx context.Context, force bool) error {
 	if a.client == nil || a.token == "" {
 		return fmt.Errorf("Server 未连接")
 	}
@@ -114,7 +114,7 @@ func (a *Agent) syncRulesFromServer(ctx context.Context) error {
 	}
 
 	// 4. 检查闸门（防抖 + 熔断）
-	if err := a.checkApplyGate(); err != nil {
+	if err := a.checkApplyGate(force); err != nil {
 		log.Printf("⚠️ 规则应用被闸门拦截: %v", err)
 		return nil // 不算失败——不是应用本身失败
 	}
@@ -219,7 +219,7 @@ func (a *Agent) verifyAndApplyRules(content []byte, sigB64 string) (*rules.RuleS
 // checkApplyGate 检查规则应用闸门（防抖 + 熔断）
 //
 // 返回 nil 表示可以应用；非 nil 表示拒绝及原因
-func (a *Agent) checkApplyGate() error {
+func (a *Agent) checkApplyGate(force bool) error {
 	a.rulesMu.Lock()
 	defer a.rulesMu.Unlock()
 
@@ -227,7 +227,7 @@ func (a *Agent) checkApplyGate() error {
 		return fmt.Errorf("规则应用已熔断（连续失败 %d 次）", a.rulesApplyFailures)
 	}
 
-	if !a.rulesLastApplyAt.IsZero() {
+	if !force && !a.rulesLastApplyAt.IsZero() {
 		elapsed := time.Since(a.rulesLastApplyAt)
 		if elapsed < RulesApplyMinInterval {
 			return fmt.Errorf("距上次应用 %v < %v，跳过",
@@ -322,6 +322,11 @@ func (a *Agent) getRulesStatus() (string, int64, int64) {
 
 // rulesSyncLoop 定时同步（带退避）
 func (a *Agent) rulesSyncLoop(ctx context.Context) {
+	// 惰性初始化心跳触发 channel（避免改 New 函数）
+	if a.rulesSyncTrigger == nil {
+		a.rulesSyncTrigger = make(chan struct{}, 1)
+	}
+
 	// 启动后先等 5 秒（让探针加载完）
 	select {
 	case <-ctx.Done():
@@ -329,7 +334,7 @@ func (a *Agent) rulesSyncLoop(ctx context.Context) {
 	case <-time.After(5 * time.Second):
 	}
 
-	if err := a.syncRulesFromServer(ctx); err != nil {
+	if err := a.syncRulesFromServer(ctx, false); err != nil {
 		log.Printf("⚠️ 首次规则同步失败: %v", err)
 	}
 
@@ -343,13 +348,17 @@ func (a *Agent) rulesSyncLoop(ctx context.Context) {
 			interval = 10 * time.Minute // 连续失败降频
 		}
 
+		force := false
 		select {
 		case <-ctx.Done():
 			return
+		case <-a.rulesSyncTrigger:
+			force = true
+			log.Printf("⚡ 心跳触发规则拉取（绕过 MinInterval）")
 		case <-time.After(interval):
 		}
 
-		if err := a.syncRulesFromServer(ctx); err != nil {
+		if err := a.syncRulesFromServer(ctx, force); err != nil {
 			failures++
 			log.Printf("⚠️ 规则同步失败 (第%d次): %v", failures, err)
 		} else {

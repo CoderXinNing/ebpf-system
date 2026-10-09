@@ -124,7 +124,28 @@ func (s *Service) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.
 	if s.handler.Store != nil {
 		s.handler.Store.SaveAgent(agent.ID, agent.Hostname, agent.IPAddr, agent.Version, agent.Group, agent.Token, agent.FirstSeen, agent.LastSeen)
 	}
-	return &pb.HeartbeatResponse{Success: true, Commands: commands}, nil
+
+	// #1 规则秒级生效：比对 Agent 上报版本 vs 当前版本
+	rulesStale := false
+	if s.rulesSvc != nil {
+		if curVer, _, err := s.rulesSvc.GetVersion(ctx); err != nil {
+			log.Printf("⚠️ 心跳比对规则版本失败: %v", err)
+		} else if req.RulesVersion != curVer {
+			rulesStale = true
+		}
+	}
+
+	// #5 agent_pids 健康汇总（本轮只 log，不落库）
+	if req.AgentPidCount > 0 || req.AgentPidCleanedLast > 0 {
+		log.Printf("📊 Agent %s agent_pids: count=%d cleaned_last=%d",
+			req.AgentId, req.AgentPidCount, req.AgentPidCleanedLast)
+	}
+
+	return &pb.HeartbeatResponse{
+		Success:    true,
+		Commands:   commands,
+		RulesStale: rulesStale,
+	}, nil
 }
 
 // ReportEvents 事件上报

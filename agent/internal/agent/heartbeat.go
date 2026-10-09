@@ -39,16 +39,24 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 			// 动态规则状态（阶段 3）
 			rulesStatus, rulesVersion, rulesLastCheck := a.getRulesStatus()
 
+			// P1.9 A1 收尾：agent_pids 计数
+			agentPidCount := 0
+			if a.fileProbe != nil {
+				agentPidCount = a.fileProbe.CountAgentPids()
+			}
+
 			resp, err := a.client.Heartbeat(a.getAuthContext(ctx), &pb.HeartbeatRequest{
-				AgentId:           a.id,
-				Timestamp:         time.Now().Unix(),
-				ActiveProbes:      a.getActiveProbeCount(),
-				ProbeDetails:      a.getProbeDetailsJSON(),
-				BaselineState:     a.baseline.GetState().String(),
-				BaselineRemaining: int64(a.baseline.RemainingTime().Seconds()),
-				RulesVersion:      rulesVersion,
-				RulesStatus:       rulesStatus,
-				RulesLastCheck:    rulesLastCheck,
+				AgentId:             a.id,
+				Timestamp:           time.Now().Unix(),
+				ActiveProbes:        a.getActiveProbeCount(),
+				ProbeDetails:        a.getProbeDetailsJSON(),
+				BaselineState:       a.baseline.GetState().String(),
+				BaselineRemaining:   int64(a.baseline.RemainingTime().Seconds()),
+				RulesVersion:        rulesVersion,
+				RulesStatus:         rulesStatus,
+				RulesLastCheck:      rulesLastCheck,
+				AgentPidCount:       int32(agentPidCount),
+				AgentPidCleanedLast: a.agentPidCleanedLast.Load(),
 			})
 			cancel()
 
@@ -69,6 +77,15 @@ func (a *Agent) runHeartbeatLoopWithCtx(ctx context.Context) {
 					log.Printf("⚠️ 重新注册失败: %v", err)
 				}
 				continue
+			}
+
+			// #1 规则秒级生效：Server 说版本不对 → 投信号
+			if resp.RulesStale {
+				select {
+				case a.rulesSyncTrigger <- struct{}{}:
+					log.Printf("⚡ 心跳提示规则版本不一致，触发立即拉取")
+				default:
+				}
 			}
 
 			if len(resp.Commands) > 0 {

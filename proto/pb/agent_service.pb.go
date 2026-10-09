@@ -370,8 +370,11 @@ type HeartbeatRequest struct {
 	RulesVersion   int64  `protobuf:"varint,7,opt,name=rules_version,json=rulesVersion,proto3" json:"rules_version,omitempty"`         // 当前生效的规则版本，0=无
 	RulesStatus    string `protobuf:"bytes,8,opt,name=rules_status,json=rulesStatus,proto3" json:"rules_status,omitempty"`             // synced / stale / unknown
 	RulesLastCheck int64  `protobuf:"varint,9,opt,name=rules_last_check,json=rulesLastCheck,proto3" json:"rules_last_check,omitempty"` // 上次成功比对的时间戳
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// P1.9 A1 收尾：agent_pids 健康汇总
+	AgentPidCount       int32 `protobuf:"varint,10,opt,name=agent_pid_count,json=agentPidCount,proto3" json:"agent_pid_count,omitempty"`                     // 当前 agent_pids 条数
+	AgentPidCleanedLast int32 `protobuf:"varint,11,opt,name=agent_pid_cleaned_last,json=agentPidCleanedLast,proto3" json:"agent_pid_cleaned_last,omitempty"` // 上轮清理死 PID 数
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *HeartbeatRequest) Reset() {
@@ -467,10 +470,26 @@ func (x *HeartbeatRequest) GetRulesLastCheck() int64 {
 	return 0
 }
 
+func (x *HeartbeatRequest) GetAgentPidCount() int32 {
+	if x != nil {
+		return x.AgentPidCount
+	}
+	return 0
+}
+
+func (x *HeartbeatRequest) GetAgentPidCleanedLast() int32 {
+	if x != nil {
+		return x.AgentPidCleanedLast
+	}
+	return 0
+}
+
 type HeartbeatResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Commands      []*ProbeCommand        `protobuf:"bytes,2,rep,name=commands,proto3" json:"commands,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Success  bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Commands []*ProbeCommand        `protobuf:"bytes,2,rep,name=commands,proto3" json:"commands,omitempty"`
+	// #1 规则秒级生效快路径
+	RulesStale    bool `protobuf:"varint,3,opt,name=rules_stale,json=rulesStale,proto3" json:"rules_stale,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -517,6 +536,13 @@ func (x *HeartbeatResponse) GetCommands() []*ProbeCommand {
 		return x.Commands
 	}
 	return nil
+}
+
+func (x *HeartbeatResponse) GetRulesStale() bool {
+	if x != nil {
+		return x.RulesStale
+	}
+	return false
 }
 
 type ProbeEvent struct {
@@ -1729,7 +1755,7 @@ const file_agent_service_proto_rawDesc = "" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x12\n" +
 	"\x04arch\x18\x02 \x01(\tR\x04arch\x12\x1f\n" +
 	"\vbtf_enabled\x18\x03 \x01(\bR\n" +
-	"btfEnabled\"\xdd\x02\n" +
+	"btfEnabled\"\xba\x03\n" +
 	"\x10HeartbeatRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12#\n" +
@@ -1739,10 +1765,15 @@ const file_agent_service_proto_rawDesc = "" +
 	"\x12baseline_remaining\x18\x06 \x01(\x03R\x11baselineRemaining\x12#\n" +
 	"\rrules_version\x18\a \x01(\x03R\frulesVersion\x12!\n" +
 	"\frules_status\x18\b \x01(\tR\vrulesStatus\x12(\n" +
-	"\x10rules_last_check\x18\t \x01(\x03R\x0erulesLastCheck\"a\n" +
+	"\x10rules_last_check\x18\t \x01(\x03R\x0erulesLastCheck\x12&\n" +
+	"\x0fagent_pid_count\x18\n" +
+	" \x01(\x05R\ragentPidCount\x123\n" +
+	"\x16agent_pid_cleaned_last\x18\v \x01(\x05R\x13agentPidCleanedLast\"\x82\x01\n" +
 	"\x11HeartbeatResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x122\n" +
-	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\"\xaf\x02\n" +
+	"\bcommands\x18\x02 \x03(\v2\x16.sentinel.ProbeCommandR\bcommands\x12\x1f\n" +
+	"\vrules_stale\x18\x03 \x01(\bR\n" +
+	"rulesStale\"\xaf\x02\n" +
 	"\n" +
 	"ProbeEvent\x12\x19\n" +
 	"\bprobe_id\x18\x01 \x01(\tR\aprobeId\x12\x1d\n" +

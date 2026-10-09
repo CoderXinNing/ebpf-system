@@ -93,6 +93,14 @@ func (p *FileProbe) MarkAgentPid(pid uint32) error {
 	return p.probe.MarkAgentPid(pid)
 }
 
+// CountAgentPids 转发给底层（P1.9 A1 心跳汇总用）
+func (p *FileProbe) CountAgentPids() int {
+	if p.probe == nil {
+		return 0
+	}
+	return p.probe.CountAgentPids()
+}
+
 // UpdateSensitivePaths 转发给底层 v3_loader.FileProbe（规则热更新用）
 func (p *FileProbe) UpdateSensitivePaths(exactPaths, prefixPaths []string) error {
 	if p.probe == nil {

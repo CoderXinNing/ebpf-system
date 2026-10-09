@@ -56,11 +56,18 @@ message HeartbeatRequest {
     int64  rules_version = 7;   // 当前生效的规则版本，0=无
     string rules_status  = 8;   // synced / stale / unknown
     int64  rules_last_check = 9; // 上次成功比对的时间戳
+
+    // P1.9 A1 收尾：agent_pids 健康汇总
+    int32 agent_pid_count        = 10;  // 当前 agent_pids 条数
+    int32 agent_pid_cleaned_last = 11;  // 上轮清理死 PID 数
 }
 
 message HeartbeatResponse {
     bool success = 1;
     repeated ProbeCommand commands = 2;
+
+    // #1 规则秒级生效快路径
+    bool rules_stale = 3;
 }
 
 message ProbeEvent {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"crypto/tls"
@@ -84,6 +85,13 @@ type Agent struct {
 	rulesLastApplyAt   time.Time // 上次成功 apply 时间（防抖）
 	rulesApplyFailures int       // 连续失败次数（熔断）
 	rulesGateClosed    bool      // 熔断状态
+
+	// P1.9 A1 收尾：上轮清理的死 PID 数（心跳上报）
+	agentPidCleanedLast atomic.Int32
+
+	// #1 规则秒级生效：心跳触发信号（容量 1，非阻塞投递）
+	//    惰性初始化在 rulesSyncLoop 开头
+	rulesSyncTrigger chan struct{}
 }
 
 func New(cfg *config.AgentConfig) *Agent {
@@ -1070,6 +1078,7 @@ func (a *Agent) agentPidCleanupLoop(ctx context.Context) {
 			if n, err := a.fileProbe.CleanupDeadPids(); err != nil {
 				log.Printf("⚠️ agent_pids 清理失败: %v", err)
 			} else if n > 0 {
+				a.agentPidCleanedLast.Store(int32(n))
 				log.Printf("🧹 agent_pids 清理 %d 个死 PID", n)
 			}
 		}
