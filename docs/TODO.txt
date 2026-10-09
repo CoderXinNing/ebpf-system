@@ -19,6 +19,15 @@ AsterTrack 待办清单
     - switchTCPCollectMode 统一入口
     - checkStarExpire 星轨全过期切回 0
 
+[x] #1 规则秒级生效 ✅ 2026-10-09
+    - HeartbeatResponse.rules_stale + Agent rulesSyncTrigger channel
+    - 验证：POST 名单 → 版本 +1 → 同秒触发拉取 + 应用
+    - 旧路径 5 分钟轮询保留为兜底
+
+[x] #5 agent_pids 心跳汇总 ✅ 2026-10-09
+    - CountAgentPids（v3_loader + plugins 转发）
+    - Server log 落库（暂不建表）
+
 [ ] 白名单决策
     - A：启用（+ UI + DB）
     - B：删掉（清死代码）
