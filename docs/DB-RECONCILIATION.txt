@@ -274,3 +274,122 @@ AsterTrack 状态对账（Reconciliation）
 =================================================
 END
 =================================================
+
+
+【八、核验结果（2026-10-09 第二轮，追加）】
+
+  8.1 migrations 现状
+    001_init_schema.up.sql           (2026-09-04)
+    002_schema_v34_patch.sql         (2026-09-04)
+    003_whitelist.up.sql             (2026-09-24)
+    004_agent_identity.up.sql        (2026-09-24)
+    005_agent_rules.up.sql           (2026-09-24)
+    006_probe_exclude_comms.up.sql   (2026-10-09)
+    007_probe_exclude_3dim.up.sql    (2026-10-09)
+    README.txt
+    最高编号：007，下一个是 008
+
+  8.2 所有表行数（pg_stat_user_tables）
+    events_2026_09_archive   389,914
+    events_2026_10           377,149
+    alerts                     1,253
+    cmdb_assets                   24
+    agent_rules                   23
+    agents                         6
+    enrollment_tokens              6
+    log_settings                   5
+    roles                          3
+    users                          3
+    role_permissions              27
+    ─── 其他全部 0 ───
+    playbooks / host_groups / probe_templates / rules
+    sessions / probe_configs / baselines / baseline_snapshots
+    agent_current_state / audit_logs / probe_exclude_* (3)
+    events_2026_11 / 12 / 2027_01 / events(主表)
+
+  8.3 probe_exclude_* 写入历史
+    probe_exclude_comms              10 ins / 1 upd / 10 del
+    probe_exclude_comms_file_access   2 ins / 0 upd /  2 del
+    probe_exclude_ips                 4 ins / 0 upd /  4 del
+    → 都清空过，当前 0 行
+
+  8.4 proto RPC 清单（AgentService，22 个）
+    Register / Heartbeat / ReportEvents
+    GetProbeList / ReportShutdown / ReportMutation
+    ActivateStarMode / RenewCert
+    ReportProcesses / ReportUsers / ReportSystemInfo
+    ReportPackages / ReportCronJobs / ReportServices
+    ReportWebComponents / ReportHardware / ReportNetwork
+    ReportPerformance / ReportAgentSelf / ReportProbeStatus
+    GetRulesVersion / GetRulesFull
+
+  8.5 前端清单
+    Views (11):
+      AlertListView / AssetView / DashboardView / DeployView
+      HostDetailView / LoginView / NotFoundView
+      ProbeExcludeCommsView / ProbeView / SettingsView / StarChainView
+    API (8):
+      agent / alert / auth / deploy / http / probeExcludeComms / star / ws
+    仍调 probe-exclude：App.vue:99 / DashboardView:87 / Router:41
+                    ProbeExcludeCommsView:24 / api/probeExcludeComms.ts
+
+  8.6 探针三方对接
+    C 探针 (6):  bash / dns / exec / file_access / tcp / xdp_reporter
+    Go loader (6): bash / decoder / exec / file / tcp / xdp
+    Go plugin (6): bash / exec / file / tcp / util / xdp
+    → dns 有 C 代码无 loader（确认搁置）
+
+  8.7 agent_rules 内容分布
+    长度范围：246 - 386 字节
+    最新 v23 (2026-10-09 17:26) 内容：
+      {"version":23,"file_access":{"rules":{"sensitive_exact":
+       ["/etc/shadow","/etc/passwd","/etc/sudoers"],
+       "sensitive_prefix":["/root/.ssh/","/home/","/var/log/auth/"]},
+       "exclude":{}},"exec":{"exclude":{}},
+       "tcp":{"rules":{"sensitive_ports":[22,3389,445,21,1433,
+       3306,6379,5985,8080,8443]},"exclude":{}}}
+    → 008a 需要把这份内容作为默认模板
+
+  8.8 alerts 分布
+    rule_name:
+      密码文件读取        914  (73%)
+      数据库配置读取      329  (26%)
+      网络信息收集          4
+      可疑命令执行          3
+      反弹Shell检测        3
+      敏感文件访问          1
+      计划任务持久化        1
+    agent_id:
+      agent-obgfyuh4vphibkdtw6ekz2gsc4   1255 条
+    → 只有 1 台活跃 Agent 产生告警
+
+  8.9 events_2026_10 按探针
+    xdp              211,014  (56%)
+    execve            63,107  (17%)
+    file_access       48,630  (13%)
+    process           26,522  (7%)
+    tcp_connect       23,458  (6%)
+    cron               3,972  (1%)
+    bash_input           618
+    baseline_anomaly     431
+    → XDP 是最大噪音源
+
+  8.10 RBAC
+    roles:            admin / operator / viewer
+    role_permissions: 27 行
+    rbacMiddleware:   34 处调用
+
+【九、本轮新增任务（不在原分类中）】
+
+  N1  alerts 去重/抑制
+      现象：914/1253 条同规则
+      位置：server/internal/alert/engine.go
+      性质：待修复
+      预估：0.5 天
+
+  N2  空表用途审计
+      范围：playbooks / probe_templates / rules
+            host_groups / agent_current_state / probe_configs
+      方法：grep 代码引用 + 查 legacy 文档
+      性质：待排查（废表前置）
+      预估：0.5 天
