@@ -565,6 +565,17 @@ AsterTrack 项目主文档
         设计：DESIGN.txt §1.10
         前置：L2 是 MVP
 
+    C12 DNS 探针启用
+        现状：C 代码存在（dns_monitor.c），无 Go loader、无插件
+        搁置：用户明确暂不动
+        预估：2-3 天（补 loader + plugin + 前端）
+
+    C13 HTTP 抓包（TCP 探针升级）
+        现状：无代码
+        设计：TCP 探针升级为 HTTP 层解析
+        性质：远期
+        预估：待评估
+
     C11 前端星轨页优化
         现状：154 进程 / 271 事件加载慢
         预估：2-3 天
