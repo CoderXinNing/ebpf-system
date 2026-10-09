@@ -1,0 +1,712 @@
+AsterTrack 项目主文档
+=================================================
+日期：2026-10-09（最近更新）
+定位：唯一入口。现状 + 事实源 + 待办 + 清理计划
+配套：DESIGN.txt（设计参考）
+历史：ARCHIVE/（旧文档，不再维护）
+规则：任何"现在是什么状态" → 只看本文件。
+     设计怎么做的细节 → DESIGN.txt。
+     历史协商过程 → ARCHIVE/。
+=================================================
+
+
+【零、项目概述】
+
+  AsterTrack 是分布式 eBPF EDR 系统。
+    Agent：Go + eBPF（5 探针），部署在被监控主机
+    Server：Go + PostgreSQL，中央管理 + 关联分析
+    前端：Vue3 + naive-ui
+
+  架构分层：
+    C 层（eBPF）    → 采集 + 内核态过滤
+    Agent 层（Go）  → 血缘 + 关联 + 上报
+    Server 层（Go） → 关联分析 + 规则 + 存储
+    前端（Vue）     → 可视化
+
+
+【一、当前状态】
+
+  1.1 已完成能力
+
+    探针 + 自检
+      - framework.SelfTester 接口 + ProbeDetail 状态机
+      - 自检循环（5min）+ 连续 2 次失败 → loaded-silent
+      - 前端探针管理页
+
+    星轨精准追踪
+      - Server: corrToPid 反向索引
+      - Agent: StarTrace + 多星轨并行（max 50）
+      - Matches 严格化（ancestors 不参与匹配）
+      - 心跳下发 root_pid
+
+    硬编码重构
+      - paths（ASTERTRACK_ROOT 环境变量）
+      - constants（时间常量集中）
+      - brand（品牌/SPIFFE 常量）
+      - 端口推导（enrollment 回报 grpc_addr）
+
+    敏感路径动态化
+      - C 层双 map（HASH 精确 + LPM_TRIE 前缀）
+      - Server 端签名 + agent_rules 表 + gRPC
+      - Agent 拉取 + 验签 + 热更新 + 本地缓存
+      - 默认规则自举（version=1）
+
+    资产采集优化
+      - /etc/passwd 缓存（300+ → 12 次/周期）
+      - uid 映射缓存
+
+    规则体系整改（2026-10-08）
+      - 阶段 A：JSON 结构 v1 → v2（探针分节 + rules/exclude）
+      - 阶段 B1：ConfigApplier 接口 + 5 插件整改
+      - 阶段 B2：TCP sensitive_ports 走规则下发
+      - 阶段 C：防抖 + recover + 熔断（5 个护栏）
+
+    Agent 子进程过滤（P1.9 A1，2026-10-08/09）
+      - 用户态主动标记（RunAndMark + PPID 校验）
+      - collector 31 处 exec.Command 全部替换
+      - agent_pids 启动清空 + 周期清理死 PID
+      - (PID, start_time_ticks) 双因子（cf323c4）
+      - agent_pids 心跳汇总（5fba534）
+
+    tcp 模式回落（2026-10-08）
+      - 星轨过期时自动切回计数模式
+      - switchTCPCollectMode 统一入口
+
+    规则秒级生效（2026-10-09）
+      - HeartbeatResponse.rules_stale + Agent rulesSyncTrigger channel
+      - Server 心跳响应比对 RulesVersion，不一致 → 置 stale
+      - Agent 收到后立即触发一次拉取
+      - 原方案（走 Commands）未采用；5 分钟轮询保留为兜底
+
+    探针排除三维度（后端，2026-10-09）
+      - migration 007 已应用
+      - C 层 sentinel_xip（LPM_TRIE）已加载
+      - 4 个探针 ApplyConfig 全部接通（exec/bash/tcp/file_access）
+      - server 6 个 API + RebuildFromDB 三节合并
+      - 统一 Apply API（POST /probe-exclude/apply + GET /all）
+      - 前端未接入
+
+  1.2 半成品
+
+    (1) 血缘表
+        现状：correlationManager 按 pid 索引
+        缺：
+          - (pid, start_time_ns) 复合键（C 层已用，Go 层未统一）
+          - is_anchor 字段
+          - exec/bash 不找父锚点
+          - 5 探针锚点逻辑不统一
+        详见 DESIGN.txt §1.2-1.3
+
+    (2) 探针排除名单
+        后端：三维度全部完成（含 e2e 验证）
+        前端：ProbeExcludeCommsView 存在但未浏览器实测，
+              且只调旧 API，未接 /probe-exclude/all + /apply
+        归档：三表（probe_exclude_comms / _file_access / _ips）都 0 行
+        去向：P1.10 规则模型 v2 时并入 agent_rules.content
+
+    (3) 跨主机关联
+        骨架：star_service.go 有 GlobalCorrelationMap / MergeGlobal
+        缺：核心匹配逻辑（五元组比对）
+
+    (4) 强制观测
+        硬编码：mandatory.go 有 MandatoryProbes 列表
+        缺：位掩码机制 + super-admin 例外
+
+  1.3 已知问题
+
+    1. [已规避] Go exec.Command clone3 绕过 tracepoint
+       - P1.9 A1 用户态标记规避假告警
+       - 内核行为未变，后续若引入非 Agent 发起场景需重评
+
+    2. postgres/sentinel 用户权限
+       - 003-005 migration 漏 GRANT，已补救
+
+    3. nvm 非交互 shell 不加载
+       - .bashrc 有 early return，前端 dev 用 bash -l -c
+
+    4. paths.Join Init 时序问题
+       - 已修
+
+    5. XDP 全量提交（P0，已数据实锤）
+       - events_2026_10 里 xdp 211,014 条，占 56%
+       - 与"保命信道"设计脱节
+       - 用户明确"不急"，延后
+
+    6. file_access 过滤太宽
+       - /home/ 前缀导致 236 条/5 分钟
+       - 实际 events_2026_10 里 file_access 48,630 条，占 13%
+
+    7. star-timeline TODO 已并入本文档
+
+    8. [已解决] 规则变更生效路径（2026-10-09）
+       - 快路径 + 兜底路径见 §1.1
+
+    9. ~~探针/告警两层数据源共用~~ [已作废 2026-10-09]
+       - 核实：SetWhitelist 方法不存在
+       - 告警规则来源：server/configs/rules.toml
+       - 探针排除来源：probe_exclude_* 三表（DB）
+       - 两者本就不共用
+
+    10. 前端探针排除名单页未做浏览器实测
+        - 改名后 API/路由/组件路径全改
+        - 仅 npm run build 通过
+
+    11. alerts 去重/抑制缺失（新发现 2026-10-09）
+        - 1253 条告警里 914 条同规则「密码文件读取」
+        - 329 条同规则「数据库配置读取」
+        - 详见 §4 A6
+
+    12. TCP 排除维度重构 [已完成]
+        - C 层 tcp_monitor.c 已改用 sentinel_xip
+        - Go rules.TCPExclude.IPs 保留
+
+  1.4 关键约定
+
+    1. SPIFFE 域名冻结：spiffe://astertrack/agent/<id> 不能改
+    2. 时间常量集中：agent/internal/agent/constants.go
+    3. 路径统一：paths.Join(...)
+    4. 品牌统一：internal/brand
+    5. DB migration：sentinel 用户执行 + 末尾加 GRANT
+    6. go build ./... 只检查语法，要 -o 生成二进制
+    7. certs/ 和 agent/data/ 是 gitignore
+    8. execve 的 filename 是占位符，真实命令在 details
+    9. pre-commit hook
+       - hook 脚本：scripts/hooks/pre-commit
+       - install-hooks.sh 已存在
+       - core.hooksPath 需每台机器手动设
+       - 跳过：SKIP_HOOKS=1 或 git commit --no-verify
+       - 新机器 clone 后必跑 install-hooks.sh
+
+  1.5 环境信息
+
+    服务启动：
+      Server: ./bin/server --config server/configs/server.toml
+      Agent:  ./bin/agent --config agent/configs/agent.toml
+      前端:   cd web-vue && bash -l -c 'nvm use 20 && npm run dev -- --host 0.0.0.0'
+
+    数据库：PostgreSQL sentinel
+      - 用户：sentinel（应用）/ postgres（超管）
+      - 库名：sentinel
+
+    证书：
+      - CA: AsterTrack CA（2026-09-24 生成）
+      - 本机 Agent: agent-obgfyuh4vphibkdtw6ekz2gsc4
+      - mTLS: strict_mtls = true
+
+    环境变量：
+      - ASTERTRACK_ROOT（可选，默认 cwd）
+      - PATH 需含 /root/.nvm/versions/node/v20.20.2/bin
+
+
+【二、代码结构】
+
+  ebpf-sentinel/
+  ├── agent/
+  │   ├── cmd/main.go
+  │   ├── configs/agent.toml
+  │   └── internal/
+  │       ├── agent/         核心（事件/星轨/自检/血缘）
+  │       ├── collector/     资产采集
+  │       ├── config/
+  │       ├── enroll/
+  │       ├── paths/
+  │       ├── probe/
+  │       │   ├── framework/ Probe 接口 + SelfTester + PreChecker
+  │       │   └── plugins/   5 个探针适配器
+  │       └── v3_loader/     eBPF 加载器
+  ├── server/
+  │   ├── cmd/main.go
+  │   ├── configs/
+  │   └── internal/
+  │       ├── ca/            证书生成/加载（Bundle）
+  │       ├── grpcservice/   gRPC 实现
+  │       ├── handler/       HTTP
+  │       ├── middleware/    mTLS L1-L4
+  │       ├── paths/
+  │       ├── repository/psql/
+  │       ├── rulessvc/      规则发布
+  │       └── service/       星轨服务
+  ├── internal/              共享包
+  │   ├── brand/
+  │   ├── rules/             规则结构 + Canonical
+  │   └── rulesign/          签名/验签
+  ├── proto/
+  │   ├── split/             .proto 源
+  │   └── pb/                生成物
+  ├── v3_engine/probes/      eBPF C 代码
+  ├── web-vue/src/           前端
+  ├── certs/                 gitignore
+  ├── docs/                  本文档 + DESIGN.txt + ARCHIVE/
+  ├── legacy/                历史代码（Go 忽略）
+  └── bin/                   gitignore
+
+
+【三、事实源（DB 核验 2026-10-09）】
+
+  3.1 当前表清单（28 张）
+
+    agent_current_state            (0 行)
+    agent_rules                    (23 行，e2e 产物)
+    agents                         (6 行)
+    alerts                         (1253 行)
+    audit_logs                     (0 行，已存在未接入)
+    baseline_snapshots             (0 行)
+    baselines                      (0 行)
+    cmdb_assets                    (24 行)
+    enrollment_tokens              (6 行)
+    events                         (0 行，主表)
+    events_2026_09_archive         (389,914 行，DETACH)
+    events_2026_10                 (377,149 行)
+    events_2026_11                 (0 行)
+    events_2026_12                 (0 行)
+    events_2027_01                 (0 行)
+    host_groups                    (0 行)
+    log_settings                   (5 行)
+    playbooks                      (0 行)
+    probe_configs                  (0 行)
+    probe_exclude_comms            (0 行，待废)
+    probe_exclude_comms_file_access(0 行，待废)
+    probe_exclude_ips              (0 行，待废)
+    probe_templates                (0 行)
+    role_permissions               (27 行)
+    roles                          (3 行)
+    rules                          (0 行)
+    sessions                       (0 行)
+    users                          (3 行)
+
+    未存在但 DESIGN.txt 提到：
+      rule_templates               (P1.10 待建)
+
+  3.2 关键表 schema
+
+    agents：
+      id, agent_id, hostname, display_name, ip_addr, location, owner,
+      version, group_id, token_hash, capability_level, active_probes,
+      probe_details(jsonb), baseline_state, learning_started_at,
+      learning_duration, first_seen, last_seen, framework(jsonb),
+      kernel_info(jsonb), version_lock, created_at, updated_at,
+      public_key_der(bytea), public_key_hash(bytea), machine_id,
+      mac_address, cert_serial, cert_expires_at, revoked_at
+    关键：
+      UNIQUE (agent_id)
+      revoked_at 是 L4 证书撤销专用（非软删除）
+      无 deleted_at（P1.11 待加）
+    被 CASCADE 引用（12 张）：
+      events / events_2026_10 / _11 / _12 / _2027_01
+      events_2026_09_archive（有独立 CASCADE，非孤儿）
+      alerts / baselines / baseline_snapshots
+      probe_configs / cmdb_assets / agent_current_state
+
+    agent_rules：
+      id, version, content(text), sha256(varchar64), signature(text),
+      created_by(varchar64), created_at
+    索引：pkey(id), idx_agent_rules_version(version DESC)
+    缺：agent_id 列、(agent_id, sha256) 唯一索引
+
+    audit_logs（已存在）：
+      id, session_id, username, action, detail, before_value(jsonb),
+      after_value(jsonb), result, ip, user_agent, capability_level,
+      created_at
+    FK：session_id → sessions(id) ON DELETE SET NULL
+    CHECK：result ∈ {success,failure}
+           capability_level ∈ {lsm,xdp,ebpf,cmdb}
+    索引：created_at DESC / username / capability_level
+
+    probe_exclude_*（三张，0 行，待废）
+
+    events_2026_09_archive：
+      仍有 FK agent_id → agents ON DELETE CASCADE
+      （原 DB-DELETE-CASCADE 说"脱离 CASCADE"有误）
+
+  3.3 migrations 现状
+
+    001_init_schema.up.sql           (2026-09-04)
+    002_schema_v34_patch.sql         (2026-09-04)
+    003_whitelist.up.sql             (2026-09-24)
+    004_agent_identity.up.sql        (2026-09-24)
+    005_agent_rules.up.sql           (2026-09-24)
+    006_probe_exclude_comms.up.sql   (2026-10-09)
+    007_probe_exclude_3dim.up.sql    (2026-10-09)
+    README.txt
+    下一个编号：008
+
+  3.4 proto RPC 清单（AgentService，22 个）
+
+    Register / Heartbeat / ReportEvents
+    GetProbeList / ReportShutdown / ReportMutation
+    ActivateStarMode / RenewCert
+    ReportProcesses / ReportUsers / ReportSystemInfo
+    ReportPackages / ReportCronJobs / ReportServices
+    ReportWebComponents / ReportHardware / ReportNetwork
+    ReportPerformance / ReportAgentSelf / ReportProbeStatus
+    GetRulesVersion / GetRulesFull
+
+    agent_service.proto:56  int64 rules_version = 7（AgentStatus，上报）
+    agent_service.proto:70  bool  rules_stale  = 3（HeartbeatResponse）
+
+  3.5 前端清单
+
+    Views (11)：
+      AlertListView / AssetView / DashboardView / DeployView
+      HostDetailView / LoginView / NotFoundView
+      ProbeExcludeCommsView / ProbeView / SettingsView / StarChainView
+
+    API (8)：
+      agent / alert / auth / deploy / http / probeExcludeComms / star / ws
+
+    仍调 probe-exclude：
+      App.vue:99 / DashboardView.vue:87 / router/index.ts:41
+      ProbeExcludeCommsView.vue:24 / api/probeExcludeComms.ts
+
+  3.6 探针三方对接
+
+    C 探针 (6)：
+      bash_monitor.c / dns_monitor.c / exec_monitor.c
+      file_access.c / tcp_monitor.c / xdp_reporter.c
+
+    Go loader (6)：
+      bash_loader / decoder / exec_loader / file_loader / tcp_loader / xdp_loader
+
+    Go plugin (6)：
+      bash_probe / exec_probe / file_probe / tcp_probe / util / xdp_probe
+
+    dns：有 C 代码无 loader / 无插件 → 确认搁置
+
+  3.7 agent_rules 内容分布
+
+    长度范围：246 - 386 字节
+    最新 v23（2026-10-09 17:26）内容：
+      {"version":23,
+       "file_access":{"rules":{
+         "sensitive_exact":["/etc/shadow","/etc/passwd","/etc/sudoers"],
+         "sensitive_prefix":["/root/.ssh/","/home/","/var/log/auth/"]},
+        "exclude":{}},
+       "exec":{"exclude":{}},
+       "tcp":{"rules":{"sensitive_ports":[22,3389,445,21,1433,
+         3306,6379,5985,8080,8443]},"exclude":{}}}
+    → P1.10 008a 需把这份内容作为默认模板
+
+  3.8 alerts 分布
+
+    rule_name：
+      密码文件读取        914 (73%)
+      数据库配置读取      329 (26%)
+      网络信息收集          4
+      可疑命令执行          3
+      反弹Shell检测        3
+      敏感文件访问          1
+      计划任务持久化        1
+    agent_id：
+      agent-obgfyuh4vphibkdtw6ekz2gsc4   1255 条
+    → 只有 1 台活跃 Agent 产生告警
+
+  3.9 events_2026_10 按探针
+
+    xdp              211,014  (56%)
+    execve            63,107  (17%)
+    file_access       48,630  (13%)
+    process           26,522  (7%)
+    tcp_connect       23,458  (6%)
+    cron               3,972  (1%)
+    bash_input           618
+    baseline_anomaly     431
+    → XDP 是最大噪音源
+
+  3.10 RBAC
+
+    roles：admin / operator / viewer
+    role_permissions：27 行
+    rbacMiddleware：34 处调用
+
+  3.11 DB vs 文档差异（历史文档已修正）
+
+    | 项 | 旧文档 | 实际 |
+    |---|-------|------|
+    | agent_rules.content | BYTEA | TEXT |
+    | agent_rules 行数 | 22 | 23（待 P1.10 清空） |
+    | Heartbeat 迁移 | rules_hash 替换 rules_version | 应替换 rules_stale |
+    | events_2026_09_archive | 脱离 CASCADE | 仍有独立 CASCADE |
+    | audit_logs | 需建 | 已存在 |
+    | agents 软删除 | 复用 revoked_at | revoked_at 是证书撤销专用 |
+    | PROJECT-STATUS #9 | main.go:573 SetWhitelist | 方法不存在 |
+
+
+【四、待办分类】
+
+  A 待修复（有 bug/死代码/文档漂移，不涉架构）
+  ────────────────────────────────
+
+    A1  file_access /home/ 默认值收窄
+        位置：agent/internal/probe/plugins/file_probe.go:47
+        修复：收窄为具体敏感文件路径
+        预估：1 天
+
+    A2  main.go 死代码删除
+        位置：server/cmd/main.go:590-599
+        现状：读 ProbeExcludeComms 字段，字段无人读
+        修复：删 goroutine + 字段
+        预估：0.5 小时
+
+    A3  文档漂移修正
+        范围：见 §3.11 差异清单
+        预估：0.5 天
+
+    A4  install-hooks.sh 已存在，README 补强调
+        预估：0.5 小时
+
+    A5  [已完成] HANDOVER.md 已删
+
+    A6  alerts 去重/抑制
+        现象：914/1253 条同规则
+        位置：server/internal/alert/engine.go
+        预估：0.5 天
+
+    A7  空表用途审计（废表前置）
+        范围：playbooks / probe_templates / rules
+              host_groups / agent_current_state / probe_configs
+        方法：grep 代码引用
+        预估：0.5 天
+
+  B 待开发（设计完成，无新架构）
+  ────────────────────────────────
+
+    B1  血缘表复合键 + 锚点统一
+        设计：DESIGN.txt §1.2-1.3
+        预估：3-5 天
+
+    B2  前端探针排除页浏览器实测
+        依赖：#11 后端已就绪（但在 P1.10 后要改接 rules API）
+        预估：半天
+
+    B3  CI 补齐
+        现状：无 .github/.gitlab/.gitea
+        目标：push 时强制跑
+        预估：1 天
+
+    B4  EnsurePartitions 冷启动
+        现状：重启后 5 分钟才跑首次维护
+        修复：启动主动触发一次
+        预估：0.5 天
+
+    B5  XDP 全量提交修复
+        现状：events 里占 56%，与"保命信道"设计脱节
+        用户：明确"不急"，延后
+        预估：待评估
+
+    B6  localhost 老 Agent 清理
+        实际：agent-l5osbb2rlckzxsez4xso2b22fi
+              hostname=localhost.localdomain, last_seen=2026-09-23
+        处理：P1.11 软删除功能上线后清理
+        预估：0.5 天
+
+  C 待架构（需新功能/新架构）
+  ────────────────────────────────
+
+    C1  P1.10 规则模型 v2（三阶段）
+        C1a 阶段 A：数据迁移（1 天）
+        C1b 阶段 B：代码改造（3-4 天）
+        C1c 阶段 C：废表（1 小时，观察一周后）
+        设计：DESIGN.txt §2
+        预估：4-5 天
+
+    C2  P1.11 删除联动加固
+        设计：DESIGN.txt §4
+        预估：3-4 天
+
+    C3  L2 序列规则引擎
+        设计：DESIGN.txt §1.6
+        现状：未开始
+        预估：3-5 天
+
+    C4  LBE 本地持久化
+        设计：DESIGN.txt §1.8
+        现状：0 文件
+        预估：1-2 周
+
+    C5  跨主机关联
+        设计：DESIGN.txt §1.9
+        现状：骨架存在，核心匹配未做
+        预估：3-5 天
+
+    C6  强制观测位掩码
+        设计：DESIGN.txt §1.5
+        现状：硬编码已实现，位掩码未做
+        预估：1-2 天
+
+    C7  LSM 拦截
+        现状：仅枚举占位
+        前置：明确拦什么
+        预估：待评估
+
+    C8  容器兼容
+        现状：L1（能捕获，不识别）
+        评估：L2 cgroup_id 3 天；L3 元数据 3-5 天
+
+    C9  Client 数据加解密
+        设计：DESIGN.txt §1.13
+        预估：1-2 周
+
+    C10 编排引擎
+        设计：DESIGN.txt §1.10
+        前置：L2 是 MVP
+
+    C11 前端星轨页优化
+        现状：154 进程 / 271 事件加载慢
+        预估：2-3 天
+
+  D 已作废（历史文档错误 / 已解决）
+  ────────────────────────────────
+
+    D1  PROJECT-STATUS #9 探针/告警两层数据源
+        已核实：SetWhitelist 方法不存在，两层本不共用
+
+    D2  DB-DELETE-CASCADE 归档表孤儿策略 A/B/C
+        已核实：归档表仍有独立 CASCADE，无孤儿数据
+
+    D3  白名单决策 A/B
+        已合并入 C1
+
+    D4  v3_loader/test_* 死代码
+        已完成（2026-10-09）
+
+    D5  HANDOVER.md
+        已删 ✅
+
+    D6  三张 probe_exclude 表
+        待 P1.10 阶段 C DROP
+
+    D7  main.go:590-599 死代码
+        待删（A2）
+
+  N 本轮新增（不在原分类中）
+  ────────────────────────────────
+
+    N1  alerts 去重/抑制（= A6）
+
+    N2  空表用途审计（= A7）
+
+  排期建议
+  ────────────────────────────────
+
+    Phase A（止血，~2 天）
+      A1 / A2 / A3 / A4 / A5（已完）/ A6 / A7
+
+    Phase B（完善，~5-7 天）
+      B1-B6
+
+    Phase C（改造 + 新功能）
+      C1 + C2 优先（P1.10 / P1.11）
+      C3-C11 按业务优先级排
+
+
+【五、清理计划】
+
+  5.1 待废表清单
+
+    5.1.1 因 P1.10 废
+      probe_exclude_comms              (0 行，历史 10/1/10)
+      probe_exclude_comms_file_access  (0 行，历史 2/0/2)
+      probe_exclude_ips                (0 行，历史 4/0/4)
+      处置：migration 008b DROP
+
+    5.1.2 待评估表（0 行，A7 审计）
+      playbooks               ← 检查引用
+      probe_templates         ← 检查是否被 agent_rules 替代
+      rules                   ← 检查 legacy
+      host_groups             ← agents.group_id 引用，不能删
+      agent_current_state     ← 检查引用
+      baselines               ← P1 阶段要用，保留
+      baseline_snapshots      ← 同上，保留
+      sessions                ← audit_logs FK 依赖，保留
+
+    5.1.3 分区表（0 行但保留）
+      events_2026_11 / 12 / 2027_01  ← 预建分区
+
+  5.2 待废代码清单
+
+    5.2.1 probe_exclude 相关（P1.10 阶段 B 一起删）
+      web-vue/src/api/probeExcludeComms.ts                    整文件
+      web-vue/src/views/ProbeExcludeCommsView.vue             整文件
+      web-vue/src/router/index.ts:41                          /probe-exclude-comms 路由
+      web-vue/src/App.vue:99                                  菜单项
+      web-vue/src/views/DashboardView.vue:87                  快捷入口
+      server/internal/handler/probe_exclude_3dim_handler.go   整文件
+      server/internal/handler/probe_exclude_comms_handler.go  整文件
+      server/internal/repository/psql/probe_exclude_repo.go   整文件
+      server/internal/handler/handler.go:32-36,167-184        回调字段
+      server/internal/handler/handler.go:346-360              9 个路由
+      server/internal/rulessvc/service.go:88-160              RebuildFromDB
+      server/cmd/main.go:290-292                              SetListProbeExcludeCommsFunc
+      server/cmd/main.go:408-412                              RebuildFromDB 调用
+      server/cmd/main.go:590-599                              启动缓存 goroutine
+
+    5.2.2 legacy/ 下 .o 文件
+      状态：已 git rm --cached（7a1e1a1），本地保留
+      处置：不动（守则要求保留 legacy）
+
+  5.3 执行顺序（P1.10 三阶段）
+
+    阶段 A：数据迁移（先做，1 天）
+      A.1  migration 008a（加列 + 建模板表）
+      A.2  agent_rules v23 内容写入 rule_templates (is_default=true)
+      A.3  三张 probe_exclude 表内容合并到默认模板 exclude 节
+      A.4  验证：模板表 1 行 + agent_rules 23 行仍有 agent_id=NULL
+      回滚：DROP rule_templates + ALTER TABLE agent_rules DROP COLUMN agent_id
+
+    阶段 B：代码改造（3-4 天）
+      B.1  rulessvc 重构
+      B.2  gRPC 改造（GetRulesFull 按 agent_id，Heartbeat 加 hash）
+      B.3  handler 新 API
+      B.4  删 §5.2.1 所有 probe_exclude 代码
+      B.5  Agent 侧 hash 缓存
+      B.6  注册触发 EnsureAgentRule
+      B.7  前端改接 rules API
+      验证：e2e 单机 apply / 模板批量 apply
+      回滚：git revert 整个 PR
+
+    阶段 C：废表（观察一周后，1 小时）
+      C.1  pg_dump 三张 probe_exclude 表
+      C.2  migration 008b：
+           DROP TABLE probe_exclude_*
+           ALTER agent_rules DROP version
+           DELETE agent_rules WHERE agent_id IS NULL
+           SET NOT NULL + 加唯一索引
+      回滚：pg_restore 备份 + 手写反向 SQL
+
+  5.4 附带修（不改结构）
+
+    5.4.1 alerts 去重/抑制（= A6）
+    5.4.2 XDP 全量提交（= B5，用户明确延后）
+
+  5.5 不清理但需记录
+
+    log_settings (5)     ← 前端设置页数据
+    role_permissions (27) ← RBAC
+    users (3) / roles (3) ← 管理员/运营/审计
+    enrollment_tokens (6) ← 注册令牌
+    cmdb_assets (24)     ← 资产采集
+
+  5.6 本轮不动（用户明确）
+
+    XDP 保命信道 / LSM / 容器兼容
+    Client 加密 / 编排引擎 / L2 序列规则
+    DNS 探针启用 / HTTP 抓包
+
+
+【六、当前 commit 状态】
+
+  分支：main
+  HEAD：7a1e1a1（chore(build): .o 脱离 git 跟踪）
+
+  工作区：
+    ?? docs/DB-RECONCILIATION.txt（将被归档）
+    ?? docs/TASK-CLASSIFICATION.txt（将被归档）
+    ?? docs/CLEANUP-PLAN.txt（将被归档）
+    ?? docs/PROJECT.txt（本文件，整合后）
+    ?? docs/DESIGN.txt（整合后）
+    ?? docs/ARCHIVE/（整合后）
+
+
+=================================================
+END
+=================================================

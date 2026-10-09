@@ -1,0 +1,539 @@
+AsterTrack 设计定稿
+=================================================
+日期：2026-10-09
+定位：设计参考。规范"怎么做"，不记录"当前是什么状态"
+配套：PROJECT.txt（事实源）
+历史：ARCHIVE/（旧设计协商记录）
+=================================================
+
+
+【一、架构定稿（EDR-CORRELATION-v3.1）】
+
+  1.1 核心哲学
+
+    1. 骨架与血肉分离：exec 维护血缘表骨架，file/tcp 提供异常节点血肉
+    2. 内存做关联，磁盘做兜底：高频事件在内存消化，磁盘仅用于断网
+       缓存与状态快照
+    3. 宁可少采，绝不打垮宿主：内核态有限流，本地落地有硬配额
+
+  1.2 血缘表机制
+
+    Key:   (pid, start_time_ns)（复合键，防 PID 重用）
+    Value: { ppid, ppid_start_time_ns, corr_key, is_anchor,
+             created_at, last_seen }
+    存储:  sync.Map 或 Actor 管理
+    容量:  上限 50000 条（建议 2000），超限 LRU 淘汰
+
+  1.3 锚点生成规则
+
+    1. exec 事件：不创建新锚点，继承父进程 corr_key
+    2. 孤儿进程（父为 init/systemd）：独立生成新锚点
+    3. file_access/bash/tcp 事件：若无 corr_key，则创建新锚点
+    4. 多级上溯：exec 寻找锚点时，最多上溯 5 层
+    5. 暂不做 namespace_id
+
+  1.4 采集策略
+
+    exec:        全采 + 剔除系统进程
+    bash:        全采 + 剔除空/重复
+    file_access: 默认不采 + 敏感路径
+    tcp:         计数 + 星轨激活转明细
+    xdp:         保底通道，默认不启用，仅 Agent 掉线时激活
+                 - Token Bucket 限流
+                 - ENABLE_XDP 编译/配置开关
+
+  1.5 强制观测清单（不可关闭）
+
+    1. 进程生命周期（exec 全采）
+    2. 关键系统文件（/etc/shadow、/etc/passwd、/etc/crontab、
+       /root/.ssh/）
+    3. 公网外联（非内网 IP，至少计数）
+    4. CMDB 资产变更
+    5. Agent 自身健康
+    底层通过位掩码硬约束。例外：super-admin + 二次确认可临时调整。
+
+  1.6 规则分层设计
+
+    L1 原子规则（C/Go 层）：单探针单事件匹配
+    L2 序列规则（Go 层）：同 corr_key 下的事件序列匹配，触发星轨
+      - 先做"简单 AND"
+      - L2 视为"小编排引擎"，未来无缝迁移到大编排引擎
+    L3 树形规则（Server 层）：跨进程树、跨主机
+
+  1.7 规则冲突仲裁
+
+    1. 强制观测 > 用户规则 > 系统默认
+    2. 单机规则只能收紧，不能做减法
+    3. 同层冲突：安全优先（采 > 不采），高权限用户优先
+    4. 必须实现冲突检测器
+
+  1.8 本地持久化（LBE 模块）
+
+    1. 形式：环形 Append-Only 文件 + meta.json
+    2. 默认配额：200MB（16MB×12 段 或 32MB×6 段）
+       - UI 滑块可调：100MB-1GB
+    3. 写入：内存 Channel（10000 容量）+ 批量刷盘（1000 条或 1 秒）
+    4. 三不存 / 三必存：
+       - 三不存：普通 file_access 流水、内网 tcp 明细、高频重复命令
+       - 三必存：血缘状态与锚点快照、L2 命中告警及星轨明细、
+                断网期间待上报事件
+    5. 极致压缩（断网时可 CPU 换空间）：
+       - 通用：Snappy
+       - exec/bash：只存核心字段（pid, ppid, start_time, comm,
+                     argv_hash）
+    6. 完整性机制（不做 HMAC）：
+       - 每条记录：CRC32
+       - 段头：CRC32
+       - 关键数据：复用 Server 下发时的原签名
+       - 普通事件：无签名，靠 Server 侧交叉验证
+       - 不做 HMAC：内存密钥重启即丢，落盘则失去意义
+    7. 磁盘 Guardian：
+       - 每 10 秒检查磁盘剩余空间
+       - 默认阈值：软/硬各 1GB（用户可调）
+       - 触发动作：清空 LBE 一半 + 降级"仅内存队列" + 熔断 + 告警
+       - 熔断后不再尝试落盘
+    8. 断网重传：
+       - 网络恢复后从最旧段重传
+       - 限速 1MB/s 或 1000 条/s
+       - Server 基于 corr_key + timestamp 幂等去重
+
+  1.9 跨主机关联（Server 端）
+
+    1. Agent 只管单机血缘，Server 负责跨主机
+    2. 匹配 tcp 五元组（A.dstIP == B.srcIP && A.dstPort == B.srcPort）
+    3. P1 阶段：只做基本 IP+Port 匹配
+    4. NAT 优化留 P1
+
+  1.10 动作层设计
+
+    拦截动作全部交给 LSM（内核态），Agent 不做 kill/block。
+
+    编排引擎（未来）触发动作：
+      ├─ 对 LSM：下发拦截规则
+      ├─ 对 AF（外部防火墙）：下发策略
+      ├─ 对探针：切模式
+      ├─ 对 Agent：上报节奏调整
+      └─ 对告警：升级 / 抑制 / 合并
+
+    C1 安全事件审计：
+      - 记录"为什么认为这是攻击"（判定依据 + 事件证据）
+      - 例 1：软基线异常（DoS 突增 → 记录偏离统计）
+      - 例 2：硬规则命中（"/dev/tcp/xxx" → "cat /etc/passwd" 序列）
+
+    C2 编排引擎指挥 AF：预留（等 AF 接入时具体化）
+
+  1.11 落地阶段
+
+    阶段 0：清基础（1-2 天）[已完成]
+    阶段 1：血缘表 + 锚点（3-5 天）
+    阶段 2：L2 规则引擎（3-5 天）
+    阶段 3：LBE + Guardian（1-2 周）
+    阶段 4：跨主机关联（3-5 天）
+    阶段 5：强制观测位掩码（1-2 天）
+
+  1.12 预期效果
+
+    做完阶段 0-2（"打通上下文关联"）：
+      - 血缘表正确工作
+      - 5 探针 corr_key 统一
+      - L2 序列规则生效
+      - 前端能看到完整攻击链
+
+    完成所有阶段：
+      - 事件自动串成攻击链
+      - 跨主机关联
+      - 断网不丢关键证据
+      - 编排引擎 + LSM 后：实时拦截
+
+    结构性阻碍：清
+    精度问题：后续调参
+    永久阻碍：加密内容 / 文件内容 / 攻击者反制
+
+  1.13 远期（P2）
+
+    Client 数据加解密：
+      - 目标：LBE + 上报数据全加密
+      - 密钥源：TPM / machine-id 派生（KDF）
+      - 算法：AES-GCM
+      - 工作量：1-2 周
+
+  1.14 设计判断（2026-10-09 固化）
+
+    - 软基线：冻结，定位"被动能力补充"，不参与告警
+    - CMDB 变更检测：定位"探针挂掉的降级备份"，不是告警源
+    - LSM/XDP：定位"可选增强，用户授权"，用"能力分级"而非"降级"
+    - 四层能力分级：LSM-XDP-eBPF-Agent，按内核能力自动取舍
+    - 沙箱：做"派发接口"，不自己做沙箱
+    - 部署脚本：只做离线/在线/远程一键三种，探针由 Agent 上线后自拉
+    - 审计日志：当前最该补的运维底座（P1.11 实施）
+    - 规则引擎和编排：先证明硬编码能做好，再谈抽象和编排
+
+
+【二、规则模型 v2（每 Agent 独立 + 模板）】
+
+  2.1 演进原因
+
+    v1（旧）：agent_rules 全局一份，所有 Agent 共享
+    问题：
+      - 无法按主机差异化（Nginx 主机 vs Tomcat 主机）
+      - 用户想排除某台机器的噪音，会影响所有机器
+      - 分发模型单一，无法做灰度
+
+    v2（新）：
+      - 每 Agent 一份独立规则
+      - 模板用于初始化 / 批量应用
+      - 无 scope、无合并、无 version
+
+  2.2 核心模型
+
+    模板（rule_templates）
+      用途：新 Agent 激活时初始化；手动批量应用到多台
+      本质：一份预设规则 JSON，可编辑可复制
+
+    Agent 规则（agent_rules）
+      用途：每台 Agent 独立一份完整规则
+      本质：独立、自洽、可单独签名
+      无继承、无合并、无优先级
+
+  2.3 表结构
+
+    rule_templates（新表）：
+      name        TEXT PRIMARY KEY
+      content     TEXT NOT NULL        -- canonical JSON
+      sha256      VARCHAR(64) NOT NULL
+      signature   TEXT NOT NULL
+      is_default  BOOLEAN NOT NULL DEFAULT false
+      created_by  VARCHAR(64)
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+      -- 部分唯一索引：is_default=true 只允许一行
+
+    agent_rules（改造）：
+      id          BIGSERIAL PRIMARY KEY
+      agent_id    VARCHAR(64) NOT NULL  -- 新增
+      content     TEXT NOT NULL
+      sha256      VARCHAR(64) NOT NULL
+      signature   TEXT NOT NULL
+      created_by  VARCHAR(64)
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+      -- 删除 version 列
+      -- 唯一索引 (agent_id, sha256)
+      -- 现有 23 行历史数据全部 DELETE（e2e 产物）
+
+  2.4 核心流程
+
+    1. Agent 首次激活
+       → Server 查 agent_rules 有无该 agent_id
+       → 无：从 is_default=true 的模板复制一份写入
+       → 有：跳过
+       （best-effort，失败记日志，不回滚注册）
+
+    2. Agent 拉取规则（gRPC GetRulesFull）
+       按 agent_id 直读 agent_rules 最新一行
+       返回 content + sha256 + signature
+       Agent 验签后 ApplyConfig
+
+    3. 心跳
+       HeartbeatResponse.rules_hash = 该 Agent 的 sha256
+       Agent 比对本地 hash
+         不一致 → 触发 rulesSyncTrigger 拉取
+
+    4. Apply（单机）
+       POST /api/agents/:id/rules/apply
+       Body: {expected_sha256, ruleset}
+       Server 比对当前 sha256
+         一致 → 签名 + 写新行
+         不一致 → 409 Conflict
+
+    5. Apply（模板批量）
+       POST /api/rules/templates/:name/apply-to-agents
+       Body: {agent_ids: [...]} 或 {all: true}
+       前端二次确认
+       后端：给每个 agent_id 写一份模板内容的副本
+
+  2.5 API 清单
+
+    模板管理：
+      GET    /api/rules/templates              列模板
+      POST   /api/rules/templates              建模板
+      PUT    /api/rules/templates/:name        改模板
+      DELETE /api/rules/templates/:name        删模板
+      POST   /api/rules/templates/:name/apply-to-agents  批量应用
+
+    Agent 规则：
+      GET    /api/agents/:id/rules             读该 Agent 完整规则
+      POST   /api/agents/:id/rules/apply       写（带 expected_sha256）
+
+    废弃候选（P1.10 阶段 B 清理）：
+      /api/probe-exclude/*                      三维度细粒度 API
+      /api/probe-exclude/apply                  三维度统一 Apply
+      /api/probe-exclude/all                    三维度读
+
+    gRPC：
+      GetRulesFull(req.AgentId)                按 agent_id 直读
+      HeartbeatResponse.rules_hash             新增（替换 rules_stale）
+                                                rules_version 保留（上报用）
+
+  2.6 设计决策记录
+
+    - 抛弃 YAML，全结构化 JSON
+    - 抛弃 scope 列：每 Agent 天然独立
+    - 抛弃 version 列：SHA256 完全替代
+    - 内容没变 = sha256 没变 = 不写新行（天然去重）
+    - 前端只负责草稿/预测，Apply 才真正下发
+    - 批量应用模板：前端二次确认，后端全量覆盖
+    - 模板改动不影响已有 Agent，只对"未来激活"或"手动批量应用"生效
+    - 无"全局规则"概念
+    - 标签/分组是 UI 显示层，下发按 agent_id
+    - 新 Agent 激活时 Server 自动绑定默认模板（best-effort）
+
+
+【三、规则下发与 Apply】
+
+  3.1 核心问题
+
+    规则频繁修改 → Agent 频繁更新 C map → 可能抖动
+    解决：源头控制（前端草稿 + Apply）+ Agent 兜底（防抖 + 闸门）
+
+  3.2 整体流程
+
+    前端：
+      编辑规则 → 本地草稿（不下发）
+      点"Apply" → 一次性提交完整快照
+
+    Server：
+      接收完整快照 → 版本校验（乐观锁）→ 签名 → 下发
+
+    Agent：
+      收到 → 验签 → 解析 → 分发到各探针 → 更新 C map
+      带防抖 + recover + 闸门兜底
+
+  3.3 数据存储
+
+    一个 JSON（不分文件），存 DB agent_rules
+    内部结构：探针分节 + 每节 rules/exclude
+
+    {
+      "version": 2,
+      "file_access": {
+        "rules": {
+          "sensitive_exact": [...],
+          "sensitive_prefix": [...]
+        },
+        "exclude": {"comms": ["cron", "logrotate"]}
+      },
+      "exec": {
+        "rules": {"min_cmdline_len": 1},
+        "exclude": {"comms": ["systemd"]}
+      },
+      "tcp": {
+        "rules": {"sensitive_ports": [...]},
+        "exclude": {"ips": [...]}
+      }
+    }
+
+  3.4 Apply 机制
+
+    前端：
+      - 草稿本地存（localStorage 或 pinia）
+      - "Apply" 按钮一次性提交完整快照
+      - diff 预览（改了哪些）
+      - 冲突提示（版本变了）
+
+    Server：
+      - Apply API 带"基于哪个版本"
+      - 乐观锁：如果当前版本 ≠ 用户基于的版本 → 拒绝
+      - 签名 → 写 DB → 通知在线 Agent
+
+    Agent：
+      - 收到规则 → 验签 → 应用（带防抖）
+      - 心跳带 rules_hash
+      - Server 汇总"哪些 Agent 已生效"
+
+  3.5 Agent 侧防护（5 补丁）
+
+    1. 防抖（3 秒）：收到新规则 → 等 3 秒无新规则才应用
+    2. panic recover：UpdateSensitivePaths 加 defer recover
+    3. 最小更新间隔：距上次 apply 不足 1 秒 → 拒绝，排队
+    4. 健康闸门：连续失败 3 次 → 静默模式，保持旧规则
+    5. 规则数量上限：单探针规则 > 1024 → 拒绝
+
+  3.6 RBAC（暂不细分）
+
+    现状：只有"管理员"
+    待设计：rules.write / probe.deploy / baseline.reset 等原子权限
+    触发：引入多角色（operator / viewer / auditor）时
+    优先级：P2
+
+  3.7 各阶段状态
+
+    阶段 A：JSON 结构升级（v1 → v2）+ Server 兼容    ✅ 已完成
+    阶段 B：Agent 侧分发（各探针 Update 方法）       ✅ 已完成
+    阶段 C：Agent 侧防抖 + recover + 闸门            ✅ 已完成
+    阶段 D：Server Apply API + 乐观锁                被 §2 覆盖
+    阶段 E：前端草稿 + Apply + diff 预览             未开工（设计不变）
+    阶段 F：Server Agent 状态汇总 + UI               被 §2 覆盖
+
+  3.8 阶段 E 前置：探针排除三维度 Apply（已完成，P1.10 将作废）
+
+    性质：阶段 E 的简化版，先在小块上验证"前端草稿 + 一次 Apply"
+
+    已落地：
+      - POST /api/probe-exclude/apply
+        请求体：{exec_bash_comms:[], file_access_comms:[], tcp_ips:[]}
+        语义：请求体即最终态，事务内全量替换三表
+      - GET  /api/probe-exclude/all
+        返回三维度当前内容
+
+    未做（保留给阶段 E 完整版）：
+      - 乐观锁
+      - diff 预览
+      - 整个 RuleSet 的 Apply
+      - 前端草稿本地存
+
+    注：P1.10 会废除这套 API，排除名单直接进 agent_rules.content。
+
+
+【四、删除联动加固】
+
+  4.1 背景
+
+    用户需求：删除一台 Agent 时，系统所有关于它的信息要一起清掉
+    场景：误注册、Agent 退役、换机重装
+    关注：DB 层是否天然支持，应用层还需要做什么
+
+  4.2 现状（CASCADE 已覆盖）
+
+    删除 agents 表中一行，DB 自动级联清理 12 张表：
+      events / events_2026_10 / _11 / _12 / _2027_01
+      events_2026_09_archive（有独立 CASCADE）
+      alerts / baselines / baseline_snapshots
+      probe_configs / cmdb_assets / agent_current_state
+
+    结论：应用层不需要"遍历所有表 DELETE"。
+          只需在删除前：通知在线 Agent + 记审计。
+
+  4.3 高危问题
+
+    🔴 高危 1：删除会锁全表几十秒
+
+      现状：
+        events_2026_10 有 37 万行，一台 Agent 可能占几万行
+        DELETE agents → CASCADE 到 events → 删几万行
+        → 表级锁 → 其他 Agent 写入阻塞
+
+      后果：
+        删一台 Agent，所有其他 Agent 的事件写入卡死
+        事件写入超时 → Agent 侧丢事件 / 报错
+
+      方案：
+        软删除 + 后台异步清理
+        1. agents 加 deleted_at 列
+        2. 删除动作 = UPDATE agents SET deleted_at = now()
+                          + revoked_at = COALESCE(revoked_at, now())
+           （双设：L4 证书立即失效 + 记录软删时间）
+        3. 后台任务（每 5 分钟）分批清理：
+           - 先通知在线 Agent 停止上报
+           - 分批删除 events 各分区中该 agent 的数据（每批 1000 行）
+           - 最后物理删除 agents 行
+        4. 期间该 Agent 在 UI 上标灰不可操作
+
+    ~~🔴 高危 2：归档表脱离 CASCADE~~ [已作废 2026-10-09]
+
+      核实结论：
+        events_2026_09_archive 虽已 DETACH 脱离 events 主表，
+        但仍有独立外键 FK(agent_id) REFERENCES agents(agent_id)
+        ON DELETE CASCADE。
+        删除 Agent 时归档表数据同样被级联清理，不存在孤儿数据。
+
+    🟡 中危 3：三张表无 agent_id（P1.10 后废）
+
+      probe_exclude_comms / _file_access / _ips
+      → P1.10 废表，不再涉及
+
+      enrollment_tokens 与 agent_id 无关（是给未注册机器的令牌）
+
+  4.4 其它隐患
+
+    隐患 A：无软删除
+      agents 表无 deleted_at 列
+      revoked_at 是 L4 证书撤销专用，不能复用为软删除
+
+    隐患 B：无审计接入
+      audit_logs 表已存在，但从未接入
+      谁删的、何时删的、为何删的——全无痕
+
+    隐患 C：删除流程未标准化
+      当前依赖 DB CASCADE
+      应用层没有集中的 DeleteAgentEverywhere 函数
+
+    隐患 D：归档表命名未标准化
+      events_2026_09_archive 是手工创建
+      后续归档应统一命名规则（events_YYYY_MM_archive）
+      见 psql.go runCleanup 已实现该规则
+
+  4.5 实施计划
+
+    P1. 立即：删除前通知在线 Agent
+         - 在 agents 删除 API 里，先给在线 Agent 发 signal
+         - 让它停止上报 + 清本地缓存
+         - 再执行删除
+
+    P2. 短期：软删除 + 异步清理
+         - agents 加 deleted_at 列
+         - 删除 = 标记 + 异步分批物理清
+         - 软删除时同时设 revoked_at（L4 证书立即失效）
+
+    P3. 短期：审计接入
+         - audit_logs 表已存在，只需写 Log() 辅助函数
+         - 记录操作人、时间、agent_id、before_value
+
+    P4. 中期：统一删除函数
+         - server/internal/service/agent_lifecycle.go
+         - func DeleteAgentEverywhere(ctx, agentID string) error
+         - 集中处理：通知 → 审计 → 软删 → 异步清
+
+    P5. 长期：归档表版本化（视需求）
+         - 归档表已受 CASCADE，本项降级为可选
+
+  4.6 工作量估算
+
+    P1 通知在线 Agent                0.5 天
+    P2 软删除 + 异步清理             1 天
+    P3 审计接入                      0.5 天
+    P4 统一删除函数                  0.5 天
+    P5 归档表版本化（视需求）        1-2 天
+    合计：3-4 天
+
+  4.7 实施约束（生产标准）
+
+    1. 软删除时同时设 revoked_at（双保险，L4 立即拒连）
+    2. L4 中间件加双过滤：revoked_at IS NULL AND deleted_at IS NULL
+    3. 异步清理必须幂等，Server 重启后靠 deleted_at 重扫
+    4. 软删除用 WHERE deleted_at IS NULL 乐观锁
+    5. 并发删除第二个请求返回幂等成功（不报错）
+    6. agents 重注册走 UPSERT（ON CONFLICT agent_id）
+    7. 所有 agents 查询加 WHERE deleted_at IS NULL
+    8. audit_logs.before_value 只写关键字段（避免 public_key_der
+       等大字段）
+    9. 删除 API 加 RBAC：admin-only
+    10. 前端删除加假进度条（VMware 风格）
+
+
+【五、文档定位说明】
+
+  本文件（DESIGN.txt）：设计参考
+  PROJECT.txt：现状 / 事实源 / 待办 / 清理计划
+  ARCHIVE/：历史协商记录（不再维护）
+
+  归档内容对照：
+    EDR-CORRELATION-v3.1.txt  → DESIGN.txt §1
+    RULES-MODEL-v2.txt        → DESIGN.txt §2
+    RULES-APPLY-DESIGN.txt    → DESIGN.txt §3
+    DB-DELETE-CASCADE.txt     → DESIGN.txt §4
+
+  设计变更时：改 DESIGN.txt + 在 PROJECT.txt 记待办
+  状态变化时：只改 PROJECT.txt
+
+=================================================
+END
+=================================================
