@@ -242,13 +242,19 @@ origin/main：同
     - 仅 npm run build 通过，未在浏览器中人工验证增删/展示
 
 11. 探针排除名单只接了 exec（半成品）
-    e2e 基线（2026-10-09 17:07 验证通过）：
-      - POST /api/probe-exclude-comms {"comm":"sleep"} → agent_rules v11→v12（3s 内）
-      - map id=1283 出现 {"key":"sleep","value":1}，其他 3 个 map 空
-      - sleep 事件数近 5s = 0，排除生效
-      - DELETE 后 → v13，map 1283 清空
-      - 结论：exec 链路完全通，bash/file_access/tcp 三个 map 从未被填
-      - map id 归属：1283=exec；1279/1282/1293 待 #11 后确认
+    e2e 基线（2026-10-09 17:07）：
+      - exec 单探针链路通过（v11→v12，map 1283 出现 sleep）
+    e2e 三维度（2026-10-09 17:18，#11/#12 完成后）：
+      - POST /probe-exclude-comms {"comm":"bash-test"}        → map 1327 + 1336 均出现
+      - POST /probe-exclude-comms-file-access {"comm":"psql"} → map 1340 出现
+      - POST /probe-exclude-ips {"ip":"10.99.99.99"}          → sentinel_xip(1333) 出现
+      - POST /probe-exclude-ips {"ip":"172.99.0.0/16"}        → sentinel_xip(1333) 出现 prefixlen=16
+      - agent_rules v13→v17（4 次 POST，17:18:02 同秒完成）
+      - DELETE 全部成功，map 清空
+      - 字节序验证：10.99.99.99 → ip=1667457802（0x6363630A），CIDR 前缀正确
+      - map 归属：1327=exec 或 bash；1328=tcp(comm 维度空)；1333=sentinel_xip；
+                  1336=另一个(exec/bath 共享)；1340=file_access
+      - 结论：三维度全部生效，exec+bash 共享 / file_access 独立 / tcp IP 独立
     现状：
       - C 层 5 探针引用 sentinel_exclude_comms：exec/bash/file_access/tcp/dns
         其中 dns 探针整体搁置（无 Go loader / 无插件），本轮豁免
