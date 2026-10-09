@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -72,6 +73,10 @@ type TCPProbe struct {
 	link      *ManualTracepointLink
 	objs      *tcpObjects
 	agentHash uint32
+
+	// 排除名单同步（记录上次 keys，用于清空重建）
+	excludeMu        sync.Mutex
+	lastExcludeComms []string
 }
 
 type tcpObjects struct {
@@ -205,14 +210,37 @@ func (p *TCPProbe) UpdateExcludeComms(processNames []string) error {
 	if p.objs == nil || p.objs.SentinelExcludeComms == nil {
 		return nil
 	}
+
+	p.excludeMu.Lock()
+	defer p.excludeMu.Unlock()
+
+	var val uint8 = 1
+
+	// 1. 全清现有条目（LRU_HASH 支持 Iterate）
+	//    不用"记录 last keys"模式——进程重启后内存丢失，会漏删
+	//    注意：Next 的 value 参数不能传 nil，cilium/ebpf 会解码它
+	iter := p.objs.SentinelExcludeComms.Iterate()
+	var key [16]byte
+	var valOld uint8
+	for iter.Next(&key, &valOld) {
+		k := key // 拷贝一份，防迭代器复用同一 key 缓冲
+		_ = p.objs.SentinelExcludeComms.Delete(&k)
+	}
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("遍历 exclude_comms 失败: %w", err)
+	}
+
+	// 2. 写入新列表
 	for _, name := range processNames {
-		var key [16]byte
-		copy(key[:], name)
-		var value uint8 = 1
-		if err := p.objs.SentinelExcludeComms.Put(&key, &value); err != nil {
-			return err
+		var k [16]byte
+		copy(k[:], name)
+		if err := p.objs.SentinelExcludeComms.Put(&k, &val); err != nil {
+			return fmt.Errorf("写入 exclude 失败 [%s]: %w", name, err)
 		}
 	}
+
+	// 保留记录（便于观察/调试，可选）
+	p.lastExcludeComms = append([]string(nil), processNames...)
 	return nil
 }
 
