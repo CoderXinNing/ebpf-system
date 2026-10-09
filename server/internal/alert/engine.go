@@ -1,12 +1,12 @@
 package alert
 
 import (
+	"log"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
-	"log"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -32,34 +32,26 @@ type Frequency struct {
 }
 
 type Alert struct {
-	ID          string
+	ID            string
 	CorrelationID string
-	RuleName    string
-	Severity    string
-	Description string
-	AgentID     string
-	PID         int32
-	Comm        string
-	Filename    string
-	Details     string
-	Time        time.Time
+	RuleName      string
+	Severity      string
+	Description   string
+	AgentID       string
+	PID           int32
+	Comm          string
+	Filename      string
+	Details       string
+	Time          time.Time
 }
 
 type Engine struct {
 	dedupMap  map[string]time.Time
-	mu         sync.RWMutex
-	rules      []Rule
-	rulesPath  string
-	freqCount  map[string][]time.Time // 频率统计
-	OnAlert    func(Alert)
-	whitelist  []string // 白名单
-}
-
-// SetWhitelist 设置白名单
-func (e *Engine) SetWhitelist(whitelist []string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.whitelist = whitelist
+	mu        sync.RWMutex
+	rules     []Rule
+	rulesPath string
+	freqCount map[string][]time.Time // 频率统计
+	OnAlert   func(Alert)
 }
 
 func NewEngine(rulesPath string, callback func(Alert)) *Engine {
@@ -124,16 +116,9 @@ func (e *Engine) loadRules(path string) {
 
 // CheckEvent 检查事件是否触发告警
 func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, source string, correlationID string) {
-	// 白名单检查
 	e.mu.RLock()
-	whitelist := e.whitelist
 	rules := e.rules
 	e.mu.RUnlock()
-	for _, w := range whitelist {
-		if comm == w || strings.Contains(cmdline, w) {
-			return
-		}
-	}
 
 	for _, rule := range rules {
 		if !e.matchRule(rule, comm, cmdline, filename, source) {
@@ -175,15 +160,15 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 		alert := Alert{
 			ID:            time.Now().Format("20060102150405") + "-" + rule.Name,
 			CorrelationID: correlationID,
-			RuleName:    rule.Name,
-			Severity:    rule.Severity,
-			Description: rule.Description,
-			AgentID:     agentID,
-			PID:         pid,
-			Comm:        alertUser,
-			Filename:    strings.TrimRight(filename, "\x00"),
-			Details:     cleanCmdline,
-			Time:        time.Now(),
+			RuleName:      rule.Name,
+			Severity:      rule.Severity,
+			Description:   rule.Description,
+			AgentID:       agentID,
+			PID:           pid,
+			Comm:          alertUser,
+			Filename:      strings.TrimRight(filename, "\x00"),
+			Details:       cleanCmdline,
+			Time:          time.Now(),
 		}
 
 		// 去重：同规则+同Agent 30秒内不重复告警

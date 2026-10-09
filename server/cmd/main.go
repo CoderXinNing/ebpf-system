@@ -595,7 +595,6 @@ func main() {
 			h.Mu.Lock()
 			h.ProbeExcludeComms = list
 			h.Mu.Unlock()
-			alertEngine.SetWhitelist(list)
 			log.Printf("📥 探针排除名单已加载: %d 条", len(list))
 		}
 	}()
