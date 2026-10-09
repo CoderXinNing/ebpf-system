@@ -20,6 +20,7 @@ static __always_inline int is_agent_tree_or_join(__u32 pid) {
     if (pid == 0) return 0;
     if (is_agent_tree(pid)) return 1;
 
+    // 懒惰加入：父在 agent_pids 则自己也加入
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
     if (!task) return 0;
 
@@ -27,13 +28,8 @@ static __always_inline int is_agent_tree_or_join(__u32 pid) {
     bpf_core_read(&parent, sizeof(parent), &task->real_parent);
     if (!parent) return 0;
 
-    __u32 ppid = 0;
-    bpf_core_read(&ppid, sizeof(ppid), &parent->pid);
-    if (ppid == 0) return 0;
-
-    if (is_agent_tree(ppid)) {
-        __u8 v = 1;
-        bpf_map_update_elem(&agent_pids, &pid, &v, BPF_ANY);
+    if (is_agent_tree_task(parent)) {
+        add_current_to_agent_tree();
         return 1;
     }
     return 0;
@@ -86,30 +82,32 @@ static __always_inline int is_sensitive_path(const char *filename) {
 // ============================================
 SEC("tracepoint/sched/sched_process_exec")
 int trace_exec(struct trace_event_raw_sched_process_exec *ctx) {
-    __u32 pid = bpf_get_current_pid_tgid() >> 32;
-
-    // 查父进程
+    // exec 时查父进程：父在 agent_pids → 自己加入
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task) return 0;
+
     struct task_struct *parent = NULL;
     bpf_core_read(&parent, sizeof(parent), &task->real_parent);
-    if (!parent) {
-        return 0;
-    }
+    if (!parent) return 0;
 
-    __u32 ppid = 0;
-    bpf_core_read(&ppid, sizeof(ppid), &parent->pid);
-
-    if (is_agent_tree(ppid)) {
-        __u8 v = 1;
-        bpf_map_update_elem(&agent_pids, &pid, &v, BPF_ANY);
+    if (is_agent_tree_task(parent)) {
+        add_current_to_agent_tree();
     }
     return 0;
 }
 
 SEC("tracepoint/sched/sched_process_exit")
 int trace_exit(void *ctx) {
-    __u32 pid = bpf_get_current_pid_tgid() >> 32;
-    bpf_map_delete_elem(&agent_pids, &pid);
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task) return 0;
+
+    __u32 pid = 0;
+    __u64 st = 0;
+    read_task_pid_starttime(task, &pid, &st);
+    if (pid == 0) return 0;
+
+    struct pid_key key = {.pid = pid, .start_time_ticks = st};
+    bpf_map_delete_elem(&agent_pids, &key);
     return 0;
 }
 

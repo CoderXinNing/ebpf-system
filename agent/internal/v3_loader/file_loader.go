@@ -1,9 +1,12 @@
 package v3_loader
 
 import (
+	"encoding/binary"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -83,11 +86,17 @@ func (p *FileProbe) Load() error {
 
 	// 写入自己 PID 到 agent_pids（P1.9：过滤 Agent 自身噪声）
 	agentPid := uint32(os.Getpid())
-	var flag uint8 = 1
-	if err := p.objs.AgentPids.Put(&agentPid, &flag); err != nil {
-		log.Printf("⚠️ 写入 agent_pids 失败: %v（P1.9 过滤不生效）", err)
+	st, err := readStartTimeTicks(agentPid)
+	if err != nil {
+		log.Printf("⚠️ 读自己 start_time 失败: %v", err)
 	} else {
-		log.Printf("✅ agent_pids 已标记自己 PID=%d（P1.9）", agentPid)
+		key := makePidKey(agentPid, st)
+		var flag uint8 = 1
+		if err := p.objs.AgentPids.Put(key[:], &flag); err != nil {
+			log.Printf("⚠️ 写入 agent_pids 失败: %v（P1.9 过滤不生效）", err)
+		} else {
+			log.Printf("✅ agent_pids 已标记自己 PID=%d ticks=%d（P1.9）", agentPid, st)
+		}
 	}
 
 	// 手动 attach（openat）
@@ -148,13 +157,52 @@ func (p *FileProbe) Load() error {
 	return nil
 }
 
+// readStartTimeTicks 读 /proc/<pid>/stat 第 22 字段（starttime，jiffies）
+//
+// ⚠️ 不换算成 ns：C 层把 task->start_time（ns）除以 1e7 得到 ticks，
+//
+//	两边都用 ticks 才能精确对齐
+func readStartTimeTicks(pid uint32) (uint64, error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return 0, err
+	}
+	content := string(data)
+	idx := strings.LastIndex(content, ")")
+	if idx < 0 {
+		return 0, fmt.Errorf("stat 格式异常")
+	}
+	fields := strings.Fields(content[idx+2:])
+	if len(fields) < 20 {
+		return 0, fmt.Errorf("stat 字段不足（%d）", len(fields))
+	}
+	// starttime 是 stat 的第 22 字段（从 ") " 后数，fields[19]）
+	return strconv.ParseUint(fields[19], 10, 64)
+}
+
+// makePidKey 构造复合键（12 字节：pid LE 4 + start_time_ns LE 8）
+// 与 C 层 struct pid_key（packed）对齐
+func makePidKey(pid uint32, startNs uint64) [12]byte {
+	var key [12]byte
+	binary.LittleEndian.PutUint32(key[0:4], pid)
+	binary.LittleEndian.PutUint64(key[4:12], startNs)
+	return key
+}
+
 // MarkAgentPid 把一个 PID 加入 agent_pids map（P1.9：过滤 Agent 子进程）
+//
+// 用复合键 (pid, start_time_ns) 防 PID 复用攻击
 func (p *FileProbe) MarkAgentPid(pid uint32) error {
 	if p.objs == nil || p.objs.AgentPids == nil {
 		return fmt.Errorf("探针未加载")
 	}
+	st, err := readStartTimeTicks(pid)
+	if err != nil {
+		return fmt.Errorf("读 start_time 失败: %w", err)
+	}
+	key := makePidKey(pid, st)
 	var v uint8 = 1
-	return p.objs.AgentPids.Put(&pid, &v)
+	return p.objs.AgentPids.Put(key[:], &v)
 }
 
 // clearMap 清空 map（遍历删除所有 key）
@@ -205,29 +253,31 @@ func (p *FileProbe) CleanupDeadPids() (int, error) {
 	key := make([]byte, keySize)
 	value := make([]byte, valueSize)
 
-	var deadPids []uint32
+	var deadKeys [][]byte
 	iter := p.objs.AgentPids.Iterate()
 	for iter.Next(&key, &value) {
-		if len(key) < 4 {
+		if len(key) < 12 {
 			continue
 		}
-		pid := uint32(key[0]) | uint32(key[1])<<8 | uint32(key[2])<<16 | uint32(key[3])<<24
+		pid := binary.LittleEndian.Uint32(key[0:4])
 		if pid == 0 {
 			continue
 		}
 		// 检查 /proc/<pid> 是否存在
 		if _, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); os.IsNotExist(err) {
-			deadPids = append(deadPids, pid)
+			k := make([]byte, 12)
+			copy(k, key[:12])
+			deadKeys = append(deadKeys, k)
 		}
 	}
 	if err := iter.Err(); err != nil {
 		return 0, err
 	}
 
-	// 删除死 PID
+	// 删除死 PID（用完整复合键）
 	cleaned := 0
-	for _, pid := range deadPids {
-		if err := p.objs.AgentPids.Delete(&pid); err == nil {
+	for _, k := range deadKeys {
+		if err := p.objs.AgentPids.Delete(k); err == nil {
 			cleaned++
 		}
 	}

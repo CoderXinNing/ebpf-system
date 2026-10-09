@@ -3,6 +3,7 @@
 #define SENTINEL_COMMON_H
 
 #include <bpf/bpf_helpers.h>
+#include <bpf/bpf_core_read.h>
 
 // ============================================
 // V3 统一事件头（304 字节，packed）
@@ -117,17 +118,89 @@ struct {
 // 生命周期：Agent 启动写自己 pid → fork hook 传播子进程 → exit hook 清理
 // PID 复用防护：exit hook 移除，避免 pid 被攻击者复用后误过滤
 // ============================================
+// pid_key 复合键：pid + 启动时间（防 PID 复用）
+// 对齐说明：packed，12 字节。Go 侧 binary.Write 也是紧凑序列化，匹配。
+struct pid_key {
+    __u32 pid;
+    __u64 start_time_ticks;
+} __attribute__((packed));
+
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 1024);
-    __type(key, __u32);   // pid
+    __type(key, struct pid_key);
     __type(value, __u8);  // 1 = agent tree
 } agent_pids SEC(".maps");
 
+// read_task_pid_starttime 从 task_struct 读 pid + start_time（统一到 ticks）
+//
+// ⚠️ 精度说明：
+//   task->start_time 是 ns（精确）
+//   /proc/<pid>/stat 第 22 字段是 ticks
+//   两边统一用 ticks。HZ=100 时 1 tick = 10000000 ns
+static __always_inline void read_task_pid_starttime(struct task_struct *task,
+                                                     __u32 *pid, __u64 *st_ticks) {
+    *pid = 0;
+    *st_ticks = 0;
+    if (!task) return;
+    bpf_core_read(pid, sizeof(*pid), &task->pid);
+    __u64 st_ns = 0;
+    bpf_core_read(&st_ns, sizeof(st_ns), &task->start_time);
+    *st_ticks = st_ns / 10000000ULL;
+}
+
+// is_agent_tree_task 判断 task 是否在 agent_pids 里
+static __always_inline int is_agent_tree_task(struct task_struct *task) {
+    __u32 pid = 0;
+    __u64 st = 0;
+    read_task_pid_starttime(task, &pid, &st);
+    if (pid == 0) return 0;
+
+    struct pid_key key = {.pid = pid, .start_time_ticks = st};
+    __u8 *v = bpf_map_lookup_elem(&agent_pids, &key);
+    return v && *v == 1;
+}
+
+// is_agent_tree 判断当前 pid 是否在 agent_pids 里
 static __always_inline int is_agent_tree(__u32 pid) {
     if (pid == 0) return 0;
-    __u8 *v = bpf_map_lookup_elem(&agent_pids, &pid);
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task) return 0;
+    return is_agent_tree_task(task);
+}
+
+// is_agent_tree_parent 判断当前进程的父进程 ppid 是否在 agent_pids 里
+static __always_inline int is_agent_tree_parent(__u32 ppid) {
+    if (ppid == 0) return 0;
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task) return 0;
+
+    struct task_struct *parent = NULL;
+    bpf_core_read(&parent, sizeof(parent), &task->real_parent);
+    if (!parent) return 0;
+
+    __u32 parent_pid = 0;
+    __u64 parent_st = 0;
+    read_task_pid_starttime(parent, &parent_pid, &parent_st);
+    if (parent_pid != ppid) return 0;
+
+    struct pid_key key = {.pid = parent_pid, .start_time_ticks = parent_st};
+    __u8 *v = bpf_map_lookup_elem(&agent_pids, &key);
     return v && *v == 1;
+}
+
+// add_current_to_agent_tree 把当前进程加入 agent_pids
+static __always_inline void add_current_to_agent_tree(void) {
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task) return;
+    __u32 pid = 0;
+    __u64 st = 0;
+    read_task_pid_starttime(task, &pid, &st);
+    if (pid == 0) return;
+
+    struct pid_key key = {.pid = pid, .start_time_ticks = st};
+    __u8 v = 1;
+    bpf_map_update_elem(&agent_pids, &key, &v, BPF_ANY);
 }
 
 
