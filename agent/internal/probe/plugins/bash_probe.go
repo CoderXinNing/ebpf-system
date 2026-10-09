@@ -71,9 +71,14 @@ func (p *BashProbe) PreCheck(caps *probe.AgentCapabilities) error {
 var _ framework.PreChecker = (*BashProbe)(nil)
 
 // ApplyConfig 实现 framework.ConfigApplier
-// bash 探针暂无配置项（预留）
+//
+// bash 探针共享 exec 探针的 comm 排除名单（语义：进程/命令维度）。
+// 见 EDR-CORRELATION-v3.1【五】+ PROJECT-STATUS 已知问题 #11。
 func (p *BashProbe) ApplyConfig(rs *rules.RuleSet) error {
-	return nil
+	if rs == nil || rs.Exec == nil || rs.Exec.Exclude == nil {
+		return nil
+	}
+	return p.probe.UpdateExcludeComms(rs.Exec.Exclude.Comms)
 }
 
 var _ framework.ConfigApplier = (*BashProbe)(nil)

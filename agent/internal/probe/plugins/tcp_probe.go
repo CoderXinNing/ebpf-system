@@ -114,9 +114,14 @@ func (p *TCPProbe) PreCheck(caps *probe.AgentCapabilities) error {
 var _ framework.PreChecker = (*TCPProbe)(nil)
 
 // ApplyConfig 实现 framework.ConfigApplier
-// tcp 探针暂无配置项（预留）
+//
+// tcp 探针走独立的 IP 维度排除（comm 维度对 tcp 无意义）。
+// 见 EDR-CORRELATION-v3.1【五】+ PROJECT-STATUS 已知问题 #11/#12。
 func (p *TCPProbe) ApplyConfig(rs *rules.RuleSet) error {
-	return nil
+	if rs == nil || rs.TCP == nil || rs.TCP.Exclude == nil {
+		return nil
+	}
+	return p.probe.UpdateExcludeIPs(rs.TCP.Exclude.IPs)
 }
 
 var _ framework.ConfigApplier = (*TCPProbe)(nil)

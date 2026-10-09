@@ -3,6 +3,7 @@ package v3_loader
 import (
 	"fmt"
 	"log"
+	"net"
 	"strings"
 	"sync"
 
@@ -77,6 +78,7 @@ type TCPProbe struct {
 	// 排除名单同步（记录上次 keys，用于清空重建）
 	excludeMu        sync.Mutex
 	lastExcludeComms []string
+	lastExcludeIPs   []string
 }
 
 type tcpObjects struct {
@@ -84,6 +86,7 @@ type tcpObjects struct {
 	ConfigMap            *ebpf.Map     `ebpf:"config_map"`
 	SentinelEvents       *ebpf.Map     `ebpf:"sentinel_events"`
 	SentinelExcludeComms *ebpf.Map     `ebpf:"sentinel_exclude_comms"`
+	SentinelXIP          *ebpf.Map     `ebpf:"sentinel_xip"`
 	PidConnStats         *ebpf.Map     `ebpf:"pid_conn_stats"`
 	ConnDetails          *ebpf.Map     `ebpf:"conn_details"`
 }
@@ -256,4 +259,111 @@ func (p *TCPProbe) Close() {
 		}
 		p.objs = nil
 	}
+}
+
+// ============================================
+// IP 维度排除（LPM_TRIE，支持 CIDR）
+// 见 EDR-CORRELATION-v3.1【五】+ PROJECT-STATUS 已知问题 #11/#12
+// ============================================
+
+// lpmIPKey 与 C 侧 struct lpm_ip_key 内存布局严格一致：
+//
+//	struct lpm_ip_key {
+//	    __u32 prefixlen;
+//	    __u32 ip;
+//	} __attribute__((packed));
+//
+// 说明：IP 字段用 [4]byte 而非 uint32，避免 cilium/ebpf 的 native-endian
+// 序列化歧义。C 侧写入的 uint32 是小端存储的"网络字节序数值"，
+// 其内存字节序与 [4]byte 完全一致。
+type lpmIPKey struct {
+	PrefixLen uint32
+	IP        [4]byte
+}
+
+// UpdateExcludeIPs 更新 TCP 探针 IP 排除名单（支持单 IP 与 CIDR）
+//
+// 支持形式：
+//
+//	"1.2.3.4"        → /32
+//	"10.0.0.0/8"     → CIDR 前缀
+//
+// 非法条目跳过并打日志，不阻断整批更新。
+func (p *TCPProbe) UpdateExcludeIPs(ips []string) error {
+	if p.objs == nil || p.objs.SentinelXIP == nil {
+		return nil
+	}
+
+	p.excludeMu.Lock()
+	defer p.excludeMu.Unlock()
+
+	var val uint8 = 1
+
+	// 1. 全清现有条目（LPM_TRIE 支持 Iterate）
+	iter := p.objs.SentinelXIP.Iterate()
+	var key lpmIPKey
+	var valOld uint8
+	for iter.Next(&key, &valOld) {
+		k := key // 拷贝一份，防迭代器复用同一 key 缓冲
+		_ = p.objs.SentinelXIP.Delete(&k)
+	}
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("遍历 sentinel_xip 失败: %w", err)
+	}
+
+	// 2. 写入新列表
+	for _, raw := range ips {
+		k, err := parseCIDRToLPMKey(raw)
+		if err != nil {
+			log.Printf("⚠️ 跳过非法 IP/CIDR [%s]: %v", raw, err)
+			continue
+		}
+		if err := p.objs.SentinelXIP.Put(k, &val); err != nil {
+			return fmt.Errorf("写入 sentinel_xip 失败 [%s]: %w", raw, err)
+		}
+	}
+
+	p.lastExcludeIPs = append([]string(nil), ips...)
+	return nil
+}
+
+// parseCIDRToLPMKey 解析 IP 或 CIDR 为 LPM_TRIE key
+//
+// 只支持 IPv4；IPv6 直接报错（探针目前只处理 IPv4）。
+func parseCIDRToLPMKey(s string) (*lpmIPKey, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, fmt.Errorf("空字符串")
+	}
+
+	var (
+		ip        net.IP
+		prefixLen int
+	)
+
+	if strings.Contains(s, "/") {
+		parsedIP, ipNet, err := net.ParseCIDR(s)
+		if err != nil {
+			return nil, fmt.Errorf("解析 CIDR 失败: %w", err)
+		}
+		ip = parsedIP
+		ones, _ := ipNet.Mask.Size()
+		prefixLen = ones
+	} else {
+		parsedIP := net.ParseIP(s)
+		if parsedIP == nil {
+			return nil, fmt.Errorf("解析 IP 失败")
+		}
+		ip = parsedIP
+		prefixLen = 32
+	}
+
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return nil, fmt.Errorf("非 IPv4: %s", s)
+	}
+
+	k := &lpmIPKey{PrefixLen: uint32(prefixLen)}
+	copy(k.IP[:], ip4)
+	return k, nil
 }
