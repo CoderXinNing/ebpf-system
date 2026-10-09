@@ -138,11 +138,35 @@ Agent：
 阶段 B：Agent 侧分发（各探针 Update 方法）       ✅ 已完成
 阶段 C：Agent 侧防抖 + recover + 闸门            ✅ 已完成
 阶段 D：Server Apply API + 乐观锁                未开工
+        （注：探针排除三维度的简化版 Apply 已于 2026-10-09 落地，
+          见下方"阶段 E 前置"）
 阶段 E：前端草稿 + Apply + diff 预览             未开工
+        （前置：探针排除三维度的 /all + /apply 已就绪，
+          前端可直接接这两个接口）
 阶段 F：Server Agent 状态汇总 + UI               未开工
 
 总计：5-6 天
 
+
+【阶段 E 前置：探针排除三维度 Apply（已完成，2026-10-09）】
+
+性质：阶段 E 的简化版，先在一小块上验证"前端草稿 + 一次 Apply"的模式。
+
+已落地：
+  - POST /api/probe-exclude/apply
+    请求体：{exec_bash_comms:[], file_access_comms:[], tcp_ips:[]}
+    语义：请求体即最终态，事务内全量替换三表 → 触发 RebuildFromDB
+  - GET  /api/probe-exclude/all
+    返回三维度当前内容（前端加载初值）
+
+未做（保留给阶段 E 完整版）：
+  - 乐观锁（多端编辑才需要）
+  - diff 预览
+  - 整个 RuleSet 的 Apply（当前只覆盖三维度排除名单）
+  - 前端草稿本地存（localStorage / pinia）
+
+设计意义：证明"硬编码做好再抽象"——先在小范围跑通 Apply 模式，
+        再推广到整个 RuleSet。
 
 【跟现有能力的关系】
 - 复用：rulesign（签名）、agent_rules 表、心跳 rules_version

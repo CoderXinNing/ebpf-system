@@ -33,12 +33,20 @@ AsterTrack 待办清单
     - B：删掉（清死代码）
     - 决策待定
 
+[x] #11 后端三维度 ✅ 2026-10-09
+    - migration 007 + C 层 sentinel_xip + 3 个 ApplyConfig
+    - server 6 个细粒度 API
+    - 统一 Apply：POST /api/probe-exclude/apply + GET /api/probe-exclude/all
+    - 见 PROJECT-STATUS #11
+
 [ ] #11 前端三维度页
-    - 后端已完成（见 PROJECT-STATUS #11）
-    - exec+bash 共享一份 comm 页
-    - file_access 独立一份 comm 页
-    - tcp 独立一份 IP 页（支持 CIDR）
-    - 接 6 个新 API：/probe-exclude-comms-file-access, /probe-exclude-ips
+    - 后端已完成（含统一 Apply）
+    - 形态自由：三 Tab / 三区块 / 三独立页都可
+    - 只需接 2 个 API：
+        GET  /api/probe-exclude/all   → 加载初值
+        POST /api/probe-exclude/apply → 一次性提交（全量替换）
+    - 旧 9 个细粒度 API 保留但前端不必用
+    - 可选：前端内置"预设"下拉（高安全/平衡/低噪音），纯前端逻辑
 
 [ ] #9 前端三维度页浏览器实测（依赖 #11 前端）
     - 改名后组件路径已变（WhitelistView → ProbeExcludeCommsView）

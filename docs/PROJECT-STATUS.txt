@@ -281,7 +281,18 @@ origin/main：同
       - 3 个 ApplyConfig 全部接通
       - server 6 个 API + RebuildFromDB 三节合并
       - e2e 通过（见上方基线）
-    ⏳ 前端未接入：仍是单页一份 comm 名单，需拆三维度页
+    ✅ 统一 Apply API 2026-10-09 完成：
+      - POST /api/probe-exclude/apply
+        请求体即最终态，事务内全量替换三表 → 触发 RebuildFromDB
+        空数组 = 清空该维度；失败整体回滚（pgxpool.Begin）
+      - GET  /api/probe-exclude/all
+        一次性返回三维度当前内容（前端加载初值用）
+      - 旧 9 个细粒度 API 保留（curl / 兼容）
+      - e2e 通过（agent_rules v21→v22，空 apply 后 map 全清）
+      - 见 RULES-APPLY-DESIGN.txt（阶段 E 简化版）
+    ⏳ 前端未接入：
+      - 形态自由（三 Tab / 三区块 / 三独立页都可）
+      - 后端不锁形态，只接 /all + /apply 即可完整工作
     ⏳ #9 浏览器实测待前端接入后做
 
 12. TCP 排除名单维度重构（独立子任务）
