@@ -8,3 +8,4 @@ certs/
 agent/data/baseline.json
 agent/data/rules.json
 agent/data/rules.sig
+v3_engine/probes/*.o
