@@ -62,35 +62,67 @@ func (p *PSQL) Close() {
 	}
 }
 
+// 分区维护常量
+const (
+	// PartitionMonthsAhead 预建未来几个月的分区（含当前月共 N+1 个月）
+	PartitionMonthsAhead = 3
+
+	// PartitionMonthsKeep 保留最近几个月分区（含当前月）
+	// 更早的分区会被 DETACH 并归档（不改名 _archive）
+	PartitionMonthsKeep = 3
+)
+
 // Pool 返回底层连接池（过渡期使用）
 func (p *PSQL) Pool() *pgxpool.Pool {
 	return p.pool
 }
 
-// EnsurePartitions 确保未来 3 个月的分区存在
+// EnsurePartitions 确保当前月 + 未来 N 个月的分区存在
+//
+// 设计说明：
+//   - 时间边界完全由 PostgreSQL 侧生成（date_trunc + interval），
+//     避免 Go time.Local / time.UTC 与 DB 时区不一致导致边界偏移。
+//   - 幂等：CREATE TABLE IF NOT EXISTS，重复执行无副作用。
+//   - 由 StartMaintenanceTask 每日调用，保证 Server 长期不重启也不缺分区。
 func (p *PSQL) EnsurePartitions(ctx context.Context) error {
-	for i := 0; i < 3; i++ {
-		month := time.Now().AddDate(0, i, 0)
-		partitionName := fmt.Sprintf("events_%s", month.Format("2006_01"))
-		startDate := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, time.UTC)
-		endDate := startDate.AddDate(0, 1, 0)
+	for i := 0; i <= PartitionMonthsAhead; i++ {
+		// 分区名也从 DB 拿，与边界时区严格一致（避免 Go/DB 时区错位）
+		var pname string
+		if err := p.pool.QueryRow(ctx,
+			`SELECT to_char(date_trunc('month', now() + make_interval(months => $1)), 'YYYY_MM')`,
+			i).Scan(&pname); err != nil {
+			return fmt.Errorf("获取第 %d 个月分区名失败: %w", i, err)
+		}
 
-		query := fmt.Sprintf(
-			"CREATE TABLE IF NOT EXISTS %s PARTITION OF events FOR VALUES FROM ('%s') TO ('%s')",
-			partitionName,
-			startDate.Format("2006-01-02"),
-			endDate.Format("2006-01-02"),
+		query := fmt.Sprintf(`
+			CREATE TABLE IF NOT EXISTS events_%s PARTITION OF events
+			FOR VALUES FROM (date_trunc('month', now() + make_interval(months => %d)))
+			              TO (date_trunc('month', now() + make_interval(months => %d)))`,
+			pname, i, i+1,
 		)
 		if _, err := p.pool.Exec(ctx, query); err != nil {
-			return fmt.Errorf("创建分区 %s 失败: %w", partitionName, err)
+			return fmt.Errorf("创建第 %d 个月分区 (%s) 失败: %w", i, pname, err)
 		}
 	}
 	return nil
 }
 
-// StartCleanupTask 启动定时清理任务
-func (p *PSQL) StartCleanupTask(ctx context.Context) {
+// StartMaintenanceTask 启动定时维护任务
+//
+// 行为：
+//  1. 启动 5 分钟后跑第一次（避开 Server 启动高峰）
+//  2. 之后每 24 小时跑一次
+//  3. 每次先 EnsurePartitions（保证未来分区存在），再 runCleanup（清理过期数据）
+func (p *PSQL) StartMaintenanceTask(ctx context.Context) {
 	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Minute):
+		}
+
+		p.runMaintenance(ctx)
+
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -98,20 +130,69 @@ func (p *PSQL) StartCleanupTask(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				p.runCleanup(ctx)
+				p.runMaintenance(ctx)
 			}
 		}
 	}()
 }
 
+// runMaintenance 一次完整维护：确保分区 + 清理
+func (p *PSQL) runMaintenance(ctx context.Context) {
+	if err := p.EnsurePartitions(ctx); err != nil {
+		log.Printf("⚠️ 维护任务：确保分区失败: %v", err)
+	}
+	p.runCleanup(ctx)
+}
+
 // runCleanup 执行清理
+//
+// events 分区清理策略：
+//   - 保留最近 PartitionMonthsKeep 个月（含当前月）
+//   - 查 pg_inherits 找出真正早于 cutoff 的分区（白名单，绝不误删）
+//   - 归档而非 DROP：DETACH + RENAME 加 _archive 后缀
+//     理由：DROP 不可逆，归档保留取证能力，成本极低
 func (p *PSQL) runCleanup(ctx context.Context) {
-	// events 保留 30 天（DROP 旧分区）
-	cutoff30 := time.Now().AddDate(0, 0, -30)
-	oldPartition := fmt.Sprintf("events_%s", cutoff30.Format("2006_01"))
-	_, err := p.pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", oldPartition))
+	// events：按月粒度计算 cutoff（保留 N 个月，含当前月）
+	cutoffMonth := time.Now().AddDate(0, -(PartitionMonthsKeep - 1), 0)
+	cutoffName := fmt.Sprintf("events_%s", cutoffMonth.Format("2006_01"))
+
+	// 白名单：查分区树，只清理"严格早于 cutoff 且未归档"的分区
+	rows, err := p.pool.Query(ctx, `
+		SELECT c.relname
+		FROM pg_class c
+		JOIN pg_inherits i ON c.oid = i.inhrelid
+		WHERE i.inhparent = 'events'::regclass
+		  AND c.relname < $1
+		  AND c.relname NOT LIKE '%_archive'
+		ORDER BY c.relname`, cutoffName)
 	if err != nil {
-		log.Printf("⚠️ 清理旧分区失败: %v", err)
+		log.Printf("⚠️ 查询待清理分区失败: %v", err)
+	} else {
+		var toArchive []string
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err == nil {
+				toArchive = append(toArchive, name)
+			}
+		}
+		rows.Close()
+
+		for _, name := range toArchive {
+			archiveName := name + "_archive"
+			// 1. 脱离分区树
+			if _, err := p.pool.Exec(ctx,
+				fmt.Sprintf("ALTER TABLE events DETACH PARTITION %s", name)); err != nil {
+				log.Printf("⚠️ DETACH %s 失败: %v", name, err)
+				continue
+			}
+			// 2. 改名归档
+			if _, err := p.pool.Exec(ctx,
+				fmt.Sprintf("ALTER TABLE %s RENAME TO %s", name, archiveName)); err != nil {
+				log.Printf("⚠️ 归档 %s 失败: %v", name, err)
+				continue
+			}
+			log.Printf("📦 归档分区: %s → %s", name, archiveName)
+		}
 	}
 
 	// alerts 保留 90 天

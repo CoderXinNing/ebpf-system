@@ -502,7 +502,7 @@ func main() {
 	if psqlDB != nil {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		psqlDB.StartCleanupTask(ctx)
+		psqlDB.StartMaintenanceTask(ctx)
 	} else if sqliteDB != nil {
 		go func() {
 			ticker := time.NewTicker(1 * time.Hour)
