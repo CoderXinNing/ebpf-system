@@ -84,11 +84,11 @@
               <div class="quick-desc">进程 / 用户 / 软件包 / 服务</div>
             </div>
           </div>
-          <div class="quick-item" @click="router.push('/whitelist')">
+          <div class="quick-item" @click="router.push('/probe-exclude-comms')">
             <div class="quick-icon">🔒</div>
             <div class="quick-info">
-              <div class="quick-name">白名单管理</div>
-              <div class="quick-desc">用户干预最高优先级</div>
+              <div class="quick-name">探针排除名单</div>
+              <div class="quick-desc">这些 comm 不被探针采集</div>
             </div>
           </div>
         </div>

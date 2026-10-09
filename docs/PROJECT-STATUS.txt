@@ -117,7 +117,7 @@ origin/main：同
   - link.Tracepoint（替代手搓 perf_event）
 
 七、规则体系整改（2026-10-08）
-  - 阶段 A：JSON 结构 v1 → v2（探针分节 + rules/whitelist）
+  - 阶段 A：JSON 结构 v1 → v2（探针分节 + rules/exclude）
   - 阶段 B1：ConfigApplier 接口 + 5 插件整改
   - 阶段 B2：TCP sensitive_ports 走规则下发
   - 阶段 C：防抖 + recover + 熔断（5 个护栏）
@@ -155,9 +155,9 @@ origin/main：同
      - exec/bash 不找父锚点
      - 5 探针锚点逻辑不统一
 
-3. 白名单
-   现状：代码有（sentinel_whitelist map + C 判断）
-   缺：config 未启用、DB 0 行、无 UI
+3. 探针排除名单
+   现状：代码有（sentinel_exclude_comms map + C 判断）+ DB probe_exclude_comms 表
+   缺：config 未启用、DB 0 行、UI 已接（探针排除名单页）
 
 4. tcp 模式回落
    现状：星轨激活切明细（collect_mode=1），但星轨过期没切回 0
@@ -170,7 +170,7 @@ origin/main：同
   - P1.9 A1 完成（改用户态主动标记）
   - tcp 模式回落
   - file_access.c 调试残留清理
-  - 白名单决策
+  - 探针排除名单决策
 
 阶段 1：血缘表 + 锚点（3-5 天）
 阶段 2：L2 序列规则（3-5 天）

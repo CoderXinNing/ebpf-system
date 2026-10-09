@@ -81,9 +81,9 @@ int BPF_KPROBE(trace_connect, int fd, struct sockaddr *uservaddr, int addrlen) {
     bpf_get_current_comm(&comm, sizeof(comm));
     
     // 2. 白名单过滤（如果启用）
-    __u64 whitelist_enabled = get_config_value(CONFIG_WHITELIST_ENABLED);
-    if (whitelist_enabled == 1) {
-        __u8 *allowed = bpf_map_lookup_elem(&sentinel_whitelist, comm);
+    __u64 exclude_enabled = get_config_value(CONFIG_EXCLUDE_COMMS);
+    if (exclude_enabled == 1) {
+        __u8 *allowed = bpf_map_lookup_elem(&sentinel_exclude_comms, comm);
         if (allowed && *allowed == 1) {
             return 0;
         }

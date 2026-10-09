@@ -460,7 +460,7 @@ func (a *Agent) Shutdown() {
 		log.Printf("🧹 清理 %s pin", p.Name)
 		os.RemoveAll(pinBase + "/" + p.Name + "_prog")
 		os.RemoveAll(pinBase + "/" + p.Name + "_events")
-		os.RemoveAll(pinBase + "/" + p.Name + "_exec_whitelist")
+		os.RemoveAll(pinBase + "/" + p.Name + "_exec_exclude_comms")
 		os.RemoveAll(pinBase + "/" + p.Name + "_agent_heartbeat")
 		os.RemoveAll(pinBase + "/" + p.Name + "_tcp_conn_stats")
 	}

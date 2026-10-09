@@ -9,6 +9,7 @@ package rulessvc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -82,6 +83,75 @@ func (s *Service) GetVersion(ctx context.Context) (int64, string, error) {
 // 无规则时返回 (nil, nil)
 func (s *Service) GetFull(ctx context.Context) (*psql.AgentRuleRecord, error) {
 	return s.repo.GetLatestAgentRules(ctx)
+}
+
+// RebuildFromDB 从 DB 读排除名单表 + 现有规则，合并成新 RuleSet 并 Publish
+//
+// 用途：探针排除名单 handler 的 Add/Remove 后调用，把变化同步到 agent_rules
+func (s *Service) RebuildFromDB(ctx context.Context, createdBy string) error {
+	// 1. 读排除名单
+	excludeComms, err := s.repo.ListProbeExcludeComms(ctx)
+	if err != nil {
+		return fmt.Errorf("读排除名单失败: %w", err)
+	}
+
+	// 2. 读当前最新 RuleSet（保留 file_access 等其他规则）
+	rec, err := s.repo.GetLatestAgentRules(ctx)
+	if err != nil {
+		return fmt.Errorf("读当前规则失败: %w", err)
+	}
+
+	var rs *rules.RuleSet
+	if rec != nil && len(rec.Content) > 0 {
+		var loaded rules.RuleSet
+		if err := json.Unmarshal(rec.Content, &loaded); err != nil {
+			return fmt.Errorf("解析现有规则失败: %w", err)
+		}
+		rs = &loaded
+	} else {
+		// 无现有规则：用默认基础
+		rs = defaultRules()
+	}
+
+	// 3. 合并排除名单到 Exec.Exclude（语义：排除 comm）
+	if rs.Exec == nil {
+		rs.Exec = &rules.ExecRules{}
+	}
+	rs.Exec.Exclude = &rules.ExecExclude{
+		Comms: excludeComms,
+	}
+
+	// 4. 清空 Version，让 Publish 自动自增
+	rs.Version = 0
+
+	// 5. Publish
+	_, err = s.Publish(ctx, rs, createdBy)
+	return err
+}
+
+// defaultRules 首次无规则时的默认内容
+func defaultRules() *rules.RuleSet {
+	return &rules.RuleSet{
+		FileAccess: &rules.FileAccessRules{
+			Rules: &rules.FileAccessRulesInner{
+				SensitiveExact: []string{
+					"/etc/shadow",
+					"/etc/passwd",
+					"/etc/sudoers",
+				},
+				SensitivePrefix: []string{
+					"/root/.ssh/",
+					"/home/",
+					"/var/log/auth/",
+				},
+			},
+		},
+		TCP: &rules.TCPRules{
+			Rules: &rules.TCPRulesInner{
+				SensitivePorts: []uint16{22, 3389, 445, 21, 1433, 3306, 6379, 5985, 8080, 8443},
+			},
+		},
+	}
 }
 
 // EnsureDefault 首次启动时若无规则，自举默认规则

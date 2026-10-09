@@ -88,15 +88,15 @@ func (p *ExecProbe) PreCheck(caps *probe.AgentCapabilities) error {
 var _ framework.PreChecker = (*ExecProbe)(nil)
 
 // ApplyConfig 实现 framework.ConfigApplier
-// exec 探针目前只用到 whitelist（comm 白名单）
+// exec 探针目前只用到 exclude（排除 comm 名单）
 func (p *ExecProbe) ApplyConfig(rs *rules.RuleSet) error {
-	if rs.Exec == nil || rs.Exec.Whitelist == nil {
+	if rs.Exec == nil || rs.Exec.Exclude == nil {
 		return nil
 	}
 	if p.probe == nil {
 		return nil // 未加载，静默跳过
 	}
-	return p.probe.UpdateWhitelist(rs.Exec.Whitelist.ExcludeComms)
+	return p.probe.UpdateExcludeComms(rs.Exec.Exclude.Comms)
 }
 
 var _ framework.ConfigApplier = (*ExecProbe)(nil)

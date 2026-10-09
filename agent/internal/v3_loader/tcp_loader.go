@@ -13,10 +13,10 @@ import (
 
 // ConfigKey 配置枚举
 const (
-	ConfigCollectMode      uint32 = 0
-	ConfigWhitelistEnabled uint32 = 1
-	ConfigMaxEntries       uint32 = 2
-	ConfigAgentHash        uint32 = 3
+	ConfigCollectMode  uint32 = 0
+	ConfigExcludeComms uint32 = 1
+	ConfigMaxEntries   uint32 = 2
+	ConfigAgentHash    uint32 = 3
 )
 
 // CollectMode 采集模式
@@ -75,12 +75,12 @@ type TCPProbe struct {
 }
 
 type tcpObjects struct {
-	TraceConnect      *ebpf.Program `ebpf:"trace_connect"`
-	ConfigMap         *ebpf.Map     `ebpf:"config_map"`
-	SentinelEvents    *ebpf.Map     `ebpf:"sentinel_events"`
-	SentinelWhitelist *ebpf.Map     `ebpf:"sentinel_whitelist"`
-	PidConnStats      *ebpf.Map     `ebpf:"pid_conn_stats"`
-	ConnDetails       *ebpf.Map     `ebpf:"conn_details"`
+	TraceConnect         *ebpf.Program `ebpf:"trace_connect"`
+	ConfigMap            *ebpf.Map     `ebpf:"config_map"`
+	SentinelEvents       *ebpf.Map     `ebpf:"sentinel_events"`
+	SentinelExcludeComms *ebpf.Map     `ebpf:"sentinel_exclude_comms"`
+	PidConnStats         *ebpf.Map     `ebpf:"pid_conn_stats"`
+	ConnDetails          *ebpf.Map     `ebpf:"conn_details"`
 }
 
 // NewTCPProbe 创建 TCP 探针
@@ -113,6 +113,13 @@ func (p *TCPProbe) Load() error {
 	var value uint64 = uint64(p.agentHash)
 	if err := p.objs.ConfigMap.Put(&key, &value); err != nil {
 		return fmt.Errorf("写入 agent_hash 失败: %w", err)
+	}
+
+	// 启用排除列表
+	var wlKey uint32 = ConfigExcludeComms
+	var wlVal uint64 = 1
+	if err := p.objs.ConfigMap.Put(&wlKey, &wlVal); err != nil {
+		log.Printf("⚠️ 写 ConfigExcludeComms 失败: %v", err)
 	}
 
 	// 默认计数模式
@@ -193,16 +200,16 @@ func (p *TCPProbe) SetObservationLevel(level uint64) error {
 	return p.objs.ConfigMap.Put(&key, &level)
 }
 
-// UpdateWhitelist 更新白名单
-func (p *TCPProbe) UpdateWhitelist(processNames []string) error {
-	if p.objs == nil || p.objs.SentinelWhitelist == nil {
+// UpdateExcludeComms 更新白名单
+func (p *TCPProbe) UpdateExcludeComms(processNames []string) error {
+	if p.objs == nil || p.objs.SentinelExcludeComms == nil {
 		return nil
 	}
 	for _, name := range processNames {
 		var key [16]byte
 		copy(key[:], name)
 		var value uint8 = 1
-		if err := p.objs.SentinelWhitelist.Put(&key, &value); err != nil {
+		if err := p.objs.SentinelExcludeComms.Put(&key, &value); err != nil {
 			return err
 		}
 	}

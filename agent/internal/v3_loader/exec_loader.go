@@ -22,12 +22,12 @@ type ExecProbe struct {
 }
 
 type execObjects struct {
-	TraceExecve      *ebpf.Program `ebpf:"trace_execve"`
-	ConfigMap        *ebpf.Map     `ebpf:"config_map"`
-	SentinelEvents   *ebpf.Map     `ebpf:"exec_events"`
-	SentinelWhitelist *ebpf.Map    `ebpf:"sentinel_whitelist"`
-	PidCorrelations  *ebpf.Map     `ebpf:"pid_correlations"`
-	PidPpidMap       *ebpf.Map     `ebpf:"pid_ppid_map"`
+	TraceExecve          *ebpf.Program `ebpf:"trace_execve"`
+	ConfigMap            *ebpf.Map     `ebpf:"config_map"`
+	SentinelEvents       *ebpf.Map     `ebpf:"exec_events"`
+	SentinelExcludeComms *ebpf.Map     `ebpf:"sentinel_exclude_comms"`
+	PidCorrelations      *ebpf.Map     `ebpf:"pid_correlations"`
+	PidPpidMap           *ebpf.Map     `ebpf:"pid_ppid_map"`
 }
 
 // NewExecProbe 创建 exec 探针
@@ -60,6 +60,13 @@ func (p *ExecProbe) Load() error {
 	var value uint64 = uint64(p.agentHash)
 	if err := p.objs.ConfigMap.Put(&key, &value); err != nil {
 		return fmt.Errorf("写入 agent_hash 失败: %w", err)
+	}
+
+	// 启用排除列表
+	var wlKey uint32 = ConfigExcludeComms
+	var wlVal uint64 = 1
+	if err := p.objs.ConfigMap.Put(&wlKey, &wlVal); err != nil {
+		log.Printf("⚠️ 写 ConfigExcludeComms 失败: %v", err)
 	}
 
 	// 手动 attach
@@ -120,16 +127,16 @@ func (p *ExecProbe) GetPidPpidMap() *ebpf.Map {
 	return nil
 }
 
-// UpdateWhitelist 更新白名单
-func (p *ExecProbe) UpdateWhitelist(processNames []string) error {
-	if p.objs == nil || p.objs.SentinelWhitelist == nil {
+// UpdateExcludeComms 更新白名单
+func (p *ExecProbe) UpdateExcludeComms(processNames []string) error {
+	if p.objs == nil || p.objs.SentinelExcludeComms == nil {
 		return nil
 	}
 	for _, name := range processNames {
 		var key [16]byte
 		copy(key[:], name)
 		var value uint8 = 1
-		if err := p.objs.SentinelWhitelist.Put(&key, &value); err != nil {
+		if err := p.objs.SentinelExcludeComms.Put(&key, &value); err != nil {
 			return err
 		}
 	}

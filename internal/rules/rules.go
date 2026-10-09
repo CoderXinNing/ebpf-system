@@ -12,7 +12,7 @@
 // 结构演进：
 //
 //	v1: sensitive_paths（扁平，遗留）
-//	v2: 探针分节 + 每节 rules/whitelist
+//	v2: 探针分节 + 每节 rules/exclude
 package rules
 
 import (
@@ -44,8 +44,8 @@ type SensitivePaths struct {
 
 // FileAccessRules file_access 探针规则
 type FileAccessRules struct {
-	Rules     *FileAccessRulesInner `json:"rules,omitempty"`
-	Whitelist *FileAccessWhitelist  `json:"whitelist,omitempty"`
+	Rules   *FileAccessRulesInner `json:"rules,omitempty"`
+	Exclude *FileAccessExclude    `json:"exclude,omitempty"`
 }
 
 type FileAccessRulesInner struct {
@@ -53,36 +53,39 @@ type FileAccessRulesInner struct {
 	SensitivePrefix []string `json:"sensitive_prefix,omitempty"`
 }
 
-type FileAccessWhitelist struct {
-	ExcludeComms []string `json:"exclude_comms,omitempty"`
+// FileAccessExclude file_access 探针排除名单
+type FileAccessExclude struct {
+	Comms []string `json:"comms,omitempty"`
 }
 
 // ExecRules exec 探针规则
 type ExecRules struct {
-	Rules     *ExecRulesInner `json:"rules,omitempty"`
-	Whitelist *ExecWhitelist  `json:"whitelist,omitempty"`
+	Rules   *ExecRulesInner `json:"rules,omitempty"`
+	Exclude *ExecExclude    `json:"exclude,omitempty"`
 }
 
 type ExecRulesInner struct {
 	MinCmdlineLen int `json:"min_cmdline_len,omitempty"`
 }
 
-type ExecWhitelist struct {
-	ExcludeComms []string `json:"exclude_comms,omitempty"`
+// ExecExclude exec 探针排除名单
+type ExecExclude struct {
+	Comms []string `json:"comms,omitempty"`
 }
 
 // TCPRules tcp 探针规则
 type TCPRules struct {
-	Rules     *TCPRulesInner `json:"rules,omitempty"`
-	Whitelist *TCPWhitelist  `json:"whitelist,omitempty"`
+	Rules   *TCPRulesInner `json:"rules,omitempty"`
+	Exclude *TCPExclude    `json:"exclude,omitempty"`
 }
 
 type TCPRulesInner struct {
 	SensitivePorts []uint16 `json:"sensitive_ports,omitempty"`
 }
 
-type TCPWhitelist struct {
-	ExcludeIPs []string `json:"exclude_ips,omitempty"`
+// TCPExclude tcp 探针排除名单
+type TCPExclude struct {
+	IPs []string `json:"ips,omitempty"`
 }
 
 // ========== 常量 ==========
@@ -198,18 +201,18 @@ func validateFileAccess(fa *FileAccessRules) error {
 			return fmt.Errorf("file_access.rules.sensitive_prefix 必须以 / 结尾: %q", p)
 		}
 	}
-	if fa.Whitelist != nil {
-		if len(fa.Whitelist.ExcludeComms) > MaxEntries {
-			return fmt.Errorf("file_access.whitelist.exclude_comms 超限")
+	if fa.Exclude != nil {
+		if len(fa.Exclude.Comms) > MaxEntries {
+			return fmt.Errorf("file_access.exclude.comms 超限")
 		}
 	}
 	return nil
 }
 
 func validateExec(e *ExecRules) error {
-	if e.Whitelist != nil {
-		if len(e.Whitelist.ExcludeComms) > MaxEntries {
-			return fmt.Errorf("exec.whitelist.exclude_comms 超限")
+	if e.Exclude != nil {
+		if len(e.Exclude.Comms) > MaxEntries {
+			return fmt.Errorf("exec.exclude.comms 超限")
 		}
 	}
 	return nil
@@ -221,9 +224,9 @@ func validateTCP(t *TCPRules) error {
 			return fmt.Errorf("tcp.rules.sensitive_ports 超限")
 		}
 	}
-	if t.Whitelist != nil {
-		if len(t.Whitelist.ExcludeIPs) > MaxEntries {
-			return fmt.Errorf("tcp.whitelist.exclude_ips 超限")
+	if t.Exclude != nil {
+		if len(t.Exclude.IPs) > MaxEntries {
+			return fmt.Errorf("tcp.exclude.ips 超限")
 		}
 	}
 	return nil

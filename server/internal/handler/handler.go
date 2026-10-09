@@ -17,31 +17,32 @@ type Handler struct {
 	// GRPCPort Server 的 gRPC 监听端口（enrollment 时回报给 Agent）
 	GRPCPort int
 
-	movedGroups           map[string]string
-	Store                 *store.Store
-	Auth                  *auth.AuthManager
-	Agents                map[string]*AgentInfo
-	Events                []ProbeEvent
-	Mu                    sync.RWMutex
-	EventMu               sync.RWMutex
-	sendCmd               func(agentID string, cmd *pb.ProbeCommand) error
-	SaveEventFunc         func(evt ProbeEvent) error                        // PSQL 模式注入
-	SaveAgentFunc         func(agent AgentInfo) error                       // PSQL 模式注入
-	ListAlertsFunc        func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
-	UpdateAlertStatusFunc func(ids []int64, status string) error            // 告警状态更新
-	ListWhitelistFunc     func() ([]string, error)
-	AddWhitelistFunc      func(processName, reason string) error
-	RemoveWhitelistFunc   func(processName string) error
-	Whitelist             []string                                                                // 白名单（进程名列表）
-	WhitelistUpdateFunc   func([]string)                                                          // 白名单更新回调
-	ListStarEventsFunc    func(corrID string) ([]map[string]interface{}, error)                   // PSQL 攻击链查询
-	GetLatestAssetFunc    func(agentID string) (interface{}, interface{}, interface{}, error)     // PSQL 资产查询
-	SaveAssetFunc         func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
-	GetAllAssetsFunc      func(agentID string) (map[string]interface{}, error)                    // 所有资产类型
-	SaveTypedAssetFunc    func(agentID, assetType, assetName string, data interface{}) error      // 保存指定类型资产
-	GetSettingFunc        func(key string) (string, error)
-	SetSettingFunc        func(key, value string) error
-	ListSettingsFunc      func() (map[string]string, error)
+	movedGroups                 map[string]string
+	Store                       *store.Store
+	Auth                        *auth.AuthManager
+	Agents                      map[string]*AgentInfo
+	Events                      []ProbeEvent
+	Mu                          sync.RWMutex
+	EventMu                     sync.RWMutex
+	sendCmd                     func(agentID string, cmd *pb.ProbeCommand) error
+	SaveEventFunc               func(evt ProbeEvent) error                        // PSQL 模式注入
+	SaveAgentFunc               func(agent AgentInfo) error                       // PSQL 模式注入
+	ListAlertsFunc              func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
+	UpdateAlertStatusFunc       func(ids []int64, status string) error            // 告警状态更新
+	ListProbeExcludeCommsFunc   func() ([]string, error)
+	AddProbeExcludeCommsFunc    func(comm, reason string) error
+	RemoveProbeExcludeCommsFunc func(comm string) error
+	ProbeExcludeComms           []string // 探针排除名单（comm 列表）
+	ProbeExcludeCommsUpdateFunc func([]string)
+	RebuildRulesFunc            func() error                                                            // 排除名单更新回调
+	ListStarEventsFunc          func(corrID string) ([]map[string]interface{}, error)                   // PSQL 攻击链查询
+	GetLatestAssetFunc          func(agentID string) (interface{}, interface{}, interface{}, error)     // PSQL 资产查询
+	SaveAssetFunc               func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
+	GetAllAssetsFunc            func(agentID string) (map[string]interface{}, error)                    // 所有资产类型
+	SaveTypedAssetFunc          func(agentID, assetType, assetName string, data interface{}) error      // 保存指定类型资产
+	GetSettingFunc              func(key string) (string, error)
+	SetSettingFunc              func(key, value string) error
+	ListSettingsFunc            func() (map[string]string, error)
 
 	// Enrollment（Day 1-3）
 	GenerateTokenFunc func(name string, groupID *int64, maxUses int, ttlHours int, createdBy string) (string, error)
@@ -151,24 +152,24 @@ func (h *Handler) SetListStarEventsFunc(fn func(string) ([]map[string]interface{
 	h.ListStarEventsFunc = fn
 }
 
-// SetWhitelistUpdateFunc 设置白名单更新回调
-func (h *Handler) SetWhitelistUpdateFunc(fn func([]string)) {
-	h.WhitelistUpdateFunc = fn
+// SetProbeExcludeCommsUpdateFunc 设置探针排除名单更新回调
+func (h *Handler) SetProbeExcludeCommsUpdateFunc(fn func([]string)) {
+	h.ProbeExcludeCommsUpdateFunc = fn
 }
 
-// SetListWhitelistFunc 设置白名单查询回调
-func (h *Handler) SetListWhitelistFunc(fn func() ([]string, error)) {
-	h.ListWhitelistFunc = fn
+// SetListProbeExcludeCommsFunc 设置探针排除名单查询回调
+func (h *Handler) SetListProbeExcludeCommsFunc(fn func() ([]string, error)) {
+	h.ListProbeExcludeCommsFunc = fn
 }
 
-// SetAddWhitelistFunc 设置白名单添加回调
-func (h *Handler) SetAddWhitelistFunc(fn func(string, string) error) {
-	h.AddWhitelistFunc = fn
+// SetAddProbeExcludeCommsFunc 设置探针排除名单添加回调
+func (h *Handler) SetAddProbeExcludeCommsFunc(fn func(string, string) error) {
+	h.AddProbeExcludeCommsFunc = fn
 }
 
-// SetRemoveWhitelistFunc 设置白名单移除回调
-func (h *Handler) SetRemoveWhitelistFunc(fn func(string) error) {
-	h.RemoveWhitelistFunc = fn
+// SetRemoveProbeExcludeCommsFunc 设置探针排除名单移除回调
+func (h *Handler) SetRemoveProbeExcludeCommsFunc(fn func(string) error) {
+	h.RemoveProbeExcludeCommsFunc = fn
 }
 
 // SetUpdateAlertStatusFunc 设置告警状态更新回调
@@ -284,9 +285,9 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			c.JSON(200, gin.H{"success": true})
 		})
 		api.GET("/assets/category", h.AssetsByCategory)
-		api.GET("/whitelist", h.rbacMiddleware("probes", "read"), h.ListWhitelist)
-		api.POST("/whitelist", h.rbacMiddleware("probes", "write"), h.AddWhitelist)
-		api.DELETE("/whitelist/:process_name", h.rbacMiddleware("probes", "write"), h.RemoveWhitelist)
+		api.GET("/probe-exclude-comms", h.rbacMiddleware("probes", "read"), h.ListProbeExcludeComms)
+		api.POST("/probe-exclude-comms", h.rbacMiddleware("probes", "write"), h.AddProbeExcludeComms)
+		api.DELETE("/probe-exclude-comms/:comm", h.rbacMiddleware("probes", "write"), h.RemoveProbeExcludeComms)
 
 		api.GET("/alerts", func(c *gin.Context) {
 			log.Printf("DEBUG: ListAlertsFunc = %v", h.ListAlertsFunc != nil)

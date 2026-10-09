@@ -36,7 +36,7 @@ struct sentinel_event_header {
 // ============================================
 enum config_key {
     CONFIG_COLLECT_MODE = 0,      // 采集模式：0=计数，1=明细
-    CONFIG_WHITELIST_ENABLED = 1, // 白名单开关
+    CONFIG_EXCLUDE_COMMS = 1, // 排除名单开关
     CONFIG_MAX_ENTRIES = 2,       // 最大连接数阈值
     CONFIG_AGENT_HASH = 3,        // Agent 哈希值
     CONFIG_OBSERVATION_LEVEL = 4, // 观察等级：0=PASSIVE, 1=REDUCED, 2=FULL
@@ -77,7 +77,7 @@ struct {
     __uint(max_entries, 4096);
     __type(key, char[16]);
     __type(value, __u8);
-} sentinel_whitelist SEC(".maps");
+} sentinel_exclude_comms SEC(".maps");
 
 // ============================================
 // 敏感路径动态规则（file_access 使用）

@@ -27,7 +27,7 @@ type bashObjects struct {
 	TraceReadline    *ebpf.Program `ebpf:"trace_readline"`
 	ConfigMap        *ebpf.Map     `ebpf:"config_map"`
 	BashEvents       *ebpf.Map     `ebpf:"bash_events"`
-	SentinelWhitelist *ebpf.Map    `ebpf:"sentinel_whitelist"`
+	SentinelExcludeComms *ebpf.Map    `ebpf:"sentinel_exclude_comms"`
 }
 
 // NewBashProbe 创建 bash 探针
@@ -61,6 +61,13 @@ func (p *BashProbe) Load() error {
 	var value uint64 = uint64(p.agentHash)
 	if err := p.objs.ConfigMap.Put(&key, &value); err != nil {
 		return fmt.Errorf("写入 agent_hash 失败: %w", err)
+	}
+
+	// 启用排除列表（exclude_comms）
+	var wlKey uint32 = ConfigExcludeComms
+	var wlVal uint64 = 1
+	if err := p.objs.ConfigMap.Put(&wlKey, &wlVal); err != nil {
+		log.Printf("⚠️ 写 ConfigExcludeComms 失败: %v", err)
 	}
 
 	// uretprobe attach
@@ -111,16 +118,16 @@ func (p *BashProbe) Load() error {
 	return nil
 }
 
-// UpdateWhitelist 更新白名单
-func (p *BashProbe) UpdateWhitelist(processNames []string) error {
-	if p.objs == nil || p.objs.SentinelWhitelist == nil {
+// UpdateExcludeComms 更新白名单
+func (p *BashProbe) UpdateExcludeComms(processNames []string) error {
+	if p.objs == nil || p.objs.SentinelExcludeComms == nil {
 		return nil
 	}
 	for _, name := range processNames {
 		var key [16]byte
 		copy(key[:], name)
 		var value uint8 = 1
-		if err := p.objs.SentinelWhitelist.Put(&key, &value); err != nil {
+		if err := p.objs.SentinelExcludeComms.Put(&key, &value); err != nil {
 			return err
 		}
 	}

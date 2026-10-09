@@ -287,14 +287,14 @@ func main() {
 				}
 				return result, nil
 			})
-			h.SetListWhitelistFunc(func() ([]string, error) {
-				return psqlDB.ListWhitelist(context.Background())
+			h.SetListProbeExcludeCommsFunc(func() ([]string, error) {
+				return psqlDB.ListProbeExcludeComms(context.Background())
 			})
-			h.SetAddWhitelistFunc(func(processName, reason string) error {
-				return psqlDB.AddWhitelist(context.Background(), processName, reason, "admin")
+			h.SetAddProbeExcludeCommsFunc(func(comm, reason string) error {
+				return psqlDB.AddProbeExcludeComms(context.Background(), comm, reason, "admin")
 			})
-			h.SetRemoveWhitelistFunc(func(processName string) error {
-				return psqlDB.RemoveWhitelist(context.Background(), processName)
+			h.SetRemoveProbeExcludeCommsFunc(func(comm string) error {
+				return psqlDB.RemoveProbeExcludeComms(context.Background(), comm)
 			})
 			h.SetUpdateAlertStatusFunc(func(ids []int64, status string) error {
 				return psqlDB.UpdateAlertStatus(context.Background(), ids, status)
@@ -553,16 +553,16 @@ func main() {
 	})
 	grpcSvc.SetAlertEngine(alertEngine)
 
-	// 启动时从 PSQL 加载白名单
+	// 启动时从 PSQL 加载探针排除名单
 	go func() {
 		time.Sleep(2 * time.Second)
-		list, err := psqlDB.ListWhitelist(context.Background())
+		list, err := psqlDB.ListProbeExcludeComms(context.Background())
 		if err == nil && len(list) > 0 {
 			h.Mu.Lock()
-			h.Whitelist = list
+			h.ProbeExcludeComms = list
 			h.Mu.Unlock()
 			alertEngine.SetWhitelist(list)
-			log.Printf("📥 白名单已加载: %d 条", len(list))
+			log.Printf("📥 探针排除名单已加载: %d 条", len(list))
 		}
 	}()
 	_ = alert.NewCorrelationEngine("server/configs/correlation.toml")

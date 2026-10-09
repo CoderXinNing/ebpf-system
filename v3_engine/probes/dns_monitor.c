@@ -30,9 +30,9 @@ int trace_udp_sendmsg(struct pt_regs *ctx) {
     // 这里用 sendmsg 的 sockaddr 判断端口太复杂，先抓所有
 
     // 白名单过滤
-    __u64 whitelist_enabled = get_config_value(CONFIG_WHITELIST_ENABLED);
-    if (whitelist_enabled == 1) {
-        __u8 *allowed = bpf_map_lookup_elem(&sentinel_whitelist, comm);
+    __u64 exclude_enabled = get_config_value(CONFIG_EXCLUDE_COMMS);
+    if (exclude_enabled == 1) {
+        __u8 *allowed = bpf_map_lookup_elem(&sentinel_exclude_comms, comm);
         if (allowed && *allowed == 1) {
             return 0;
         }

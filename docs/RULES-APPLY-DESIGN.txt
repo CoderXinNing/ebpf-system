@@ -26,7 +26,7 @@ Agent：
 
 【数据存储】
 一个 JSON（不分文件），存 DB agent_rules
-内部结构：探针分节 + 每节 rules/whitelist
+内部结构：探针分节 + 每节 rules/exclude
 
 {
   "version": 2,
@@ -35,17 +35,17 @@ Agent：
       "sensitive_exact": [...],
       "sensitive_prefix": [...]
     },
-    "whitelist": {
-      "exclude_comms": ["cron", "logrotate"]
+    "exclude": {
+      "comms": ["cron", "logrotate"]
     }
   },
   "exec": {
     "rules": {"min_cmdline_len": 1},
-    "whitelist": {"exclude_comms": ["systemd"]}
+    "exclude": {"comms": ["systemd"]}
   },
   "tcp": {
     "rules": {"sensitive_ports": [...]},
-    "whitelist": {"exclude_ips": [...]}
+    "exclude": {"ips": [...]}
   }
 }
 

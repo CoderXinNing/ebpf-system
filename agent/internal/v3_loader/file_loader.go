@@ -40,7 +40,7 @@ type fileObjects struct {
 	TraceExit         *ebpf.Program `ebpf:"trace_exit"`
 	ConfigMap         *ebpf.Map     `ebpf:"config_map"`
 	FileEvents        *ebpf.Map     `ebpf:"file_events"`
-	SentinelWhitelist *ebpf.Map     `ebpf:"sentinel_whitelist"`
+	SentinelExcludeComms *ebpf.Map     `ebpf:"sentinel_exclude_comms"`
 	SensitiveExact    *ebpf.Map     `ebpf:"sensitive_exact"`
 	SensitivePrefixes *ebpf.Map     `ebpf:"sensitive_prefixes"`
 	AgentPids         *ebpf.Map     `ebpf:"agent_pids"`
@@ -76,6 +76,13 @@ func (p *FileProbe) Load() error {
 	var value uint64 = uint64(p.agentHash)
 	if err := p.objs.ConfigMap.Put(&key, &value); err != nil {
 		return fmt.Errorf("写入 agent_hash 失败: %w", err)
+	}
+
+	// 启用排除列表（exclude_comms）
+	var wlKey uint32 = ConfigExcludeComms
+	var wlVal uint64 = 1
+	if err := p.objs.ConfigMap.Put(&wlKey, &wlVal); err != nil {
+		log.Printf("⚠️ 写 ConfigExcludeComms 失败: %v", err)
 	}
 
 	// 清空 agent_pids（防老 Agent 残留死 PID 累积）
@@ -284,16 +291,16 @@ func (p *FileProbe) CleanupDeadPids() (int, error) {
 	return cleaned, nil
 }
 
-// UpdateWhitelist 更新白名单
-func (p *FileProbe) UpdateWhitelist(processNames []string) error {
-	if p.objs == nil || p.objs.SentinelWhitelist == nil {
+// UpdateExcludeComms 更新白名单
+func (p *FileProbe) UpdateExcludeComms(processNames []string) error {
+	if p.objs == nil || p.objs.SentinelExcludeComms == nil {
 		return nil
 	}
 	for _, name := range processNames {
 		var key [16]byte
 		copy(key[:], name)
 		var value uint8 = 1
-		if err := p.objs.SentinelWhitelist.Put(&key, &value); err != nil {
+		if err := p.objs.SentinelExcludeComms.Put(&key, &value); err != nil {
 			return err
 		}
 	}

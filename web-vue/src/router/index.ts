@@ -38,9 +38,9 @@ const router = createRouter({
       component: () => import('../views/ProbeView.vue'),
     },
     {
-      path: '/whitelist',
-      name: 'Whitelist',
-      component: () => import('../views/WhitelistView.vue'),
+      path: '/probe-exclude-comms',
+      name: 'ProbeExcludeComms',
+      component: () => import('../views/ProbeExcludeCommsView.vue'),
     },
     {
       path: '/deploy',

@@ -86,9 +86,9 @@ int trace_execve(struct trace_event_raw_sys_enter *args) {
     bpf_get_current_comm(&comm, sizeof(comm));
 
     // 白名单过滤
-    __u64 whitelist_enabled = get_config_value(CONFIG_WHITELIST_ENABLED);
-    if (whitelist_enabled == 1) {
-        __u8 *allowed = bpf_map_lookup_elem(&sentinel_whitelist, comm);
+    __u64 exclude_enabled = get_config_value(CONFIG_EXCLUDE_COMMS);
+    if (exclude_enabled == 1) {
+        __u8 *allowed = bpf_map_lookup_elem(&sentinel_exclude_comms, comm);
         if (allowed && *allowed == 1) {
             return 0;
         }
