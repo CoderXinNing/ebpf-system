@@ -113,6 +113,23 @@ func (am *AuthManager) ValidateAndTouch(ctx context.Context, tokenStr string) (*
 	return user, sess.ID, nil
 }
 
+// GetSessionByID 按主键查询会话详情
+func (am *AuthManager) GetSessionByID(ctx context.Context, id int64) (*Session, error) {
+	// 直接用 sessionStore 接口，但需要按 id 查（接口里没有）
+	// 简化：通过 pool 直接查
+	var sess Session
+	err := am.pool.QueryRow(ctx,
+		`SELECT id, user_id, session_id_hash, COALESCE(ip,''), COALESCE(user_agent,''),
+		        created_at, expires_at, revoked_at, last_activity_at, keepalive
+		 FROM sessions WHERE id = $1`, id,
+	).Scan(&sess.ID, &sess.UserID, &sess.SessionIDHash, &sess.IP, &sess.UserAgent,
+		&sess.CreatedAt, &sess.ExpiresAt, &sess.RevokedAt, &sess.LastActivityAt, &sess.Keepalive)
+	if err != nil {
+		return nil, err
+	}
+	return &sess, nil
+}
+
 // GetSessionConfig 返回前端需要的会话配置
 //
 // 返回：idleMinutes / absoluteHours

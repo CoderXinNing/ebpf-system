@@ -87,6 +87,12 @@
             <div class="form-hint">enrollment_tokens 中已过期/已撤销数据的保留时长</div>
           </div>
 
+          <n-space justify="end" style="margin-top: 8px;">
+            <n-button size="small" @click="handleRestoreLogDefaults">
+              恢复默认
+            </n-button>
+          </n-space>
+
           <n-divider />
 
           <div class="form-item">
@@ -320,6 +326,26 @@ const cleanupDays = ref<Record<string, number>>({
   audit_logs: 180,
   tokens: 180,
 })
+
+const LOG_DEFAULTS = {
+  event_days: 180,
+  alert_days: 90,
+  audit_days: 180,
+  token_days: 180,
+}
+
+function handleRestoreLogDefaults() {
+  dialog.warning({
+    title: '恢复默认',
+    content: '将保留天数重置为系统默认值（事件 180 / 告警 90 / 审计 180 / 令牌 180）。仅修改表单，需点击"保存"才生效。',
+    positiveText: '恢复',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      logSettings.value = { ...LOG_DEFAULTS }
+      message.info('已恢复默认值，请点击"保存"生效')
+    },
+  })
+}
 
 async function handleCleanup(target: CleanupTarget, mode: CleanupMode) {
   const days = mode === 'before_days' ? cleanupDays.value[target] : 0

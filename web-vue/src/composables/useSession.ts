@@ -51,13 +51,35 @@ export function useSession() {
   // ---------- 心跳 ----------
   function startHeartbeat() {
     if (heartbeatTimer) return
+    // 立即拉一次配置 + 心跳
+    syncConfig()
     heartbeatTimer = window.setInterval(async () => {
       try {
         await http.post('/session/keepalive')
+        // 同步配置（配置被改后最多 5 分钟前端感知）
+        await syncConfig()
       } catch {
         // 401 由 http.ts 拦截器处理（跳登录页）
       }
     }, HEARTBEAT_INTERVAL_MS)
+  }
+
+  // 从后端拉会话配置，更新本地 idle / keepalive
+  async function syncConfig() {
+    try {
+      const { data } = await http.get('/session/config')
+      if (data.idle_minutes) idleMinutes.value = data.idle_minutes
+      if (data.keepalive !== undefined) keepalive.value = data.keepalive
+      // 同步到 localStorage
+      const raw = localStorage.getItem('session')
+      const cfg = raw ? JSON.parse(raw) : {}
+      cfg.idle_minutes = data.idle_minutes
+      cfg.absolute_hours = data.absolute_hours
+      cfg.keepalive = data.keepalive
+      localStorage.setItem('session', JSON.stringify(cfg))
+    } catch {
+      // 网络错误或 401：忽略（401 由拦截器处理）
+    }
   }
 
   function stopHeartbeat() {
