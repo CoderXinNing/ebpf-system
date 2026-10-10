@@ -39,6 +39,19 @@ export function useSession() {
     } catch {}
   }
 
+  // 从后端拉取最新配置（管理员改动后同步）
+  async function syncConfig() {
+    try {
+      const { data } = await http.get('/session/config')
+      if (data.idle_minutes) idleMinutes.value = data.idle_minutes
+      if (data.heartbeat_enabled !== undefined) heartbeatEnabled.value = data.heartbeat_enabled
+      if (data.heartbeat_interval_seconds) heartbeatInterval.value = data.heartbeat_interval_seconds
+      saveConfig()
+    } catch {
+      // 401 由 http.ts 拦截器处理
+    }
+  }
+
   function saveConfig() {
     const cfg = {
       idle_minutes: idleMinutes.value,
@@ -51,9 +64,13 @@ export function useSession() {
   // ---------- 心跳 ----------
   function startHeartbeat() {
     if (heartbeatTimer) return
+    // 立即同步一次配置
+    syncConfig()
     heartbeatTimer = window.setInterval(async () => {
       try {
         await http.post('/session/keepalive')
+        // 每个心跳周期同步配置（idle / interval 可能被改）
+        await syncConfig()
       } catch {
         // 401 由 http.ts 拦截器处理
       }
@@ -124,6 +141,8 @@ export function useSession() {
   // ---------- 生命周期 ----------
   onMounted(() => {
     loadConfig()
+    // 拉一次最新配置（管理员改动后最多一次 mount 感知）
+    syncConfig()
     if (heartbeatEnabled.value) startHeartbeat()
 
     // 监听 http.ts 广播的活动事件
