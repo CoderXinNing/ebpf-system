@@ -12,7 +12,11 @@ import (
 
 // Login 用户登录
 func (h *Handler) Login(c *gin.Context) {
-	var req struct{ Username, Password string }
+	var req struct {
+		Username  string `json:"username"`
+		Password  string `json:"password"`
+		Keepalive bool   `json:"keepalive"`
+	}
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "请求格式错误"})
 		return
@@ -81,7 +85,7 @@ func (h *Handler) Login(c *gin.Context) {
 
 	// 创建会话
 	sessionID, dbID, err := h.Auth.CreateSession(
-		c.Request.Context(), user.ID, c.ClientIP(), c.Request.UserAgent(), false)
+		c.Request.Context(), user.ID, c.ClientIP(), c.Request.UserAgent(), req.Keepalive)
 	if err != nil {
 		log.Printf("⚠️ 创建会话失败: %v", err)
 		c.JSON(500, gin.H{"error": "创建会话失败"})
@@ -108,7 +112,16 @@ func (h *Handler) Login(c *gin.Context) {
 		EventRW:    audit.RWWrite,
 		Result:     audit.ResultSuccess,
 	})
-	c.JSON(200, gin.H{"token": token, "user": user})
+	idleMinutes, absoluteHours := h.Auth.GetSessionConfig(c.Request.Context())
+	c.JSON(200, gin.H{
+		"token": token,
+		"user":  user,
+		"session": gin.H{
+			"idle_minutes":   idleMinutes,
+			"absolute_hours": absoluteHours,
+			"keepalive":      req.Keepalive,
+		},
+	})
 }
 
 // ListUsers 用户列表

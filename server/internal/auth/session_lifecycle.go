@@ -113,6 +113,15 @@ func (am *AuthManager) ValidateAndTouch(ctx context.Context, tokenStr string) (*
 	return user, sess.ID, nil
 }
 
+// GetSessionConfig 返回前端需要的会话配置
+//
+// 返回：idleMinutes / absoluteHours
+func (am *AuthManager) GetSessionConfig(ctx context.Context) (int, int) {
+	idleMinutes := am.readIntConf(ctx, "session", "idle_minutes", 10)
+	absoluteHours := am.readIntConf(ctx, "session", "absolute_hours", 8)
+	return idleMinutes, absoluteHours
+}
+
 // RevokeSessionByID 撤销会话（logout 调用）
 func (am *AuthManager) RevokeSessionByID(ctx context.Context, sessionID int64) error {
 	return am.sessionStore.Revoke(ctx, sessionID)

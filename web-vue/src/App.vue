@@ -66,11 +66,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { connectWS, onWSMessage } from './api/ws'
 import { useRoute, useRouter } from 'vue-router'
+import { useSession } from './composables/useSession'
 import { NConfigProvider, NMessageProvider, NDialogProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme, lightTheme, NBadge, NPopover, NList, NListItem, NEmpty, NInput } from 'naive-ui'
 
 const route = useRoute()
 const router = useRouter()
 const isDark = ref(false)
+const { showWarning } = useSession()
 const notifications = ref<any[]>([])
 const globalSearch = ref('')
 
