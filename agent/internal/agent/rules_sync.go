@@ -284,6 +284,10 @@ func saveRulesCache(content []byte, sig string) error {
 	enc, err := localcrypto.Encrypt(content, paths.AgentIDFile())
 	if err != nil {
 		log.Printf("⚠️ 规则加密失败（降级明文）: %v", err)
+		// 删旧 rules.enc，避免下次启动 loadRulesCache 优先读到过期加密缓存
+		if rerr := os.Remove(paths.RulesEncFile()); rerr != nil && !os.IsNotExist(rerr) {
+			log.Printf("⚠️ 删除旧 rules.enc 失败: %v", rerr)
+		}
 		if werr := os.WriteFile(paths.RulesCacheFile(), content, 0600); werr != nil {
 			return werr
 		}

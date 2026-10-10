@@ -64,6 +64,10 @@ func saveProbeListCache(probes []*pb.ProbeInfo) error {
 	enc, err := localcrypto.Encrypt(plain, paths.AgentIDFile())
 	if err != nil {
 		log.Printf("⚠️ 探针名单加密失败（降级明文）: %v", err)
+		// 删旧 probes.enc，避免下次启动 loadProbeListCache 优先读到过期加密缓存
+		if rerr := os.Remove(paths.ProbeListEncFile()); rerr != nil && !os.IsNotExist(rerr) {
+			log.Printf("⚠️ 删除旧 probes.enc 失败: %v", rerr)
+		}
 		return writePlainProbeCache(plain)
 	}
 
