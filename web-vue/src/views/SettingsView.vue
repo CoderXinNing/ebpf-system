@@ -79,6 +79,42 @@
             </n-input-number>
             <div class="form-hint">audit_logs 表数据保留时长</div>
           </div>
+          <div class="form-item">
+            <div class="form-label">Token 保留天数</div>
+            <n-input-number v-model:value="logSettings.token_days" :min="1" :max="365" style="max-width: 200px">
+              <template #suffix>天</template>
+            </n-input-number>
+            <div class="form-hint">enrollment_tokens 中已过期/已撤销数据的保留时长</div>
+          </div>
+
+          <n-divider />
+
+          <div class="form-item">
+            <div class="form-label">手动清理数据</div>
+            <div class="form-hint" style="margin-bottom: 12px;">
+              仅影响历史数据，不影响后续采集。清理动作会记录到审计日志。
+            </div>
+            <n-space vertical :size="12">
+              <n-space v-for="t in cleanupTargets" :key="t.key" align="center" :size="8">
+                <n-text style="width: 100px;">{{ t.label }}</n-text>
+                <n-input-number
+                  v-model:value="cleanupDays[t.key]"
+                  :min="1"
+                  :max="3650"
+                  size="small"
+                  style="width: 120px;"
+                >
+                  <template #suffix>天前</template>
+                </n-input-number>
+                <n-button size="small" @click="handleCleanup(t.key, 'before_days')">
+                  清理 N 天前
+                </n-button>
+                <n-button size="small" type="error" ghost @click="handleCleanup(t.key, 'all')">
+                  清空全部
+                </n-button>
+              </n-space>
+            </n-space>
+          </div>
         </div>
 
         <!-- Agent 设置 -->
@@ -209,6 +245,7 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { NButton, NInput, NInputNumber, NSelect, NRadioGroup, NRadio, NSpace, NDivider, useMessage, NDataTable, NModal, NTag, useDialog } from 'naive-ui'
 import http from '../api/http'
+import { cleanup, type CleanupTarget, type CleanupMode } from '../api/admin'
 
 const message = useMessage()
 
@@ -254,9 +291,10 @@ const security = ref({
 
 // 日志
 const logSettings = ref({
-  event_days: 30,
+  event_days: 180,
   alert_days: 90,
   audit_days: 180,
+  token_days: 180,
 })
 
 // 用户管理
@@ -268,6 +306,44 @@ const showEditModal = ref(false)
 const newUser = ref({ username: '', password: '', role: 'viewer' })
 const editUser = ref({ id: 0, username: '', role: '', password: '' })
 const dialog = useDialog()
+
+// 数据清理
+const cleanupTargets = [
+  { key: 'events' as CleanupTarget, label: '事件（events）' },
+  { key: 'alerts' as CleanupTarget, label: '告警（alerts）' },
+  { key: 'audit_logs' as CleanupTarget, label: '审计（audit_logs）' },
+  { key: 'tokens' as CleanupTarget, label: '令牌（tokens）' },
+]
+const cleanupDays = ref<Record<string, number>>({
+  events: 180,
+  alerts: 90,
+  audit_logs: 180,
+  tokens: 180,
+})
+
+async function handleCleanup(target: CleanupTarget, mode: CleanupMode) {
+  const days = mode === 'before_days' ? cleanupDays.value[target] : 0
+  const label = cleanupTargets.find(t => t.key === target)?.label || target
+
+  const tip = mode === 'all'
+    ? `确认清空全部「${label}」数据？此操作不可恢复。`
+    : `确认清理「${label}」中 ${days} 天前的数据？`
+
+  dialog.warning({
+    title: '清理确认',
+    content: tip,
+    positiveText: '确认清理',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        const resp = await cleanup(target, mode, days)
+        message.success(`清理完成，影响 ${resp.affected} 条`)
+      } catch (err: any) {
+        message.error(err.response?.data?.error || '清理失败')
+      }
+    },
+  })
+}
 
 const roleOptions = [
   { label: '管理员 (admin)', value: 'admin' },
@@ -400,9 +476,10 @@ async function loadSettings() {
     // 日志设置
     const { data: logs } = await http.get('/log-settings')
     logSettings.value = {
-      event_days: parseInt(logs.event_days) || 30,
+      event_days: parseInt(logs.event_days) || 180,
       alert_days: parseInt(logs.alert_days) || 90,
       audit_days: parseInt(logs.audit_days) || 180,
+      token_days: parseInt(logs.token_days) || 180,
     }
   } catch (err) {
     console.error('加载设置失败:', err)
@@ -421,6 +498,7 @@ async function handleSave() {
         event_days: String(logSettings.value.event_days),
         alert_days: String(logSettings.value.alert_days),
         audit_days: String(logSettings.value.audit_days),
+        token_days: String(logSettings.value.token_days),
       })
     } else {
       message.info('无需保存')

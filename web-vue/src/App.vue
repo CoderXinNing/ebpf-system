@@ -4,6 +4,16 @@
     <n-message-provider>
       <router-view v-if="isLoginPage" />
       <n-layout v-else :style="{ minHeight: '100vh', background: isDark ? '#18181c' : '#f5f5f5' }">
+        <n-alert
+          v-if="showWarning"
+          type="warning"
+          :show-icon="true"
+          closable
+          @close="dismissWarning"
+          style="margin: 8px 24px 0; border-radius: 8px;"
+        >
+          会话即将过期，请继续操作或刷新页面
+        </n-alert>
         <n-layout-header bordered style="padding: 12px 24px !important; background: #fff !important">
           <n-space align="center" justify="space-between">
             <n-space align="center">
@@ -67,12 +77,16 @@ import { computed, onMounted, ref } from 'vue'
 import { connectWS, onWSMessage } from './api/ws'
 import { useRoute, useRouter } from 'vue-router'
 import { useSession } from './composables/useSession'
-import { NConfigProvider, NMessageProvider, NDialogProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme, lightTheme, NBadge, NPopover, NList, NListItem, NEmpty, NInput } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NDialogProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme, lightTheme, NBadge, NPopover, NList, NListItem, NEmpty, NInput, NAlert } from 'naive-ui'
 
 const route = useRoute()
 const router = useRouter()
 const isDark = ref(false)
 const { showWarning } = useSession()
+
+function dismissWarning() {
+  showWarning.value = false
+}
 const notifications = ref<any[]>([])
 const globalSearch = ref('')
 
