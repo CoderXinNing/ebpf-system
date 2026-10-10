@@ -111,6 +111,24 @@ AsterTrack 项目主文档
       - 提交：410af3c
       - 验证：Server 重启后全链路正常，无 panic
 
+    数据/日志清理系统（2026-10-10）
+      - ReadIntSetting：log_settings 读取整数配置，防脏数据
+      - runCleanup 读配置：
+          alert_days(90) / audit_days(180) / event_days(180) / token_days(180)
+          baseline_snapshots(90d) / sessions(7d) 保持硬编码
+      - CleanupExpiredTokens 签名重写 + 接入 runCleanup
+      - event_days 语义：归档表保留月数（180 天 ≈ 6 月）
+          过期归档表 DROP，不再无限累积
+      - 手动清理 API：POST /api/admin/cleanup
+          target ∈ {events, alerts, audit_logs, tokens}
+          mode ∈ {all, before_days}
+          confirm='CLEANUP' 二次确认
+          写入审计：system.data_cleanup / system.log_cleanup
+      - 新增 cleanup_repo.go
+      - 提交：29b515a
+      - 已验证：alerts before_days=7 → affected=634
+                  tokens all → affected=19
+
   1.2 半成品
 
     (1) 血缘表
@@ -300,7 +318,8 @@ AsterTrack 项目主文档
     events_2026_12                 (0 行)
     events_2027_01                 (0 行)
     host_groups                    (0 行)
-    log_settings                   (5 行)
+    log_settings                   (5 行；支持 alert_days/audit_days/
+                                    event_days/token_days 等清理配置)
     playbooks                      (0 行)
     probe_configs                  (0 行)
     probe_exclude_comms            (0 行，待废)
@@ -641,6 +660,45 @@ AsterTrack 项目主文档
         验证：Server 重启后全链路正常，无 panic
         预估：1 天（已用）
 
+    A11 [已完成] 数据/日志清理系统接入配置
+        背景（3 个 BUG）：
+          - runCleanup 硬编码 90/180/7 天，log_settings 配置从未生效
+          - CleanupExpiredTokens 写了没接，token 表无限增长
+          - event_days 配置无消费，events 归档表永不删除
+
+        B0 ReadIntSetting：
+          - settings_repo.go 新增 ReadIntSetting(ctx, key, default)
+          - 值必须 Atoi 成合法正整数，否则用默认值
+
+        B1 runCleanup 读配置：
+          - alert_days(90) / audit_days(180) / event_days(180) / token_days(180)
+          - baseline_snapshots(90d) / sessions(7d) 保持硬编码
+
+        B2 CleanupExpiredTokens：
+          - 签名重写为 (ctx, retentionDays int)
+          - 接入 runCleanup，读 token_days
+
+        B3 event_days 语义：
+          - 归档表保留月数（180 天 ≈ 6 月，向上取整）
+          - 过期归档表 DROP
+          - log-settings 加 token_days；event_days 默认 30 → 180
+
+        B4 手动清理 API：
+          - POST /api/admin/cleanup（admin-only）
+          - {target, mode, days, confirm}，confirm='CLEANUP'
+          - target ∈ {events, alerts, audit_logs, tokens}
+          - mode ∈ {all, before_days}
+          - 写审计：system.data_cleanup / system.log_cleanup
+
+        新增：psql/cleanup_repo.go + audit codes 2 个常量
+        提交：29b515a
+        验证：
+          - alerts before_days=7 → affected=634
+          - tokens all → affected=19
+          - confirm/target/days 校验：400 拦截全部生效
+          - 审计写入完整
+        预估：0.5 天（已用）
+
   B 待开发（设计完成，无新架构）
   ────────────────────────────────
 
@@ -904,16 +962,20 @@ AsterTrack 项目主文档
 
 【六、当前 commit 状态】
 
-  分支：main（ahead of origin/main by 13 commits）
-  HEAD：410af3c（refactor: 完全移除 SQLite，PSQL callback 迁移完成）
+  分支：main（ahead of origin/main by 16 commits）
+  HEAD：29b515a（feat(cleanup): 数据/日志清理系统接入配置 + 手动清理 API）
 
-  本批提交（2026-10-10）：
+  本批提交（2026-10-10，10 个）：
     c999c51  fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪
     4d1995f  docs(phase-a): A3 文档漂移修正
     3ecbdcb  docs(phase-a): A3 文档漂移修正（§6 工作区）
     60d6051  feat(audit): 审计系统接入 PostgreSQL（第一批）
     bca760d  fix(handler): PSQL 模式下 nil 风险清零（Step 7c）
+    e9bf603  docs: 同步本批修复到 PROJECT.txt
     410af3c  refactor: 完全移除 SQLite，PSQL callback 迁移完成
+    8cd6928  docs: 同步 SQLite 移除到 PROJECT.txt
+    1122669  docs: 记录星轨去重问题，归入 B1 血缘表
+    29b515a  feat(cleanup): 数据/日志清理系统接入配置 + 手动清理 API
 
   工作区：clean
     （原 docs/DB-RECONCILIATION.txt / TASK-CLASSIFICATION.txt /
