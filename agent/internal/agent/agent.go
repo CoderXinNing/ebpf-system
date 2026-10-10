@@ -217,6 +217,8 @@ func (a *Agent) Run(ctx context.Context) {
 
 	if err := a.connectAndRegister(); err != nil {
 		log.Println("⚠️ Server不可达，进入离线保命模式")
+		// 离线：用缓存的探针名单加载（保留 SHA256 校验）
+		a.loadProbesFromCacheOffline()
 		// 后台重试连接（指数退避）
 		go a.retryConnectLoop()
 	} else {
@@ -549,6 +551,12 @@ func (a *Agent) fetchProbeList() []*pb.ProbeInfo {
 	for _, fp := range resp.FalsePositiveFeatures {
 		a.probeStateActor.Send(msgAddFalsePositive{feature: fp})
 	}
+
+	// 缓存名单（离线保命模式用）
+	if err := saveProbeListCache(resp.Probes); err != nil {
+		log.Printf("⚠️ 探针名单缓存写入失败: %v", err)
+	}
+
 	return resp.Probes
 }
 

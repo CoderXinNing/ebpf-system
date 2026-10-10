@@ -75,6 +75,16 @@ func RulesCacheFile() string { return filepath.Join(AgentDataDir(), "rules.json"
 // RulesSigFile 规则签名缓存路径
 func RulesSigFile() string { return filepath.Join(AgentDataDir(), "rules.sig") }
 
+// ProbeListCacheFile 探针名单旧明文缓存路径（迁移用，新版本不再写）
+func ProbeListCacheFile() string { return filepath.Join(AgentDataDir(), "probes.json") }
+
+// ProbeListEncFile 探针名单加密缓存路径（离线保命模式用）
+//
+// 内容：Server 最后一次下发的探针名单 + SHA256。
+// 与 rules.enc 同套加密：AES-GCM + HKDF(machine-id + agent.id)。
+// 视为安全资产：防御能力清单 + .o SHA256。
+func ProbeListEncFile() string { return filepath.Join(AgentDataDir(), "probes.enc") }
+
 // RulesEncFile 规则加密缓存路径（Phase 3）
 // 格式：[nonce(12) | ciphertext | tag(16)]，AES-GCM
 // 密钥源：/etc/machine-id + agent.id → HKDF-SHA256 → 32 字节
