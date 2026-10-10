@@ -94,10 +94,6 @@ func (s *Service) RebuildFromDB(ctx context.Context, createdBy string) error {
 	if err != nil {
 		return fmt.Errorf("读 exec+bash 排除名单失败: %w", err)
 	}
-	fileAccessComms, err := s.repo.ListFileAccessExcludeComms(ctx)
-	if err != nil {
-		return fmt.Errorf("读 file_access 排除名单失败: %w", err)
-	}
 	tcpIPs, err := s.repo.ListExcludeIPs(ctx)
 	if err != nil {
 		return fmt.Errorf("读 tcp IP 排除名单失败: %w", err)
@@ -121,30 +117,26 @@ func (s *Service) RebuildFromDB(ctx context.Context, createdBy string) error {
 		rs = defaultRules()
 	}
 
-	// 3. 合并 exec+bash 共享 comm 排除
-	//    （bash 无独立 JSON 节，读 rs.Exec.Exclude；见 PROJECT-STATUS #11）
+	// 3. 合并 exec comm 排除
+	//    v3 起 bash 有独立节，exec comm 只影响 exec 探针。
+	//    只覆盖 Comms，保留 ExactCmdlines / PrefixCmdlines（由其它 API 管理）。
 	if rs.Exec == nil {
 		rs.Exec = &rules.ExecRules{}
 	}
-	rs.Exec.Exclude = &rules.ExecExclude{
-		Comms: excludeComms,
+	if rs.Exec.Exclude == nil {
+		rs.Exec.Exclude = &rules.ExecExclude{}
 	}
+	rs.Exec.Exclude.Comms = excludeComms
 
-	// 4. 合并 file_access 独立 comm 排除
-	if rs.FileAccess == nil {
-		rs.FileAccess = &rules.FileAccessRules{}
-	}
-	rs.FileAccess.Exclude = &rules.FileAccessExclude{
-		Comms: fileAccessComms,
-	}
-
-	// 5. 合并 tcp 独立 IP 排除
+	// 4. 合并 tcp IP 排除
+	//    只覆盖 IPs，保留 Comms / Combos（由其它 API 管理）。
 	if rs.TCP == nil {
 		rs.TCP = &rules.TCPRules{}
 	}
-	rs.TCP.Exclude = &rules.TCPExclude{
-		IPs: tcpIPs,
+	if rs.TCP.Exclude == nil {
+		rs.TCP.Exclude = &rules.TCPExclude{}
 	}
+	rs.TCP.Exclude.IPs = tcpIPs
 
 	// 6. 清空 Version，让 Publish 自动自增
 	rs.Version = 0
@@ -189,7 +181,7 @@ func (s *Service) EnsureDefault(ctx context.Context) error {
 		return nil // 已有规则
 	}
 
-	log.Printf("📋 首次启动：初始化默认规则（v2 结构）")
+	log.Printf("📋 首次启动：初始化默认规则（v3 结构）")
 	def := &rules.RuleSet{
 		Version: 1,
 		FileAccess: &rules.FileAccessRules{

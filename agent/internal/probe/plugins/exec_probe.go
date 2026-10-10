@@ -88,15 +88,28 @@ func (p *ExecProbe) PreCheck(caps *probe.AgentCapabilities) error {
 var _ framework.PreChecker = (*ExecProbe)(nil)
 
 // ApplyConfig 实现 framework.ConfigApplier
-// exec 探针目前只用到 exclude（排除 comm 名单）
+//
+// exec 三路排除（任一命中即排除）：
+//   - comm          进程名（父进程）
+//   - exact_cmdline 被执行的命令，精确
+//   - prefix_cmdline 被执行的命令，前缀
 func (p *ExecProbe) ApplyConfig(rs *rules.RuleSet) error {
-	if rs.Exec == nil || rs.Exec.Exclude == nil {
+	if rs == nil || rs.Exec == nil || rs.Exec.Exclude == nil {
 		return nil
 	}
 	if p.probe == nil {
-		return nil // 未加载，静默跳过
+		return nil
 	}
-	return p.probe.UpdateExcludeComms(rs.Exec.Exclude.Comms)
+
+	// comm
+	if err := p.probe.UpdateExcludeComms(rs.Exec.Exclude.Comms); err != nil {
+		return err
+	}
+	// cmdline（exact + prefix）
+	return p.probe.UpdateExcludeCmdlines(
+		rs.Exec.Exclude.ExactCmdlines,
+		rs.Exec.Exclude.PrefixCmdlines,
+	)
 }
 
 var _ framework.ConfigApplier = (*ExecProbe)(nil)

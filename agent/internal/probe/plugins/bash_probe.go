@@ -72,13 +72,19 @@ var _ framework.PreChecker = (*BashProbe)(nil)
 
 // ApplyConfig 实现 framework.ConfigApplier
 //
-// bash 探针共享 exec 探针的 comm 排除名单（语义：进程/命令维度）。
-// 见 EDR-CORRELATION-v3.1【五】+ PROJECT-STATUS 已知问题 #11。
+// v3 起 bash 独立节（rs.Bash），只做命令维度排除。
+// comm 恒为 bash，无意义，不读 comm 表。
 func (p *BashProbe) ApplyConfig(rs *rules.RuleSet) error {
-	if rs == nil || rs.Exec == nil || rs.Exec.Exclude == nil {
+	if rs == nil || rs.Bash == nil || rs.Bash.Exclude == nil {
 		return nil
 	}
-	return p.probe.UpdateExcludeComms(rs.Exec.Exclude.Comms)
+	if p.probe == nil {
+		return nil
+	}
+	return p.probe.UpdateExcludeCmdlines(
+		rs.Bash.Exclude.ExactCmdlines,
+		rs.Bash.Exclude.PrefixCmdlines,
+	)
 }
 
 var _ framework.ConfigApplier = (*BashProbe)(nil)

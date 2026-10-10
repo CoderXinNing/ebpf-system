@@ -120,35 +120,16 @@ var _ framework.PreChecker = (*FileProbe)(nil)
 
 // ApplyConfig 实现 framework.ConfigApplier
 //
-// file_access 有两类独立配置：
-//  1. 敏感路径（rules）—— 走 file_access 探针自身
-//  2. comm 排除（exclude）—— 独立于 exec+bash 的 comm 名单，
-//     用于过滤噪音源（如 psql 正常读 /etc/shadow）
-//
-// 见 EDR-CORRELATION-v3.1【五】+ PROJECT-STATUS 已知问题 #11。
+// v3 起 file_access 只做包含（监控什么），不做排除。
+// 上下文（谁改的、用什么命令改的）由 exec/bash 补全。
 func (p *FileProbe) ApplyConfig(rs *rules.RuleSet) error {
-	if rs == nil || rs.FileAccess == nil {
+	if rs == nil || rs.FileAccess == nil || rs.FileAccess.Rules == nil {
 		return nil
 	}
-
-	// 1. 敏感路径（rules 非空时应用）
-	if rs.FileAccess.Rules != nil {
-		if err := p.UpdateSensitivePaths(
-			rs.FileAccess.Rules.SensitiveExact,
-			rs.FileAccess.Rules.SensitivePrefix,
-		); err != nil {
-			return err
-		}
-	}
-
-	// 2. comm 排除（exclude 非空时应用）
-	if rs.FileAccess.Exclude != nil {
-		if err := p.probe.UpdateExcludeComms(rs.FileAccess.Exclude.Comms); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return p.UpdateSensitivePaths(
+		rs.FileAccess.Rules.SensitiveExact,
+		rs.FileAccess.Rules.SensitivePrefix,
+	)
 }
 
 var _ framework.ConfigApplier = (*FileProbe)(nil)

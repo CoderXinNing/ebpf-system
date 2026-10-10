@@ -128,14 +128,9 @@ int trace_openat(struct trace_event_raw_sys_enter *args) {
     char comm[16] = {};
     bpf_get_current_comm(&comm, sizeof(comm));
 
-    // 白名单过滤
-    __u64 exclude_enabled = get_config_value(CONFIG_EXCLUDE_COMMS);
-    if (exclude_enabled == 1) {
-        __u8 *allowed = bpf_map_lookup_elem(&sentinel_exclude_comms, comm);
-        if (allowed && *allowed == 1) {
-            return 0;
-        }
-    }
+    // v3：file_access 不做 comm 排除
+    // 语义上 file_access 只负责"监控什么"，不负责"排除谁"；
+    // 上下文由 exec/bash 补全，噪音由敏感路径过滤即可。
 
     // 读取文件名（openat 的第二个参数）
     const char *filename = (const char *)args->args[1];

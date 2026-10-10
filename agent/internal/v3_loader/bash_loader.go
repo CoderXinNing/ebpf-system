@@ -23,16 +23,18 @@ type BashProbe struct {
 	agentHash uint32
 	bashPath  string
 
-	// 排除名单同步（记录上次 keys，用于清空重建）
-	excludeMu        sync.Mutex
-	lastExcludeComms []string
+	// cmdline 排除同步（v3 起 bash 只做命令维度排除）
+	cmdMu              sync.Mutex
+	lastExactCmdlines  []string
+	lastPrefixCmdlines []string
 }
 
 type bashObjects struct {
-	TraceReadline        *ebpf.Program `ebpf:"trace_readline"`
-	ConfigMap            *ebpf.Map     `ebpf:"config_map"`
-	BashEvents           *ebpf.Map     `ebpf:"bash_events"`
-	SentinelExcludeComms *ebpf.Map     `ebpf:"sentinel_exclude_comms"`
+	TraceReadline *ebpf.Program `ebpf:"trace_readline"`
+	ConfigMap     *ebpf.Map     `ebpf:"config_map"`
+	BashEvents    *ebpf.Map     `ebpf:"bash_events"`
+	SentinelXCmdE *ebpf.Map     `ebpf:"sentinel_xcmd_e"`
+	SentinelXCmdP *ebpf.Map     `ebpf:"sentinel_xcmd_p"`
 }
 
 // NewBashProbe 创建 bash 探针
@@ -66,13 +68,6 @@ func (p *BashProbe) Load() error {
 	var value uint64 = uint64(p.agentHash)
 	if err := p.objs.ConfigMap.Put(&key, &value); err != nil {
 		return fmt.Errorf("写入 agent_hash 失败: %w", err)
-	}
-
-	// 启用排除列表（exclude_comms）
-	var wlKey uint32 = ConfigExcludeComms
-	var wlVal uint64 = 1
-	if err := p.objs.ConfigMap.Put(&wlKey, &wlVal); err != nil {
-		log.Printf("⚠️ 写 ConfigExcludeComms 失败: %v", err)
 	}
 
 	// uretprobe attach
@@ -123,42 +118,51 @@ func (p *BashProbe) Load() error {
 	return nil
 }
 
-// UpdateExcludeComms 更新白名单
-func (p *BashProbe) UpdateExcludeComms(processNames []string) error {
-	if p.objs == nil || p.objs.SentinelExcludeComms == nil {
+// UpdateExcludeCmdlines 更新命令排除名单（exact HASH + prefix LPM_TRIE）
+//
+// v3 起 bash 只做命令维度排除，comm 恒为 bash 无意义。
+func (p *BashProbe) UpdateExcludeCmdlines(exact, prefix []string) error {
+	if p.objs == nil || p.objs.SentinelXCmdE == nil || p.objs.SentinelXCmdP == nil {
 		return nil
 	}
 
-	p.excludeMu.Lock()
-	defer p.excludeMu.Unlock()
+	p.cmdMu.Lock()
+	defer p.cmdMu.Unlock()
 
 	var val uint8 = 1
 
-	// 1. 全清现有条目（LRU_HASH 支持 Iterate）
-	//    不用"记录 last keys"模式——进程重启后内存丢失，会漏删
-	//    注意：Next 的 value 参数不能传 nil，cilium/ebpf 会解码它
-	iter := p.objs.SentinelExcludeComms.Iterate()
-	var key [16]byte
-	var valOld uint8
-	for iter.Next(&key, &valOld) {
-		k := key // 拷贝一份，防迭代器复用同一 key 缓冲
-		_ = p.objs.SentinelExcludeComms.Delete(&k)
+	for _, cmd := range p.lastExactCmdlines {
+		var key [256]byte
+		copy(key[:], cmd)
+		_ = p.objs.SentinelXCmdE.Delete(&key)
 	}
-	if err := iter.Err(); err != nil {
-		return fmt.Errorf("遍历 exclude_comms 失败: %w", err)
+	for _, cmd := range p.lastPrefixCmdlines {
+		key := makeLPMKey(cmd)
+		_ = p.objs.SentinelXCmdP.Delete(key)
 	}
 
-	// 2. 写入新列表
-	for _, name := range processNames {
-		var k [16]byte
-		copy(k[:], name)
-		if err := p.objs.SentinelExcludeComms.Put(&k, &val); err != nil {
-			return fmt.Errorf("写入 exclude 失败 [%s]: %w", name, err)
+	for _, cmd := range exact {
+		if len(cmd) > 255 {
+			return fmt.Errorf("exact cmdline 超长（>255）: %s", cmd)
+		}
+		var key [256]byte
+		copy(key[:], cmd)
+		if err := p.objs.SentinelXCmdE.Put(&key, &val); err != nil {
+			return fmt.Errorf("写入 xcmd_e 失败 [%s]: %w", cmd, err)
+		}
+	}
+	for _, cmd := range prefix {
+		if len(cmd) > 255 {
+			return fmt.Errorf("prefix cmdline 超长（>255）: %s", cmd)
+		}
+		key := makeLPMKey(cmd)
+		if err := p.objs.SentinelXCmdP.Put(key, &val); err != nil {
+			return fmt.Errorf("写入 xcmd_p 失败 [%s]: %w", cmd, err)
 		}
 	}
 
-	// 保留记录（便于观察/调试，可选）
-	p.lastExcludeComms = append([]string(nil), processNames...)
+	p.lastExactCmdlines = append([]string(nil), exact...)
+	p.lastPrefixCmdlines = append([]string(nil), prefix...)
 	return nil
 }
 

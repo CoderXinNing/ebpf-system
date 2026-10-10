@@ -134,6 +134,111 @@ struct {
 } sensitive_prefixes SEC(".maps");
 
 // ============================================
+// 命令排除（exec + bash 使用，v3 新增）
+//
+// 双 map 设计（与 sensitive_exact/prefixes 对齐）：
+//   sentinel_xcmd_e: 精确匹配命令（HASH）
+//   sentinel_xcmd_p: 前缀匹配命令（LPM_TRIE）
+//
+// 语义：
+//   exec 侧命令 = argv[0]（可执行文件路径）
+//   bash 侧命令 = readline 返回的用户输入
+//
+// ⚠️ 长度上限 255 字符（双重锁死）：
+//   1. 事件头 data[256]，探针读取时 bpf_probe_read_user_str(_, 256, _)
+//      超过 255 的部分在进 Map 之前就被截断
+//   2. Map key 为 char[256]，规则写入时同样按 255 截断
+//   → 超长命令的"精确匹配"本质失效，只能匹配前 255 字符
+//   → 超长且变化多的命令请改用前缀匹配，或交给 Go 层做关键字包含
+//
+// 命名说明：内核 BPF map 名上限 15 字符。
+//   sentinel_xcmd_exact  → 超限，故用 sentinel_xcmd_e
+//   sentinel_xcmd_prefix → 超限，故用 sentinel_xcmd_p
+// ============================================
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 1024);
+    __type(key, char[256]);
+    __type(value, __u8);
+} sentinel_xcmd_e SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LPM_TRIE);
+    __uint(max_entries, 1024);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
+    __type(key, struct lpm_path_key);
+    __type(value, __u8);
+} sentinel_xcmd_p SEC(".maps");
+
+// ============================================
+// TCP 进程/组合维度排除（v3 新增）
+//
+// sentinel_xcomm: 按 comm 排除（HASH）
+//   语义：排除某进程发起的全部外联
+//
+// sentinel_xcombo: 按 (comm, ip) 组合排除（HASH）
+//   语义：精确排除"进程 X 访问 IP Y"
+//   key 布局：comm[16] + ip[4]（网络字节序），packed = 20 字节
+//   限制：不支持 CIDR（组合查询固定精确匹配）
+//   与 sentinel_xip 独立并存，任意命中即排除
+//
+// 命名说明：sentinel_xcomm 恰好 14 字符，未超限。
+// ============================================
+struct xcombo_key {
+    char  comm[16];
+    __u32 ip;      // 网络字节序 IPv4
+} __attribute__((packed));
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 1024);
+    __type(key, char[16]);
+    __type(value, __u8);
+} sentinel_xcomm SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 1024);
+    __type(key, struct xcombo_key);
+    __type(value, __u8);
+} sentinel_xcombo SEC(".maps");
+
+// ============================================
+// 命令排除判断（exec + bash 共用）
+//
+// 语义：
+//   精确匹配 sentinel_xcmd_e → 命中
+//   前缀匹配 sentinel_xcmd_p → 命中
+//   任一命中即返回 1（调用方自行 return）
+//
+// 注意：
+//   - 255 字符上限（事件头与 map key 双重限制）
+//   - 前缀查询给最大 prefixlen（256*8），内核自动最长匹配
+//   - 前缀规则写入时必须用实际长度（见 Go 侧 makeLPMKey）
+// ============================================
+static __always_inline int is_excluded_cmdline(const char *cmdline) {
+    if (!cmdline) return 0;
+
+    struct lpm_path_key key = {};
+    long n = bpf_probe_read_user_str(key.path, sizeof(key.path), cmdline);
+    if (n <= 0) return 0;
+    key.path[255] = '\0';
+
+    // 1. 精确匹配（HASH）
+    __u8 *exact = bpf_map_lookup_elem(&sentinel_xcmd_e, key.path);
+    if (exact && *exact == 1) return 1;
+
+    // 2. 前缀匹配（LPM_TRIE）
+    key.prefixlen = sizeof(key.path) * 8;
+    __u8 *prefix = bpf_map_lookup_elem(&sentinel_xcmd_p, &key);
+    if (prefix && *prefix == 1) return 1;
+
+    return 0;
+}
+
+
+
+// ============================================
 // Agent 自身进程树标记（P1.9）
 //
 // 用途：过滤 Agent 自身行为产生的噪声

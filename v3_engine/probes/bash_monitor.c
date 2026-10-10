@@ -29,18 +29,15 @@ int trace_readline(struct pt_regs *ctx) {
         return 0;
     }
 
-    // 白名单过滤
-    __u64 exclude_enabled = get_config_value(CONFIG_EXCLUDE_COMMS);
-    if (exclude_enabled == 1) {
-        __u8 *allowed = bpf_map_lookup_elem(&sentinel_exclude_comms, comm);
-        if (allowed && *allowed == 1) {
-            return 0;
-        }
-    }
-
     // 读取返回值（readline 返回字符串在 AX 寄存器）
     const char *line = (const char *)PT_REGS_RC(ctx);
     if (!line) {
+        return 0;
+    }
+
+    // 命令排除（v3 新增：精确 + 前缀）
+    // 语义：bash 侧"命令" = 用户输入的整行命令
+    if (is_excluded_cmdline(line)) {
         return 0;
     }
 

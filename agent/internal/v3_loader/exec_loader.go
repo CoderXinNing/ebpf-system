@@ -21,9 +21,14 @@ type ExecProbe struct {
 	objs      *execObjects
 	agentHash uint32
 
-	// 排除名单同步（记录上次 keys，用于清空重建）
+	// comm 排除同步
 	excludeMu        sync.Mutex
 	lastExcludeComms []string
+
+	// cmdline 排除同步（记录上次 keys，用于清空重建）
+	cmdMu              sync.Mutex
+	lastExactCmdlines  []string
+	lastPrefixCmdlines []string
 }
 
 type execObjects struct {
@@ -31,6 +36,8 @@ type execObjects struct {
 	ConfigMap            *ebpf.Map     `ebpf:"config_map"`
 	SentinelEvents       *ebpf.Map     `ebpf:"exec_events"`
 	SentinelExcludeComms *ebpf.Map     `ebpf:"sentinel_exclude_comms"`
+	SentinelXCmdE        *ebpf.Map     `ebpf:"sentinel_xcmd_e"`
+	SentinelXCmdP        *ebpf.Map     `ebpf:"sentinel_xcmd_p"`
 	PidCorrelations      *ebpf.Map     `ebpf:"pid_correlations"`
 	PidPpidMap           *ebpf.Map     `ebpf:"pid_ppid_map"`
 }
@@ -168,6 +175,59 @@ func (p *ExecProbe) UpdateExcludeComms(processNames []string) error {
 
 	// 保留记录（便于观察/调试，可选）
 	p.lastExcludeComms = append([]string(nil), processNames...)
+	return nil
+}
+
+// UpdateExcludeCmdlines 更新命令排除名单（exact HASH + prefix LPM_TRIE）
+//
+// 采用"记录上次 keys 再删"策略（LPM_TRIE 不便 Iterate）。
+// 注意：路径长度 > 255 会跳过并报错，调用方处理。
+func (p *ExecProbe) UpdateExcludeCmdlines(exact, prefix []string) error {
+	if p.objs == nil || p.objs.SentinelXCmdE == nil || p.objs.SentinelXCmdP == nil {
+		return nil
+	}
+
+	p.cmdMu.Lock()
+	defer p.cmdMu.Unlock()
+
+	var val uint8 = 1
+
+	// 1. 删上次的 exact（HASH）
+	for _, cmd := range p.lastExactCmdlines {
+		var key [256]byte
+		copy(key[:], cmd)
+		_ = p.objs.SentinelXCmdE.Delete(&key)
+	}
+	// 2. 删上次的 prefix（LPM_TRIE）
+	for _, cmd := range p.lastPrefixCmdlines {
+		key := makeLPMKey(cmd)
+		_ = p.objs.SentinelXCmdP.Delete(key)
+	}
+
+	// 3. 写新的 exact
+	for _, cmd := range exact {
+		if len(cmd) > 255 {
+			return fmt.Errorf("exact cmdline 超长（>255）: %s", cmd)
+		}
+		var key [256]byte
+		copy(key[:], cmd)
+		if err := p.objs.SentinelXCmdE.Put(&key, &val); err != nil {
+			return fmt.Errorf("写入 xcmd_e 失败 [%s]: %w", cmd, err)
+		}
+	}
+	// 4. 写新的 prefix
+	for _, cmd := range prefix {
+		if len(cmd) > 255 {
+			return fmt.Errorf("prefix cmdline 超长（>255）: %s", cmd)
+		}
+		key := makeLPMKey(cmd)
+		if err := p.objs.SentinelXCmdP.Put(key, &val); err != nil {
+			return fmt.Errorf("写入 xcmd_p 失败 [%s]: %w", cmd, err)
+		}
+	}
+
+	p.lastExactCmdlines = append([]string(nil), exact...)
+	p.lastPrefixCmdlines = append([]string(nil), prefix...)
 	return nil
 }
 

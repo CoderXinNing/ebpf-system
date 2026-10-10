@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os/exec"
 	"strings"
 
@@ -115,13 +116,59 @@ var _ framework.PreChecker = (*TCPProbe)(nil)
 
 // ApplyConfig 实现 framework.ConfigApplier
 //
-// tcp 探针走独立的 IP 维度排除（comm 维度对 tcp 无意义）。
-// 见 EDR-CORRELATION-v3.1【五】+ PROJECT-STATUS 已知问题 #11/#12。
+// tcp 三维度排除（任一命中即排除）：
+//   - IPs    目标 IP / CIDR
+//   - Comms  发起连接的进程名
+//   - Combos (comm, ip) 精确组合
+//
+// 敏感端口不在 C 层，走 Agent 的 tcpAnomaly（Go 层规则引擎）。
 func (p *TCPProbe) ApplyConfig(rs *rules.RuleSet) error {
 	if rs == nil || rs.TCP == nil || rs.TCP.Exclude == nil {
 		return nil
 	}
-	return p.probe.UpdateExcludeIPs(rs.TCP.Exclude.IPs)
+	if p.probe == nil {
+		return nil
+	}
+
+	ex := rs.TCP.Exclude
+
+	if err := p.probe.UpdateExcludeIPs(ex.IPs); err != nil {
+		return err
+	}
+	if err := p.probe.UpdateExcludeComms(ex.Comms); err != nil {
+		return err
+	}
+
+	// combos：解析并写入
+	if len(ex.Combos) > 0 {
+		entries := make([]v3_loader.TCPComboEntry, 0, len(ex.Combos))
+		for _, c := range ex.Combos {
+			ip := net.ParseIP(c.IP)
+			if ip == nil {
+				log.Printf("⚠️ 跳过非法 combo IP [%s/%s]", c.Comm, c.IP)
+				continue
+			}
+			ip4 := ip.To4()
+			if ip4 == nil {
+				log.Printf("⚠️ 跳过非 IPv4 combo [%s/%s]", c.Comm, c.IP)
+				continue
+			}
+			var entry v3_loader.TCPComboEntry
+			entry.Comm = c.Comm
+			copy(entry.IP[:], ip4)
+			entries = append(entries, entry)
+		}
+		if err := p.probe.UpdateExcludeCombos(entries); err != nil {
+			return err
+		}
+	} else {
+		// 清空
+		if err := p.probe.UpdateExcludeCombos(nil); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 var _ framework.ConfigApplier = (*TCPProbe)(nil)

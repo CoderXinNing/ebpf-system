@@ -100,6 +100,12 @@ int trace_execve(struct trace_event_raw_sys_enter *args) {
         return 0;
     }
 
+    // 命令排除（v3 新增：精确 + 前缀）
+    // 语义：exec 侧"命令" = argv[0]（可执行文件路径），如 /bin/ls
+    if (is_excluded_cmdline(filename)) {
+        return 0;
+    }
+
     // 分配事件
     struct sentinel_event_header *evt;
     evt = bpf_ringbuf_reserve(&exec_events, sizeof(struct sentinel_event_header), 0);

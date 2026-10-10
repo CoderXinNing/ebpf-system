@@ -76,19 +76,21 @@ type TCPProbe struct {
 	agentHash uint32
 
 	// 排除名单同步（记录上次 keys，用于清空重建）
-	excludeMu        sync.Mutex
-	lastExcludeComms []string
-	lastExcludeIPs   []string
+	excludeMu         sync.Mutex
+	lastExcludeComms  []string
+	lastExcludeIPs    []string
+	lastExcludeCombos []TCPComboEntry
 }
 
 type tcpObjects struct {
-	TraceConnect         *ebpf.Program `ebpf:"trace_connect"`
-	ConfigMap            *ebpf.Map     `ebpf:"config_map"`
-	SentinelEvents       *ebpf.Map     `ebpf:"sentinel_events"`
-	SentinelExcludeComms *ebpf.Map     `ebpf:"sentinel_exclude_comms"`
-	SentinelXIP          *ebpf.Map     `ebpf:"sentinel_xip"`
-	PidConnStats         *ebpf.Map     `ebpf:"pid_conn_stats"`
-	ConnDetails          *ebpf.Map     `ebpf:"conn_details"`
+	TraceConnect   *ebpf.Program `ebpf:"trace_connect"`
+	ConfigMap      *ebpf.Map     `ebpf:"config_map"`
+	SentinelEvents *ebpf.Map     `ebpf:"sentinel_events"`
+	SentinelXComm  *ebpf.Map     `ebpf:"sentinel_xcomm"`
+	SentinelXCombo *ebpf.Map     `ebpf:"sentinel_xcombo"`
+	SentinelXIP    *ebpf.Map     `ebpf:"sentinel_xip"`
+	PidConnStats   *ebpf.Map     `ebpf:"pid_conn_stats"`
+	ConnDetails    *ebpf.Map     `ebpf:"conn_details"`
 }
 
 // NewTCPProbe 创建 TCP 探针
@@ -121,13 +123,6 @@ func (p *TCPProbe) Load() error {
 	var value uint64 = uint64(p.agentHash)
 	if err := p.objs.ConfigMap.Put(&key, &value); err != nil {
 		return fmt.Errorf("写入 agent_hash 失败: %w", err)
-	}
-
-	// 启用排除列表
-	var wlKey uint32 = ConfigExcludeComms
-	var wlVal uint64 = 1
-	if err := p.objs.ConfigMap.Put(&wlKey, &wlVal); err != nil {
-		log.Printf("⚠️ 写 ConfigExcludeComms 失败: %v", err)
 	}
 
 	// 默认计数模式
@@ -208,9 +203,12 @@ func (p *TCPProbe) SetObservationLevel(level uint64) error {
 	return p.objs.ConfigMap.Put(&key, &level)
 }
 
-// UpdateExcludeComms 更新白名单
+// UpdateExcludeComms 更新 TCP comm 排除名单（HASH）
+//
+// 语义：排除某进程发起的全部外联。
+// 与 sentinel_xip / sentinel_xcombo 独立并存，任一命中即排除。
 func (p *TCPProbe) UpdateExcludeComms(processNames []string) error {
-	if p.objs == nil || p.objs.SentinelExcludeComms == nil {
+	if p.objs == nil || p.objs.SentinelXComm == nil {
 		return nil
 	}
 
@@ -219,30 +217,25 @@ func (p *TCPProbe) UpdateExcludeComms(processNames []string) error {
 
 	var val uint8 = 1
 
-	// 1. 全清现有条目（LRU_HASH 支持 Iterate）
-	//    不用"记录 last keys"模式——进程重启后内存丢失，会漏删
-	//    注意：Next 的 value 参数不能传 nil，cilium/ebpf 会解码它
-	iter := p.objs.SentinelExcludeComms.Iterate()
+	iter := p.objs.SentinelXComm.Iterate()
 	var key [16]byte
 	var valOld uint8
 	for iter.Next(&key, &valOld) {
-		k := key // 拷贝一份，防迭代器复用同一 key 缓冲
-		_ = p.objs.SentinelExcludeComms.Delete(&k)
+		k := key
+		_ = p.objs.SentinelXComm.Delete(&k)
 	}
 	if err := iter.Err(); err != nil {
-		return fmt.Errorf("遍历 exclude_comms 失败: %w", err)
+		return fmt.Errorf("遍历 sentinel_xcomm 失败: %w", err)
 	}
 
-	// 2. 写入新列表
 	for _, name := range processNames {
 		var k [16]byte
 		copy(k[:], name)
-		if err := p.objs.SentinelExcludeComms.Put(&k, &val); err != nil {
-			return fmt.Errorf("写入 exclude 失败 [%s]: %w", name, err)
+		if err := p.objs.SentinelXComm.Put(&k, &val); err != nil {
+			return fmt.Errorf("写入 xcomm 失败 [%s]: %w", name, err)
 		}
 	}
 
-	// 保留记录（便于观察/调试，可选）
 	p.lastExcludeComms = append([]string(nil), processNames...)
 	return nil
 }
@@ -279,6 +272,59 @@ func (p *TCPProbe) Close() {
 type lpmIPKey struct {
 	PrefixLen uint32
 	IP        [4]byte
+}
+
+// xcomboKey 与 C 侧 struct xcombo_key 内存布局严格一致（packed，20 字节）
+//
+//	comm[16] + u32 ip（网络字节序）
+type xcomboKey struct {
+	Comm [16]byte
+	IP   [4]byte
+}
+
+// TCPComboEntry 组合排除条目（Go 侧已解析好的形式）
+type TCPComboEntry struct {
+	Comm string
+	IP   [4]byte
+}
+
+// UpdateExcludeCombos 更新 TCP (comm, ip) 组合排除名单
+//
+// 语义：精确排除"进程 X 访问 IP Y"。
+// 与 xcomm / xip 独立并存。
+// 注意：不支持 CIDR，IP 必须精确。
+func (p *TCPProbe) UpdateExcludeCombos(entries []TCPComboEntry) error {
+	if p.objs == nil || p.objs.SentinelXCombo == nil {
+		return nil
+	}
+
+	p.excludeMu.Lock()
+	defer p.excludeMu.Unlock()
+
+	var val uint8 = 1
+
+	iter := p.objs.SentinelXCombo.Iterate()
+	var key xcomboKey
+	var valOld uint8
+	for iter.Next(&key, &valOld) {
+		k := key
+		_ = p.objs.SentinelXCombo.Delete(&k)
+	}
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("遍历 sentinel_xcombo 失败: %w", err)
+	}
+
+	for _, e := range entries {
+		var k xcomboKey
+		copy(k.Comm[:], e.Comm)
+		copy(k.IP[:], e.IP[:])
+		if err := p.objs.SentinelXCombo.Put(&k, &val); err != nil {
+			return fmt.Errorf("写入 xcombo 失败 [%s/%v]: %w", e.Comm, e.IP, err)
+		}
+	}
+
+	p.lastExcludeCombos = append([]TCPComboEntry(nil), entries...)
+	return nil
 }
 
 // UpdateExcludeIPs 更新 TCP 探针 IP 排除名单（支持单 IP 与 CIDR）
