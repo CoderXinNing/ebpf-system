@@ -926,6 +926,31 @@ AsterTrack 项目主文档
         范围：双信任过渡 + Agent 上报 CA 指纹 + 分发 RPC + SOP
         预估：2-3 天
 
+
+    B10 数据生命周期管理（设计待定）
+        背景：
+          - events / alerts / audit_logs 各自独立保留策略
+          - alerts 依赖 events 作为证据
+          - 未来 CMDB 变更事件也会产生"事件"
+          - 清理一个表可能导致另一个表数据"悬空"
+
+        问题：
+          1. 有 alerts 无 events（告警悬空，无法追溯证据）
+          2. 有 events 无 alerts（原始数据孤岛，需重跑规则）
+          3. CMDB events 是否与 events 统一？
+          4. 清理联动：alerts 活跃时，对应 events 是否跳过？
+
+        可能方案：
+          A. 独立保留（现状）
+          B. 告警保留 >= 事件保留（后端校验 alert_days >= event_days）
+          C. 清理联动（alerts 未关闭 → 跳过对应 events）
+          D. 统一保留策略（单一 retention_days）
+
+        建议：方案 B 最实际（语义清晰、实现简单）
+             等 CMDB 功能设计时一起做
+
+        归属：与 CMDB 功能设计一起
+
   C 待架构（需新功能/新架构）
   ────────────────────────────────
 
