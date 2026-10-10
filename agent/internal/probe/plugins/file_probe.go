@@ -44,7 +44,7 @@ var defaultExactPaths = []string{
 // 前缀匹配（用户意图 = 监控目录，路径须以 / 结尾）
 var defaultPrefixPaths = []string{
 	"/root/.ssh/",
-	"/home/",
+	"/var/spool/cron/",
 	"/var/log/auth",
 }
 

@@ -264,7 +264,7 @@ description = "读取系统密码文件"
 [[rules.conditions]]
 field = "filename"
 op = "regex"
-value = "/etc/shadow|/etc/passwd|/etc/sudoers"
+value = "/etc/shadow|/etc/gshadow|/etc/sudoers"
 
 [[rules]]
 name = "数据库配置读取"

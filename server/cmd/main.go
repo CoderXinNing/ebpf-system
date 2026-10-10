@@ -587,17 +587,6 @@ func main() {
 	})
 	grpcSvc.SetAlertEngine(alertEngine)
 
-	// 启动时从 PSQL 加载探针排除名单
-	go func() {
-		time.Sleep(2 * time.Second)
-		list, err := psqlDB.ListProbeExcludeComms(context.Background())
-		if err == nil && len(list) > 0 {
-			h.Mu.Lock()
-			h.ProbeExcludeComms = list
-			h.Mu.Unlock()
-			log.Printf("📥 探针排除名单已加载: %d 条", len(list))
-		}
-	}()
 	_ = alert.NewCorrelationEngine("server/configs/correlation.toml")
 
 	// 启动 HTTP

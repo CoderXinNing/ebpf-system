@@ -171,11 +171,12 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 			Time:          time.Now(),
 		}
 
-		// 去重：同规则+同Agent 30秒内不重复告警
+		// 去重：同规则+同Agent，窗口按严重级分级
+		window := dedupWindow(rule.Severity)
 		dedupKey := agentID + ":" + rule.Name
 		e.mu.Lock()
 		lastTime, exists := e.dedupMap[dedupKey]
-		if exists && time.Since(lastTime) < 30*time.Second {
+		if exists && time.Since(lastTime) < window {
 			e.mu.Unlock()
 			continue
 		}
@@ -185,6 +186,20 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 		if e.OnAlert != nil {
 			e.OnAlert(alert)
 		}
+	}
+}
+
+// dedupWindow 按告警严重级返回去重窗口
+func dedupWindow(severity string) time.Duration {
+	switch strings.ToUpper(severity) {
+	case "CRITICAL":
+		return 30 * time.Second
+	case "HIGH":
+		return 2 * time.Minute
+	case "MEDIUM":
+		return 5 * time.Minute
+	default:
+		return 15 * time.Minute
 	}
 }
 
