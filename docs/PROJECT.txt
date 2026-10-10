@@ -1,6 +1,6 @@
 AsterTrack 项目主文档
 =================================================
-日期：2026-10-09（最近更新）
+日期：2026-10-10（最近更新）
 定位：唯一入口。现状 + 事实源 + 待办 + 清理计划
 配套：DESIGN.txt（设计参考）
 历史：ARCHIVE/（旧文档，不再维护）
@@ -241,17 +241,6 @@ AsterTrack 项目主文档
        - P1.9 A1 用户态标记规避假告警
        - 内核行为未变，后续若引入非 Agent 发起场景需重评
 
-    13. [待血缘解决] 星轨去重效果差
-        - 现象：tcp_anomaly 每 10s 触发同 pid=181521（2026-10-10 观察）
-        - 影响：同一进程反复触发星轨，日志噪音 + 关联开销
-        - 根因：当前按 (agent, pid) 粗粒度去重，未考虑进程生命周期
-                （pid 复用、进程重启、同一事件的多次上报）
-        - 正解：血缘表（DESIGN.txt §1.2-1.3）
-                用 (pid, start_time_ns) 复合键 + is_anchor 区分
-                同一逻辑进程 vs 复用 pid
-        - 归属：B1（血缘表复合键 + 锚点统一）
-        - 不单独修：去重治标不治本，等血缘表落地一并解决
-
     2. postgres/sentinel 用户权限
        - 003-005 migration 漏 GRANT，已补救
 
@@ -293,6 +282,34 @@ AsterTrack 项目主文档
     12. TCP 排除维度重构 [已完成]
         - C 层 tcp_monitor.c 已改用 sentinel_xip
         - Go rules.TCPExclude.IPs 保留
+
+    13. [待血缘解决] 星轨去重效果差
+        - 现象：tcp_anomaly 每 10s 触发同 pid=181521（2026-10-10 观察）
+        - 影响：同一进程反复触发星轨，日志噪音 + 关联开销
+        - 根因：当前按 (agent, pid) 粗粒度去重，未考虑进程生命周期
+                （pid 复用、进程重启、同一事件的多次上报）
+        - 正解：血缘表（DESIGN.txt §1.2-1.3）
+                用 (pid, start_time_ns) 复合键 + is_anchor 区分
+                同一逻辑进程 vs 复用 pid
+        - 归属：B1（血缘表复合键 + 锚点统一）
+        - 不单独修：去重治标不治本，等血缘表落地一并解决
+
+  1.3b 架构债（不阻塞，待后续统一重构）
+
+    (1) SetupRoutes 巨型函数
+        位置：server/internal/handler/handler.go
+        现状：~500 行，所有路由 + handler 内联
+        建议：按模块拆 routes_agent.go / routes_alert.go / routes_session.go
+
+    (2) main.go PSQL 分支巨量注入
+        位置：server/cmd/main.go（if psqlDB != nil 块）
+        现状：200+ 行 callback 注入全在一个函数里
+        建议：抽 wireCallbacks(h, psqlDB) 函数
+
+    (3) Handler callback 字段散落
+        位置：server/internal/handler/handler.go（Handler struct）
+        现状：30+ 个 XxxFunc 字段
+        建议：抽 Repository interface，handler 依赖 interface
 
   1.4 关键约定
 
@@ -377,7 +394,10 @@ AsterTrack 项目主文档
 
 【三、事实源（DB 核验 2026-10-09）】
 
-  3.1 当前表清单（28 张）
+  3.1 当前表清单（28 张物理表，不含 4 个 events 分区子表）
+       说明：SQL information_schema 查得 28 张 BASE TABLE；
+             下面列表含 4 个 events 分区子表（10/11/12/2027_01），
+             它们不是物理表，仅展示数据分布
 
     （核验于 2026-10-10，方法 count(*)；小表 n_live_tup 失真不可用，
       行数会随系统运行增长，以 count(*) 为准）
@@ -1051,7 +1071,7 @@ AsterTrack 项目主文档
         待 P1.10 阶段 C DROP
 
     D7  main.go:590-599 死代码
-        待删（A2）
+        [已删 c999c51]（A2 完成，仅删 goroutine；handler 字段保留到 P1.10）
 
   N 本轮新增（不在原分类中）
   ────────────────────────────────
@@ -1063,8 +1083,9 @@ AsterTrack 项目主文档
   排期建议
   ────────────────────────────────
 
-    Phase A（止血，~2 天）
-      A1 / A2 / A3 / A4 / A5（已完）/ A6 / A7
+    Phase A（止血）[✅ 全部完成]
+      A1-A7  已完成（c999c51 起）
+      A8-A12 已完成（审计接入 / SQLite 移除 / 清理系统 / Session）
 
     Phase B（完善，~5-7 天）
       B1-B9（B7-B9 是 P3 工程任务，可穿插）
@@ -1114,6 +1135,7 @@ AsterTrack 项目主文档
       server/cmd/main.go:290-292                              SetListProbeExcludeCommsFunc
       server/cmd/main.go:408-412                              RebuildFromDB 调用
       server/cmd/main.go:590-599                              启动缓存 goroutine
+                                                             [已删 c999c51]
 
     5.2.2 legacy/ 下 .o 文件
       状态：已 git rm --cached（7a1e1a1），本地保留

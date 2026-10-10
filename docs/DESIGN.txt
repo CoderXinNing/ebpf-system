@@ -276,7 +276,8 @@ AsterTrack 设计定稿
 
     gRPC：
       GetRulesFull(req.AgentId)                按 agent_id 直读
-      HeartbeatResponse.rules_hash             新增（替换 rules_stale）
+      HeartbeatResponse.rules_hash             新增（替换 rules_stale）[P1.10 目标]
+                                                当前仍为 rules_stale
                                                 rules_version 保留（上报用）
 
   2.6 设计决策记录
@@ -423,7 +424,7 @@ AsterTrack 设计定稿
     🔴 高危 1：删除会锁全表几十秒
 
       现状：
-        events_2026_10 有 37 万行，一台 Agent 可能占几万行
+        events_2026_10 有 37 万行（2026-10-09 快照），一台 Agent 可能占几万行
         DELETE agents → CASCADE 到 events → 删几万行
         → 表级锁 → 其他 Agent 写入阻塞
 
