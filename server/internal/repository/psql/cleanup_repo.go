@@ -101,8 +101,9 @@ func (p *PSQL) cleanupEventsBeforeDays(ctx context.Context, days int) (int64, er
 	rows.Close()
 
 	for _, name := range archives {
-		// 归档表整表早于 cutoff → 先 DELETE 表内超期行（保留已删主机数据）
-		// 简化：直接 DROP（用户已确认"归档可以归档"，即可以按表级删）
+		// 归档表名早于 cutoff → 整表 DROP
+		// 月粒度：表内数据可能跨天，但按表级删是可接受的近似
+		// 精确到天需改日分区（当前不必要）
 		if _, err := p.pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", name)); err != nil {
 			log.Printf("⚠️ DROP 归档表 %s 失败: %v", name, err)
 		} else {

@@ -5,14 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-
 )
 
 // SaveAsset 保存资产快照
 func (p *PSQL) SaveAsset(ctx context.Context, agentID string, processesJSON, usersJSON, systemJSON []byte) error {
-	log.Printf("DEBUG: SaveAsset 入口 processes=%d users=%d system=%d", len(processesJSON), len(usersJSON), len(systemJSON))
 	if len(processesJSON) > 10 {
-		log.Printf("DEBUG: processesJSON 前 50 字符: %s", string(processesJSON[:50]))
 	}
 	if processesJSON != nil && len(processesJSON) > 2 {
 		_, err := p.pool.Exec(ctx,
@@ -135,7 +132,6 @@ func (p *PSQL) GetAllAssets(ctx context.Context, agentID string) (map[string]int
 	}
 	return result, nil
 }
-
 
 // GetLatestAsset 获取最新资产快照
 func (p *PSQL) GetLatestAsset(ctx context.Context, agentID string) (json.RawMessage, json.RawMessage, json.RawMessage, error) {

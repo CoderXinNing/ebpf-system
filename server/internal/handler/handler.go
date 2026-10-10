@@ -502,7 +502,6 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.POST("/probe-exclude/apply", h.rbacMiddleware("probes", "write"), h.ApplyProbeExclude)
 
 		api.GET("/alerts", func(c *gin.Context) {
-			log.Printf("DEBUG: ListAlertsFunc = %v", h.ListAlertsFunc != nil)
 			if h.ListAlertsFunc != nil {
 				alerts, err := h.ListAlertsFunc(100)
 				if err != nil {

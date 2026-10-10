@@ -112,7 +112,6 @@ func main() {
 	{
 		if psqlDB != nil {
 			h.SetSaveAssetFunc(func(agentID string, processesJSON, usersJSON, systemJSON []byte) error {
-				log.Printf("DEBUG: SaveAssetFunc processes=%d bytes users=%d bytes system=%d bytes", len(processesJSON), len(usersJSON), len(systemJSON))
 				return psqlDB.SaveAsset(context.Background(), agentID, processesJSON, usersJSON, systemJSON)
 			})
 			h.SetSettingCallbacks(

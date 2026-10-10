@@ -4,25 +4,52 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// defaultReadIntConf 从 system_config 读整数配置
+// configCacheEntry 配置缓存条目
+type configCacheEntry struct {
+	value    int
+	cachedAt time.Time
+}
+
+// defaultReadIntConf 从 system_config 读整数配置（带 5 分钟内存缓存）
+//
+// 缓存理由：ValidateAndTouch 每次请求都读 idle_minutes，
+// 高频请求下 DB 压力大。配置改动不频繁，5 分钟延迟可接受。
 func defaultReadIntConf(pool *pgxpool.Pool) func(ctx context.Context, namespace, key string, defaultVal int) int {
+	var cache sync.Map
+
+	const ttl = 5 * time.Minute
+
 	return func(ctx context.Context, namespace, key string, defaultVal int) int {
+		cacheKey := namespace + "." + key
+
+		if v, ok := cache.Load(cacheKey); ok {
+			if e, ok := v.(*configCacheEntry); ok {
+				if time.Since(e.cachedAt) < ttl {
+					return e.value
+				}
+			}
+		}
+
 		var v string
 		err := pool.QueryRow(ctx,
 			`SELECT value FROM system_config WHERE namespace = $1 AND key = $2`,
 			namespace, key).Scan(&v)
 		if err != nil || v == "" {
+			cache.Store(cacheKey, &configCacheEntry{value: defaultVal, cachedAt: time.Now()})
 			return defaultVal
 		}
 		n, err := strconv.Atoi(v)
 		if err != nil || n <= 0 {
+			cache.Store(cacheKey, &configCacheEntry{value: defaultVal, cachedAt: time.Now()})
 			return defaultVal
 		}
+		cache.Store(cacheKey, &configCacheEntry{value: n, cachedAt: time.Now()})
 		return n
 	}
 }
@@ -73,7 +100,7 @@ func (am *AuthManager) CreateSession(ctx context.Context, userID int, ip, userAg
 //  2. session 存在
 //  3. 未撤销
 //  4. 未超过绝对过期时间
-//  5. 未超过空闲超时（keepalive 时用延长值）
+//  5. 未超过空闲超时
 //
 // 通过后 Touch 更新 last_activity_at
 // 返回：user / session_id（DB 主键 id）/ error
@@ -98,7 +125,9 @@ func (am *AuthManager) ValidateAndTouch(ctx context.Context, tokenStr string) (*
 
 	// 绝对超时（NULL 表示禁用）
 	if sess.ExpiresAt != nil && time.Now().After(*sess.ExpiresAt) {
-		_ = am.sessionStore.Revoke(ctx, sess.ID)
+		if err := am.sessionStore.Revoke(ctx, sess.ID); err != nil {
+			fmt.Printf("⚠️ 撤销过期会话失败 (id=%d): %v\n", sess.ID, err)
+		}
 		return nil, 0, fmt.Errorf("会话已过期")
 	}
 
@@ -106,31 +135,23 @@ func (am *AuthManager) ValidateAndTouch(ctx context.Context, tokenStr string) (*
 	idleMinutes := am.readIntConf(ctx, "session", "idle_minutes", 10)
 	idleTimeout := time.Duration(idleMinutes) * time.Minute
 	if time.Since(sess.LastActivityAt) > idleTimeout {
-		_ = am.sessionStore.Revoke(ctx, sess.ID)
+		if err := am.sessionStore.Revoke(ctx, sess.ID); err != nil {
+			fmt.Printf("⚠️ 撤销空闲会话失败 (id=%d): %v\n", sess.ID, err)
+		}
 		return nil, 0, fmt.Errorf("会话空闲超时")
 	}
 
 	// 滑动续期（30 秒去重，SQL 层短路）
-	_ = am.sessionStore.Touch(ctx, sess.ID)
+	if err := am.sessionStore.Touch(ctx, sess.ID); err != nil {
+		fmt.Printf("⚠️ 更新会话活动时间失败 (id=%d): %v\n", sess.ID, err)
+	}
 
 	return user, sess.ID, nil
 }
 
 // GetSessionByID 按主键查询会话详情
 func (am *AuthManager) GetSessionByID(ctx context.Context, id int64) (*Session, error) {
-	// 直接用 sessionStore 接口，但需要按 id 查（接口里没有）
-	// 简化：通过 pool 直接查
-	var sess Session
-	err := am.pool.QueryRow(ctx,
-		`SELECT id, user_id, session_id_hash, COALESCE(ip,''), COALESCE(user_agent,''),
-		        created_at, expires_at, revoked_at, last_activity_at, keepalive
-		 FROM sessions WHERE id = $1`, id,
-	).Scan(&sess.ID, &sess.UserID, &sess.SessionIDHash, &sess.IP, &sess.UserAgent,
-		&sess.CreatedAt, &sess.ExpiresAt, &sess.RevokedAt, &sess.LastActivityAt, &sess.Keepalive)
-	if err != nil {
-		return nil, err
-	}
-	return &sess, nil
+	return am.sessionStore.GetByID(ctx, id)
 }
 
 // GetSessionConfig 返回前端需要的会话配置

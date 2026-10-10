@@ -212,12 +212,9 @@ func (s *Service) ReportEvents(ctx context.Context, req *pb.EventReport) (*pb.Re
 
 // 资产上报方法（11 个）
 func (s *Service) ReportProcesses(ctx context.Context, req *pb.ProcessReport) (*pb.ReportResponse, error) {
-	log.Printf("DEBUG: ReportProcesses 收到 %d 个进程", len(req.Processes))
 	if len(req.Processes) > 0 {
-		log.Printf("DEBUG: 第一个进程: PID=%d Name=%s Cmdline=%s", req.Processes[0].Pid, req.Processes[0].Name, req.Processes[0].Cmdline)
 	}
 	procJSON, _ := json.Marshal(req.Processes)
-	log.Printf("DEBUG: ReportProcesses Marshal 后 %d bytes", len(procJSON))
 	if s.handler.SaveAssetFunc != nil {
 		if err := s.handler.SaveAssetFunc(req.AgentId, procJSON, nil, nil); err != nil {
 			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
@@ -278,15 +275,6 @@ func (s *Service) ReportCronJobs(ctx context.Context, req *pb.CronReport) (*pb.R
 }
 
 func (s *Service) ReportServices(ctx context.Context, req *pb.ServiceReport) (*pb.ReportResponse, error) {
-	log.Printf("DEBUG: ReportServices services=%d status=%d", len(req.Services), len(req.ServiceStatus))
-	if len(req.Services) > 0 {
-		s0 := req.Services[0]
-		log.Printf("DEBUG: 第一个 service: name=%s version=%s type=%s pid=%d", s0.Name, s0.Version, s0.Type, s0.Pid)
-	}
-	if len(req.ServiceStatus) > 0 {
-		s0 := req.ServiceStatus[0]
-		log.Printf("DEBUG: 第一个 status: name=%s enabled=%v active=%s", s0.Name, s0.Enabled, s0.Active)
-	}
 	if s.handler.SaveTypedAssetFunc != nil {
 		if err := s.handler.SaveTypedAssetFunc(req.AgentId, "service", "services", req.Services); err != nil {
 			log.Printf("⚠️ 分类资产保存失败 (agent=%s): %v", req.AgentId, err)

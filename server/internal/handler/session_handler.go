@@ -6,11 +6,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// SessionKeepalive 心跳：延长会话
+// SessionKeepalive 心跳：维持会话
 //
-// 前端在页面可见时定时调用（默认 5 分钟一次）。
-// authMiddleware 已经通过 ValidateAndTouch 完成 Touch，
-// 这里只需返回成功。
+// 用户开启心跳后，前端每 heartbeat_interval_seconds 秒调用一次。
+// authMiddleware 已通过 ValidateAndTouch 完成 Touch，
+// 此处只需返回成功。
 func (h *Handler) SessionKeepalive(c *gin.Context) {
 	c.JSON(200, gin.H{"success": true})
 }

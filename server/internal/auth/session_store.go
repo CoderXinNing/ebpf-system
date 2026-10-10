@@ -6,9 +6,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -35,6 +37,7 @@ type Session struct {
 type SessionStore interface {
 	Create(ctx context.Context, sess *Session) (int64, error)
 	GetByIDHash(ctx context.Context, hash string) (*Session, error)
+	GetByID(ctx context.Context, id int64) (*Session, error)
 	Touch(ctx context.Context, id int64) error
 	Revoke(ctx context.Context, id int64) error
 	RevokeByUserID(ctx context.Context, userID int) error
@@ -76,7 +79,28 @@ func (s *PGSessionStore) GetByIDHash(ctx context.Context, hash string) (*Session
 	).Scan(&sess.ID, &sess.UserID, &sess.SessionIDHash, &sess.IP, &sess.UserAgent,
 		&sess.CreatedAt, &sess.ExpiresAt, &sess.RevokedAt, &sess.LastActivityAt, &sess.Keepalive)
 	if err != nil {
-		return nil, fmt.Errorf("会话不存在")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("会话不存在")
+		}
+		return nil, fmt.Errorf("查询会话失败: %w", err)
+	}
+	return sess, nil
+}
+
+// GetByID 按主键查询会话
+func (s *PGSessionStore) GetByID(ctx context.Context, id int64) (*Session, error) {
+	sess := &Session{}
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, user_id, session_id_hash, COALESCE(ip,''), COALESCE(user_agent,''),
+		        created_at, expires_at, revoked_at, last_activity_at, keepalive
+		 FROM sessions WHERE id = $1`, id,
+	).Scan(&sess.ID, &sess.UserID, &sess.SessionIDHash, &sess.IP, &sess.UserAgent,
+		&sess.CreatedAt, &sess.ExpiresAt, &sess.RevokedAt, &sess.LastActivityAt, &sess.Keepalive)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("会话不存在")
+		}
+		return nil, fmt.Errorf("查询会话失败: %w", err)
 	}
 	return sess, nil
 }
