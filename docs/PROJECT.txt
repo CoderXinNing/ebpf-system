@@ -78,6 +78,31 @@ AsterTrack 项目主文档
       - Agent 收到后立即触发一次拉取
       - 原方案（走 Commands）未采用；5 分钟轮询保留为兜底
 
+    规则结构 v3（2026-10-10）
+      - 规则从 v2 升 v3：bash 独立节 + cmdline 排除 + tcp comm/combo
+      - 结构变化：
+          FileAccess: 删除 exclude（file_access 只做包含，不做排除）
+          Exec:       扩展 exclude（comms + exact_cmdlines + prefix_cmdlines）
+          Bash:       新增独立节（exact_cmdlines + prefix_cmdlines，不读 comm）
+          TCP:        扩展 exclude（ips + comms + combos）
+      - C 层新增 4 张 map：
+          sentinel_xcmd_e    HASH      char[256]         exec/bash 精确命令
+          sentinel_xcmd_p    LPM_TRIE  prefixlen+char[256] exec/bash 前缀命令
+          sentinel_xcomm     HASH      char[16]          tcp 进程排除
+          sentinel_xcombo    HASH      char[20]          tcp (comm, ip) 组合
+      - 语义决策：
+          exec：comm（父进程）+ cmdline（argv[0]）三维 or
+          bash：只 cmdline（comm 恒为 bash 无意义）
+          file：只做 sensitive_exact/prefix 包含，不做排除
+          tcp ：ips（CIDR）+ comms（进程）+ combos（精确组合）三维 or
+      - 长度上限：cmdline 精确匹配 255 字符（事件头 + map key 双重锁死）
+          超长命令交给前缀匹配或 Go 层规则引擎
+      - 已验证：四探针 verifier + attach + 触发 + 收事件全通过
+      - 已验证：端到端验签 + canonical 往返一致 + 新字段全部核对
+      - 清理：file_probe 本地兜底删除、bash_monitor 重复过滤清理、
+              MinCmdlineLen 废弃
+      - 提交：c32ee0b（v3 主体）+ 1a07ec6（清理）
+
     探针排除三维度（后端，2026-10-09）
       - migration 007 已应用
       - C 层 sentinel_xip（LPM_TRIE）已加载
@@ -1197,9 +1222,11 @@ AsterTrack 项目主文档
 【六、当前 commit 状态】
 
   分支：main（已 push 到 origin/main）
-  HEAD：aaa921a（refactor(web): 去掉「会话即将过期」banner）
+  HEAD：c32ee0b（feat(rules): 规则结构 v3）
 
-  本批提交（2026-10-10，22 个，已 push）：
+  本批提交（2026-10-10，24 个）：
+    c32ee0b  feat(rules): 规则结构 v3（bash 独立节 + cmdline 排除 + tcp comm/combo）
+    1a07ec6  cleanup: 删除 file_probe 本地兜底 + bash 重复过滤 + 废弃 MinCmdlineLen
     c999c51  fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪
     4d1995f  docs(phase-a): A3 文档漂移修正
     3ecbdcb  docs(phase-a): A3 文档漂移修正（§6 工作区）

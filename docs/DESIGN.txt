@@ -293,6 +293,130 @@ AsterTrack 设计定稿
     - 标签/分组是 UI 显示层，下发按 agent_id
     - 新 Agent 激活时 Server 自动绑定默认模板（best-effort）
 
+  2.7 规则内容结构 v3（2026-10-10）
+
+    背景：v2 的排除维度不足以支撑"探针各司其职 + C 层快筛"。
+          v3 把"谁排除什么"显式化到各探针节。
+
+    结构定稿：
+
+    {
+      "version": 3,
+      "file_access": {
+        "rules": { "sensitive_exact": [], "sensitive_prefix": [] }
+      },
+      "exec": {
+        "exclude": {
+          "comms": [],
+          "exact_cmdlines": [],
+          "prefix_cmdlines": []
+        }
+      },
+      "bash": {
+        "exclude": {
+          "exact_cmdlines": [],
+          "prefix_cmdlines": []
+        }
+      },
+      "tcp": {
+        "rules": { "sensitive_ports": [] },
+        "exclude": {
+          "ips": [],
+          "comms": [],
+          "combos": [ {"comm": "...", "ip": "..."} ]
+        }
+      }
+    }
+
+    各探针语义（核心：探针各司其职，不越界）：
+
+      file_access
+        - 只做包含（监控什么），不做排除
+        - 定位：默认不采 + 敏感路径命中才采
+        - 上下文（谁改的、用什么命令改的）由 exec/bash 补全
+        - 删除了 v2 的 FileAccessExclude 结构
+
+      exec
+        - 默认全采，三维度 or 排除：
+            comms          发起 execve 的进程名（父进程）
+            exact_cmdlines 被执行的命令（argv[0]），精确
+            prefix_cmdlines 被执行的命令，前缀
+        - 用途：剔除系统进程（systemd/cron/logrotate）
+                剔除 Agent 自身 exec.Command
+
+      bash
+        - 默认全采，v3 起独立节（不再共用 exec.exclude）
+        - 只做命令维度排除（comm 恒为 bash，无意义）：
+            exact_cmdlines  用户输入的命令整行，精确
+            prefix_cmdlines 用户输入的命令整行，前缀
+
+      tcp
+        - 默认计数模式，星轨激活转明细
+        - 三维度 or 排除：
+            ips     目标 IP / CIDR（LPM_TRIE）
+            comms   发起连接的进程名（HASH）
+            combos  (comm, ip) 精确组合（HASH，不支持 CIDR）
+        - 敏感端口不在此层，走 Agent 的 tcpAnomaly（Go 层规则引擎）
+          理由：探针只给信息，是否"敏感端口访问"由规则引擎判断，
+                以此分离性能消耗
+
+    C 层 map 清单（v3 新增 4 张，v2 的 sentinel_exclude_comms 保留给 exec 专用）：
+
+      | map 名             | 类型      | key                        | 用途              |
+      |--------------------|-----------|----------------------------|-------------------|
+      | sentinel_xcmd_e    | HASH      | char[256]                  | exec/bash 精确命令 |
+      | sentinel_xcmd_p    | LPM_TRIE  | prefixlen + char[256]      | exec/bash 前缀命令 |
+      | sentinel_xcomm     | HASH      | char[16]                   | tcp 进程排除      |
+      | sentinel_xcombo    | HASH      | char[20]（comm[16]+ip[4]） | tcp 组合排除      |
+
+      命名约束：内核 BPF map 名上限 15 字符。
+        sentinel_xcmd_exact  → 超限，故用 sentinel_xcmd_e
+        sentinel_xcmd_prefix → 超限，故用 sentinel_xcmd_p
+        sentinel_xcomm 恰好 14 字符，未超限
+
+    长度上限（cmdline 精确匹配）：
+
+      - 双重锁死 255 字符：
+          1. 事件头 data[256]，探针读取 bpf_probe_read_user_str(_, 256, _)
+          2. Map key 为 char[256]，规则写入时同样按 255 截断
+      - 超长命令的"精确匹配"本质失效，只能匹配前 255 字符
+      - 超长且变化多的命令请改用前缀匹配，或交给 Go 层做关键字包含
+      - C 层做快筛，Go 层做精判：C 层能挡 90% 噪音即可
+
+    各探针物理 map 独立性：
+
+      - exec / bash / file_access / tcp 各自 LoadAndAssign 一份 .o
+      - 因此每个探针的 map 物理上独立，没有 pin、没有 MapReplacements
+      - "共用"是数据源层面（同一份 rs.Exec.Exclude.Comms 等），不是物理 map
+      - ApplyConfig 必须四路都调，才能保证内容一致
+
+    ApplyConfig 数据流（v3）：
+
+      | 探针        | 写哪些 map                                                       |
+      |-------------|------------------------------------------------------------------|
+      | exec        | sentinel_exclude_comms + sentinel_xcmd_e + sentinel_xcmd_p       |
+      | bash        | sentinel_xcmd_e + sentinel_xcmd_p                                |
+      | file_access | 只写 sensitive_exact + sensitive_prefixes                        |
+      | tcp         | sentinel_xip + sentinel_xcomm + sentinel_xcombo                  |
+
+    移除的历史配置：
+
+      - ExecRulesInner.MinCmdlineLen（定义了但全仓库零消费，v3 删除）
+      - FileAccessExclude（file_access 不做排除，v3 删除）
+      - bash 共用 exec.exclude（v3 起 bash 有独立节）
+
+    与 §2.1-2.6（规则模型 v2）的关系：
+
+      - v2 讲"每 Agent 独立 + 模板"的分发模型，继续有效
+      - v3 讲"规则内容"的内部结构，替代 §3.3 的 v2 示例
+      - 两个层面独立：分发模型不变，内容结构升级
+
+    已落地验证（2026-10-10）：
+
+      - 四探针 verifier + attach + 触发 + 收事件全通过
+      - 端到端验签 + canonical 往返一致 + 新字段全部核对
+      - 提交：c32ee0b（v3 主体）+ 1a07ec6（清理）
+
 
 【三、规则下发与 Apply】
 
@@ -320,21 +444,33 @@ AsterTrack 设计定稿
     内部结构：探针分节 + 每节 rules/exclude
 
     {
-      "version": 2,
+      "version": 3,
       "file_access": {
         "rules": {
           "sensitive_exact": [...],
           "sensitive_prefix": [...]
-        },
-        "exclude": {"comms": ["cron", "logrotate"]}
+        }
       },
       "exec": {
-        "rules": {"min_cmdline_len": 1},
-        "exclude": {"comms": ["systemd"]}
+        "exclude": {
+          "comms": ["systemd"],
+          "exact_cmdlines": ["/bin/ls"],
+          "prefix_cmdlines": ["/usr/bin/"]
+        }
+      },
+      "bash": {
+        "exclude": {
+          "exact_cmdlines": ["history"],
+          "prefix_cmdlines": ["cat /etc/"]
+        }
       },
       "tcp": {
         "rules": {"sensitive_ports": [...]},
-        "exclude": {"ips": [...]}
+        "exclude": {
+          "ips": ["1.2.3.4", "10.0.0.0/8"],
+          "comms": ["curl"],
+          "combos": [{"comm": "wget", "ip": "8.8.8.8"}]
+        }
       }
     }
 
