@@ -44,10 +44,10 @@ func (h *Handler) ListEvents(c *gin.Context) {
 			limit = n
 		}
 	}
-	if h.Store != nil {
-		dbEvents, dbErr := h.Store.GetEvents(limit, agentID)
+	if h.GetEventsAsRecordsFunc != nil {
+		dbEvents, dbErr := h.GetEventsAsRecordsFunc(limit, agentID)
 		if dbErr == nil && len(dbEvents) > 0 {
-			c.JSON(200, gin.H{"total": len(dbEvents), "events": dbEvents, "source": "sqlite"})
+			c.JSON(200, gin.H{"total": len(dbEvents), "events": dbEvents, "source": "psql"})
 			return
 		}
 	}

@@ -16,7 +16,6 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/middleware"
 	"github.com/CoderXinNing/ebpf-system/server/internal/rulessvc"
 	"github.com/CoderXinNing/ebpf-system/server/internal/service"
-	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 )
 
 // Service 实现 gRPC Sentinel 服务
@@ -81,12 +80,7 @@ func (s *Service) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Re
 	s.handler.Agents[req.AgentId] = agentInfo
 	s.handler.Mu.Unlock()
 
-	// 持久化（SQLite 模式下；PSQL 模式后续通过 repository 写入）
-	log.Printf("DEBUG: handler.Store = %v", s.handler.Store)
-	if s.handler != nil && s.handler.Store != nil && s.handler.Store.DB() != nil {
-		s.handler.Store.SaveAgent(req.AgentId, req.Hostname, req.IpAddress,
-			req.AgentVersion, getGroup(req.AgentGroup), tk, now, now)
-	}
+	// 持久化
 	if s.handler != nil && s.handler.SaveAgentFunc != nil {
 		log.Printf("📝 调用 SaveAgentFunc: ID=%s", req.AgentId)
 		if err := s.handler.SaveAgentFunc(handler.AgentInfo{
@@ -121,8 +115,12 @@ func (s *Service) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.
 	agent.Commands = make([]*pb.ProbeCommand, 0)
 	s.handler.Mu.Unlock()
 
-	if s.handler.Store != nil {
-		s.handler.Store.SaveAgent(agent.ID, agent.Hostname, agent.IPAddr, agent.Version, agent.Group, agent.Token, agent.FirstSeen, agent.LastSeen)
+	if s.handler.SaveAgentFunc != nil {
+		_ = s.handler.SaveAgentFunc(handler.AgentInfo{
+			ID: agent.ID, Hostname: agent.Hostname, IPAddr: agent.IPAddr,
+			Version: agent.Version, Group: agent.Group,
+			FirstSeen: agent.FirstSeen, LastSeen: agent.LastSeen,
+		})
 	}
 
 	// #1 规则秒级生效：比对 Agent 上报版本 vs 当前版本
@@ -220,9 +218,6 @@ func (s *Service) ReportProcesses(ctx context.Context, req *pb.ProcessReport) (*
 	}
 	procJSON, _ := json.Marshal(req.Processes)
 	log.Printf("DEBUG: ReportProcesses Marshal 后 %d bytes", len(procJSON))
-	if s.handler.Store != nil {
-		s.handler.Store.SaveAsset(req.AgentId, procJSON, nil, nil)
-	}
 	if s.handler.SaveAssetFunc != nil {
 		if err := s.handler.SaveAssetFunc(req.AgentId, procJSON, nil, nil); err != nil {
 			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
@@ -233,9 +228,6 @@ func (s *Service) ReportProcesses(ctx context.Context, req *pb.ProcessReport) (*
 
 func (s *Service) ReportUsers(ctx context.Context, req *pb.UserReport) (*pb.ReportResponse, error) {
 	userJSON, _ := json.Marshal(req.Users)
-	if s.handler.Store != nil {
-		s.handler.Store.SaveAsset(req.AgentId, nil, userJSON, nil)
-	}
 	if s.handler.SaveAssetFunc != nil {
 		if err := s.handler.SaveAssetFunc(req.AgentId, nil, userJSON, nil); err != nil {
 			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
@@ -250,9 +242,6 @@ func (s *Service) ReportSystemInfo(ctx context.Context, req *pb.SystemReport) (*
 		req.System.Services = nil
 	}
 	sysJSON, _ := json.Marshal(req.System)
-	if s.handler.Store != nil {
-		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
-	}
 	if s.handler.SaveAssetFunc != nil {
 		if err := s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON); err != nil {
 			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
@@ -312,8 +301,8 @@ func (s *Service) ReportServices(ctx context.Context, req *pb.ServiceReport) (*p
 func (s *Service) ReportWebComponents(ctx context.Context, req *pb.WebComponentReport) (*pb.ReportResponse, error) {
 	sysData := map[string]interface{}{"web_components": req.WebComponents}
 	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil {
-		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
+	if s.handler.SaveAssetFunc != nil {
+		_ = s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON)
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
@@ -325,8 +314,8 @@ func (s *Service) ReportHardware(ctx context.Context, req *pb.HardwareReport) (*
 		"env_variables":  req.EnvVariables,
 	}
 	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil {
-		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
+	if s.handler.SaveAssetFunc != nil {
+		_ = s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON)
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
@@ -338,8 +327,8 @@ func (s *Service) ReportNetwork(ctx context.Context, req *pb.NetworkReport) (*pb
 		"disk_usages":     req.DiskUsages,
 	}
 	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil {
-		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
+	if s.handler.SaveAssetFunc != nil {
+		_ = s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON)
 	}
 	return &pb.ReportResponse{Success: true}, nil
 }
@@ -347,9 +336,6 @@ func (s *Service) ReportNetwork(ctx context.Context, req *pb.NetworkReport) (*pb
 func (s *Service) ReportPerformance(ctx context.Context, req *pb.PerfReport) (*pb.ReportResponse, error) {
 	sysData := map[string]interface{}{"perf": req.Perf}
 	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil {
-		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
-	}
 	if s.handler.SaveAssetFunc != nil {
 		if err := s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON); err != nil {
 			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
@@ -361,9 +347,6 @@ func (s *Service) ReportPerformance(ctx context.Context, req *pb.PerfReport) (*p
 func (s *Service) ReportAgentSelf(ctx context.Context, req *pb.AgentSelfReport) (*pb.ReportResponse, error) {
 	sysData := map[string]interface{}{"agent_self": req.AgentSelf}
 	sysJSON, _ := json.Marshal(sysData)
-	if s.handler.Store != nil {
-		s.handler.Store.SaveAsset(req.AgentId, nil, nil, sysJSON)
-	}
 	if s.handler.SaveAssetFunc != nil {
 		if err := s.handler.SaveAssetFunc(req.AgentId, nil, nil, sysJSON); err != nil {
 			log.Printf("⚠️ 资产保存失败 (agent=%s): %v", req.AgentId, err)
@@ -374,25 +357,9 @@ func (s *Service) ReportAgentSelf(ctx context.Context, req *pb.AgentSelfReport) 
 
 // GetProbeList 探针名单查询
 func (s *Service) GetProbeList(ctx context.Context, req *pb.ProbeListRequest) (*pb.ProbeListResponse, error) {
-	var configs []store.ProbeConfigRecord
-	var err error
-	if s.handler.Store != nil {
-		configs, err = s.handler.Store.GetProbeConfigs(req.AgentId)
-	}
-	if err != nil {
-		return &pb.ProbeListResponse{Success: false, Message: "查询失败"}, nil
-	}
-
+	// PSQL 模式下 probe_configs 表尚未接入（等 probe_templates 设计完成）
+	// 直接走默认名单
 	probes := make([]*pb.ProbeInfo, 0)
-	for _, cfg := range configs {
-		probes = append(probes, &pb.ProbeInfo{
-			Name:    cfg.ProbeName,
-			Enabled: cfg.Enabled,
-			Remove:  cfg.Remove,
-			Path:    cfg.Path,
-			Sha256:  cfg.Sha256,
-		})
-	}
 
 	if len(probes) == 0 {
 		// 默认名单
@@ -407,8 +374,8 @@ func (s *Service) GetProbeList(ctx context.Context, req *pb.ProbeListRequest) (*
 
 	// 误报特征
 	var features []string
-	if s.handler.Store != nil {
-		features, _ = s.handler.Store.GetFeedbackFeatures()
+	if s.handler.GetFeedbackFeaturesFunc != nil {
+		features, _ = s.handler.GetFeedbackFeaturesFunc()
 	}
 
 	return &pb.ProbeListResponse{Success: true, Probes: probes, FalsePositiveFeatures: features}, nil
@@ -500,8 +467,12 @@ func (s *Service) ReportShutdown(ctx context.Context, req *pb.ShutdownRequest) (
 	s.handler.Mu.Lock()
 	if agent, ok := s.handler.Agents[req.AgentId]; ok {
 		agent.LastSeen = 0
-		if s.handler.Store != nil {
-			s.handler.Store.SaveAgent(agent.ID, agent.Hostname, agent.IPAddr, agent.Version, agent.Group, agent.Token, agent.FirstSeen, 0)
+		if s.handler.SaveAgentFunc != nil {
+			_ = s.handler.SaveAgentFunc(handler.AgentInfo{
+				ID: agent.ID, Hostname: agent.Hostname, IPAddr: agent.IPAddr,
+				Version: agent.Version, Group: agent.Group,
+				FirstSeen: agent.FirstSeen, LastSeen: 0,
+			})
 		}
 		log.Printf("👋 Agent正常下线: %s", agent.Hostname)
 	}

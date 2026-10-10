@@ -2,8 +2,11 @@ package psql
 
 import (
 	"context"
+	"time"
+
 	"encoding/json"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/CoderXinNing/ebpf-system/server/internal/model"
 )
@@ -109,4 +112,62 @@ func (p *PSQL) ListEventsByCorrelationID(ctx context.Context, corrID string) ([]
 func (p *PSQL) CleanExpiredEvents(ctx context.Context, beforeTimestamp int64) error {
 	// 分区表按月清理，不逐行删除
 	return nil
+}
+
+// EventRecord 事件记录（兼容旧 store.EventRecord 的 map 格式）
+type EventRecord struct {
+	ID        int64  `json:"id"`
+	AgentID   string `json:"agent_id"`
+	ProbeName string `json:"probe_name"`
+	Timestamp string `json:"timestamp"`
+	EventType string `json:"event_type"`
+	PID       int32  `json:"pid"`
+	Comm      string `json:"comm"`
+	Filename  string `json:"filename"`
+	Details   string `json:"details"`
+}
+
+// ListEventsAsRecords 按 agentID 查询事件（兼容旧 store.GetEvents 的返回）
+func (p *PSQL) ListEventsAsRecords(ctx context.Context, limit int, agentID string) ([]EventRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	var rows pgx.Rows
+	var err error
+	if agentID != "" {
+		rows, err = p.pool.Query(ctx, `
+			SELECT id, agent_id, COALESCE(probe_name,''), timestamp,
+			       COALESCE(event_type,''), COALESCE(pid,0), COALESCE(comm,''),
+			       COALESCE(filename,''), COALESCE(details::text,'')
+			FROM events WHERE agent_id = $1
+			ORDER BY id DESC LIMIT $2`, agentID, limit)
+	} else {
+		rows, err = p.pool.Query(ctx, `
+			SELECT id, agent_id, COALESCE(probe_name,''), timestamp,
+			       COALESCE(event_type,''), COALESCE(pid,0), COALESCE(comm,''),
+			       COALESCE(filename,''), COALESCE(details::text,'')
+			FROM events
+			ORDER BY id DESC LIMIT $1`, limit)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("查询事件失败: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]EventRecord, 0, limit)
+	for rows.Next() {
+		var r EventRecord
+		var ts time.Time
+		if err := rows.Scan(&r.ID, &r.AgentID, &r.ProbeName, &ts, &r.EventType,
+			&r.PID, &r.Comm, &r.Filename, &r.Details); err != nil {
+			continue
+		}
+		r.Timestamp = ts.Format("2006-01-02 15:04:05")
+		result = append(result, r)
+	}
+	return result, nil
 }

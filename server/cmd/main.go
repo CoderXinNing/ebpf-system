@@ -25,7 +25,6 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/model"
 	"github.com/CoderXinNing/ebpf-system/server/internal/paths"
 	"github.com/CoderXinNing/ebpf-system/server/internal/repository/psql"
-	"github.com/CoderXinNing/ebpf-system/server/internal/repository/sqlite"
 	"github.com/CoderXinNing/ebpf-system/server/internal/rulessvc"
 	"github.com/CoderXinNing/ebpf-system/server/internal/udp"
 	"github.com/CoderXinNing/ebpf-system/server/internal/ws"
@@ -41,8 +40,8 @@ type ServerConfig struct {
 		Token    string `toml:"token"`
 	} `toml:"server"`
 	Database struct {
-		Type     string `toml:"type"` // sqlite / postgres
-		Path     string `toml:"path"` // SQLite 路径
+		Type     string `toml:"type"` // postgres
+		Path     string `toml:"path"` // 保留字段（向后兼容旧配置）
 		Host     string `toml:"host"`
 		Port     int    `toml:"port"`
 		User     string `toml:"user"`
@@ -80,11 +79,9 @@ func main() {
 		log.Printf("⚠️ Agent 编译检查失败: %v", err)
 	}
 
-	// 数据库（根据配置选择 PSQL 或 SQLite）
+	// 数据库：PostgreSQL（唯一支持）
 	var psqlDB *psql.PSQL
-	var sqliteDB *sqlite.SQLite
-
-	if cfg.Database.Type == "postgres" {
+	{
 		var err error
 		psqlDB, err = psql.New(psql.Config{
 			Host:     cfg.Database.Host,
@@ -98,19 +95,11 @@ func main() {
 		}
 		defer psqlDB.Close()
 		log.Println("✅ 使用 PostgreSQL 数据库")
-	} else {
-		var err error
-		sqliteDB, err = sqlite.New(cfg.Database.Path)
-		if err != nil {
-			log.Fatalf("❌ SQLite 初始化失败: %v", err)
-		}
-		defer sqliteDB.Close()
-		log.Println("✅ 使用 SQLite 数据库")
 	}
 
 	// 认证（PSQL）
 	var am *auth.AuthManager
-	if psqlDB != nil {
+	{
 		var err error
 		am, err = auth.NewAuthManager(psqlDB.Pool())
 		if err != nil {
@@ -118,13 +107,9 @@ func main() {
 		}
 	}
 
-	// Handler（过渡期：继续用 SQLite Store）
-	var h *handler.Handler
-	if sqliteDB != nil {
-		h = handler.NewHandler(sqliteDB.Store, am, nil)
-	} else {
-		// PSQL 模式：Handler 层用 repository 接口（过渡期）
-		h = handler.NewHandlerWithNilStore(am, nil)
+	// Handler
+	h := handler.NewHandler(am, nil)
+	{
 		if psqlDB != nil {
 			h.SetSaveAssetFunc(func(agentID string, processesJSON, usersJSON, systemJSON []byte) error {
 				log.Printf("DEBUG: SaveAssetFunc processes=%d bytes users=%d bytes system=%d bytes", len(processesJSON), len(usersJSON), len(systemJSON))
@@ -149,6 +134,82 @@ func main() {
 					return psqlDB.ListAudit(context.Background(), limit)
 				},
 			)
+
+			// PSQL callback 注入
+			h.SetListGroupsFunc(func() ([]string, error) {
+				return psqlDB.ListGroups(context.Background())
+			})
+			h.SetCreateGroupFunc(func(name string) error {
+				return psqlDB.CreateGroup(context.Background(), name)
+			})
+			h.SetDeleteGroupFunc(func(name string) error {
+				return psqlDB.DeleteGroup(context.Background(), name)
+			})
+
+			h.SetGetAlertStatsFunc(func() map[string]interface{} {
+				return psqlDB.GetAlertStats(context.Background())
+			})
+			h.SetSaveAlertFeedbackFunc(func(alertID string, feedback, username string) error {
+				var id int64
+				if _, err := fmt.Sscanf(alertID, "%d", &id); err != nil {
+					return err
+				}
+				return psqlDB.SaveAlertFeedback(context.Background(), id, feedback, username)
+			})
+
+			h.SetSaveFeedbackFeatureFunc(func(featureKey string) error {
+				return psqlDB.SaveFeedbackFeature(context.Background(), featureKey)
+			})
+			h.SetGetFeedbackFeaturesFunc(func() ([]string, error) {
+				return psqlDB.GetFeedbackFeatures(context.Background())
+			})
+
+			h.SetGetAllLatestAssetsFunc(func() (map[string]map[string]int, error) {
+				return psqlDB.GetAllLatestAssets(context.Background())
+			})
+
+			h.SetGetProbeConfigsFunc(func(agentID string) ([]map[string]interface{}, error) {
+				configs, err := psqlDB.GetProbeConfigsByAgentID(context.Background(), agentID)
+				if err != nil {
+					return nil, err
+				}
+				out := make([]map[string]interface{}, 0, len(configs))
+				for _, c := range configs {
+					out = append(out, map[string]interface{}{
+						"id":                c.ID,
+						"agent_id":          c.AgentID,
+						"probe_template_id": c.ProbeTemplateID,
+						"status":            c.Status,
+						"desired_status":    c.DesiredStatus,
+						"failure_reason":    c.FailureReason,
+						"version_lock":      c.VersionLock,
+						"updated_at":        c.UpdatedAt.Format("2006-01-02 15:04:05"),
+					})
+				}
+				return out, nil
+			})
+
+			h.SetGetEventsAsRecordsFunc(func(limit int, agentID string) ([]map[string]interface{}, error) {
+				records, err := psqlDB.ListEventsAsRecords(context.Background(), limit, agentID)
+				if err != nil {
+					return nil, err
+				}
+				out := make([]map[string]interface{}, 0, len(records))
+				for _, r := range records {
+					out = append(out, map[string]interface{}{
+						"id":         r.ID,
+						"agent_id":   r.AgentID,
+						"probe_name": r.ProbeName,
+						"timestamp":  r.Timestamp,
+						"event_type": r.EventType,
+						"pid":        r.PID,
+						"comm":       r.Comm,
+						"filename":   r.Filename,
+						"details":    r.Details,
+					})
+				}
+				return out, nil
+			})
 			// 证书初始化（首次运行自动生成 CA + Server 证书；旧品牌 CA 会报错退出）
 			if _, err := ca.Bootstrap(ca.BootstrapOptions{
 				Dir:               "certs",
@@ -267,12 +328,8 @@ func main() {
 			h.SetGetAllAssetsFunc(func(agentID string) (map[string]interface{}, error) {
 				return psqlDB.GetAllAssets(context.Background(), agentID)
 			})
-			h.SetGetLatestAssetFunc(func(agentID string) (interface{}, interface{}, interface{}, error) {
-				processes, users, system, err := psqlDB.GetLatestAsset(context.Background(), agentID)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-				return processes, users, system, nil
+			h.SetGetLatestAssetFunc(func(agentID string) (json.RawMessage, json.RawMessage, json.RawMessage, error) {
+				return psqlDB.GetLatestAsset(context.Background(), agentID)
 			})
 			h.SetListStarEventsFunc(func(corrID string) ([]map[string]interface{}, error) {
 				events, err := psqlDB.ListEventsByCorrelationID(context.Background(), corrID)
@@ -507,19 +564,11 @@ func main() {
 		log.Println("✅ UDP 接收端已启动 :9999")
 	}
 
-	// 定时清理（PSQL 用自己的清理任务）
-	if psqlDB != nil {
+	// 定时清理
+	{
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		psqlDB.StartMaintenanceTask(ctx)
-	} else if sqliteDB != nil {
-		go func() {
-			ticker := time.NewTicker(1 * time.Hour)
-			defer ticker.Stop()
-			for range ticker.C {
-				sqliteDB.CleanExpiredLogs()
-			}
-		}()
 	}
 
 	// 告警引擎（保存引用，供事件检查使用）

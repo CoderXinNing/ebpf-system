@@ -3,10 +3,8 @@ package handler
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"log"
 	"os"
 
-	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,16 +15,16 @@ func (h *Handler) ListProbeConfigs(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "缺少agent_id"})
 		return
 	}
-	if h.Store == nil {
-		c.JSON(200, gin.H{"configs": []interface{}{}})
+	if h.GetProbeConfigsFunc != nil {
+		configs, err := h.GetProbeConfigsFunc(agentID)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "查询失败"})
+			return
+		}
+		c.JSON(200, gin.H{"configs": configs})
 		return
 	}
-	configs, err := h.Store.GetProbeConfigs(agentID)
-	if err != nil {
-		c.JSON(500, gin.H{"error": "查询失败"})
-		return
-	}
-	c.JSON(200, gin.H{"configs": configs})
+	c.JSON(200, gin.H{"configs": []interface{}{}})
 }
 
 // DeployProbe 下发/更新探针配置
@@ -61,24 +59,9 @@ func (h *Handler) DeployProbe(c *gin.Context) {
 		sha256Hash = hex.EncodeToString(hash[:])
 	}
 
-	if h.Store == nil {
-		c.JSON(501, gin.H{"error": "PSQL 模式暂未接入探针配置写入"})
-		return
-	}
-	err := h.Store.UpsertProbeConfig(store.ProbeConfigRecord{
-		AgentID:   req.AgentID,
-		ProbeName: req.ProbeName,
-		Enabled:   req.Enabled,
-		Remove:    req.Remove,
-		Path:      req.Path,
-		Sha256:    sha256Hash,
-	})
-	if err != nil {
-		c.JSON(500, gin.H{"error": "保存失败"})
-		return
-	}
-	log.Printf("📋 探针配置: %s %s (enabled=%v)", req.AgentID, req.ProbeName, req.Enabled)
-	c.JSON(200, gin.H{"success": true})
+	// PSQL 模式：probe_configs 表尚未接入（等 probe_templates 设计完成）
+	_ = sha256Hash
+	c.JSON(501, gin.H{"error": "探针配置下发暂未接入（等 probe_templates 设计）"})
 }
 
 // DestroyProbe 删除探针配置
@@ -95,14 +78,6 @@ func (h *Handler) DestroyProbe(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "agent_id和probe_name必填"})
 		return
 	}
-	if h.Store == nil {
-		c.JSON(501, gin.H{"error": "PSQL 模式暂未接入探针配置删除"})
-		return
-	}
-	if err := h.Store.DeleteProbeConfig(req.AgentID, req.ProbeName); err != nil {
-		c.JSON(500, gin.H{"error": "删除失败"})
-		return
-	}
-	log.Printf("🗑️ 删除探针配置: %s %s", req.AgentID, req.ProbeName)
-	c.JSON(200, gin.H{"success": true})
+	// PSQL 模式：probe_configs 表尚未接入（等 probe_templates 设计完成）
+	c.JSON(501, gin.H{"error": "探针配置删除暂未接入（等 probe_templates 设计）"})
 }

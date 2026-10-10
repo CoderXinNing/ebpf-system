@@ -16,8 +16,6 @@ func (h *Handler) GetIntSetting(key string, defaultVal int) int {
 
 	if h.GetSettingFunc != nil {
 		val, err = h.GetSettingFunc(key)
-	} else if h.Store != nil {
-		val, err = h.Store.GetLogSetting(key)
 	} else {
 		return defaultVal
 	}
@@ -36,25 +34,13 @@ func (h *Handler) GetIntSetting(key string, defaultVal int) int {
 func (h *Handler) SetIntSetting(key string, val int) {
 	if h.SetSettingFunc != nil {
 		h.SetSettingFunc(key, strconv.Itoa(val))
-		return
 	}
-	if h.Store == nil {
-		return
-	}
-	h.Store.SetLogSetting(key, strconv.Itoa(val))
 }
 
 // GetStringSetting 获取字符串设置
 func (h *Handler) GetStringSetting(key, defaultVal string) string {
 	if h.GetSettingFunc != nil {
 		v, err := h.GetSettingFunc(key)
-		if err == nil && v != "" {
-			return v
-		}
-		return defaultVal
-	}
-	if h.Store != nil {
-		v, err := h.Store.GetLogSetting(key)
 		if err == nil && v != "" {
 			return v
 		}
@@ -66,9 +52,5 @@ func (h *Handler) GetStringSetting(key, defaultVal string) string {
 func (h *Handler) SetStringSetting(key, val string) {
 	if h.SetSettingFunc != nil {
 		h.SetSettingFunc(key, val)
-		return
-	}
-	if h.Store != nil {
-		h.Store.SetLogSetting(key, val)
 	}
 }

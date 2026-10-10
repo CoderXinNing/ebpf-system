@@ -11,11 +11,14 @@ import (
 
 // AssetsOverview 资产概览
 func (h *Handler) AssetsOverview(c *gin.Context) {
-	if h.Store == nil {
+	var data map[string]map[string]int
+	var err error
+	if h.GetAllLatestAssetsFunc != nil {
+		data, err = h.GetAllLatestAssetsFunc()
+	} else {
 		c.JSON(200, gin.H{"agents": []interface{}{}})
 		return
 	}
-	data, err := h.Store.GetAllLatestAssets()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "查询失败"})
 		return
@@ -46,9 +49,11 @@ func (h *Handler) AssetsOverview(c *gin.Context) {
 			}
 		}
 		var cpuP, memP, diskP float64
-		if h.Store == nil {
-			// PSQL 模式：跳过性能字段
-		} else if _, _, sysJSON, err := h.Store.GetLatestAsset(agentID); err == nil {
+		var sysJSON json.RawMessage
+		if h.GetLatestAssetFunc != nil {
+			_, _, sysJSON, _ = h.GetLatestAssetFunc(agentID)
+		}
+		if len(sysJSON) > 0 {
 			var sysData map[string]interface{}
 			json.Unmarshal(sysJSON, &sysData)
 			if perf, ok := sysData["perf"].(map[string]interface{}); ok {
@@ -114,24 +119,10 @@ func (h *Handler) AssetDetail(c *gin.Context) {
 		return
 	}
 
-	if h.Store == nil {
-		c.JSON(200, gin.H{
-			"processes": json.RawMessage("[]"),
-			"users":     json.RawMessage("[]"),
-			"system":    json.RawMessage("{}"),
-		})
-		return
-	}
-
-	processes, users, sysJSON, err := h.Store.GetLatestAsset(agentID)
-	if err != nil {
-		c.JSON(404, gin.H{"error": "资产不存在"})
-		return
-	}
 	c.JSON(200, gin.H{
-		"processes": json.RawMessage(processes),
-		"users":     json.RawMessage(users),
-		"system":    json.RawMessage(sysJSON),
+		"processes": json.RawMessage("[]"),
+		"users":     json.RawMessage("[]"),
+		"system":    json.RawMessage("{}"),
 	})
 }
 
@@ -162,11 +153,11 @@ func (h *Handler) AssetsByCategory(c *gin.Context) {
 			continue
 		}
 
-		if h.Store == nil {
-			continue
+		var sysJSON json.RawMessage
+		if h.GetLatestAssetFunc != nil {
+			_, _, sysJSON, _ = h.GetLatestAssetFunc(aid)
 		}
-		_, _, sysJSON, err := h.Store.GetLatestAsset(aid)
-		if err != nil {
+		if len(sysJSON) == 0 {
 			continue
 		}
 
@@ -234,11 +225,11 @@ func (h *Handler) AssetsByCategory(c *gin.Context) {
 
 // getOS 获取 Agent 的 OS 名称
 func (h *Handler) getOS(agentID string) string {
-	if h.Store == nil {
-		return "-"
+	var sysJSON json.RawMessage
+	if h.GetLatestAssetFunc != nil {
+		_, _, sysJSON, _ = h.GetLatestAssetFunc(agentID)
 	}
-	_, _, sysJSON, err := h.Store.GetLatestAsset(agentID)
-	if err != nil {
+	if len(sysJSON) == 0 {
 		return "-"
 	}
 	var sysData map[string]interface{}

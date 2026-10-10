@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os/exec"
@@ -10,7 +11,6 @@ import (
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/audit"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
-	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,20 +18,31 @@ type Handler struct {
 	// GRPCPort Server 的 gRPC 监听端口（enrollment 时回报给 Agent）
 	GRPCPort int
 
-	movedGroups                 map[string]string
-	Store                       *store.Store
-	Auth                        *auth.AuthManager
-	Agents                      map[string]*AgentInfo
-	Events                      []ProbeEvent
-	Mu                          sync.RWMutex
-	EventMu                     sync.RWMutex
-	sendCmd                     func(agentID string, cmd *pb.ProbeCommand) error
-	SaveEventFunc               func(evt ProbeEvent) error                        // PSQL 模式注入
-	SaveAgentFunc               func(agent AgentInfo) error                       // PSQL 模式注入
-	ListAlertsFunc              func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
-	SaveAuditFunc               func(rec audit.Record) error                      // PSQL 模式注入：写审计
-	ListAuditFunc               func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入：读审计
-	UpdateAlertStatusFunc       func(ids []int64, status string) error            // 告警状态更新
+	movedGroups    map[string]string
+	Auth           *auth.AuthManager
+	Agents         map[string]*AgentInfo
+	Events         []ProbeEvent
+	Mu             sync.RWMutex
+	EventMu        sync.RWMutex
+	sendCmd        func(agentID string, cmd *pb.ProbeCommand) error
+	SaveEventFunc  func(evt ProbeEvent) error                        // PSQL 模式注入
+	SaveAgentFunc  func(agent AgentInfo) error                       // PSQL 模式注入
+	ListAlertsFunc func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
+	SaveAuditFunc  func(rec audit.Record) error                      // PSQL 模式注入：写审计
+	ListAuditFunc  func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入：读审计
+
+	// Step 2：SQLite 移除迁移新增
+	ListGroupsFunc              func() ([]string, error)
+	CreateGroupFunc             func(name string) error
+	DeleteGroupFunc             func(name string) error
+	GetAlertStatsFunc           func() map[string]interface{}
+	SaveAlertFeedbackFunc       func(alertID string, feedback, username string) error
+	SaveFeedbackFeatureFunc     func(featureKey string) error
+	GetFeedbackFeaturesFunc     func() ([]string, error)
+	GetAllLatestAssetsFunc      func() (map[string]map[string]int, error)
+	GetProbeConfigsFunc         func(agentID string) ([]map[string]interface{}, error)
+	GetEventsAsRecordsFunc      func(limit int, agentID string) ([]map[string]interface{}, error)
+	UpdateAlertStatusFunc       func(ids []int64, status string) error // 告警状态更新
 	ListProbeExcludeCommsFunc   func() ([]string, error)
 	AddProbeExcludeCommsFunc    func(comm, reason string) error
 	RemoveProbeExcludeCommsFunc func(comm string) error
@@ -49,12 +60,12 @@ type Handler struct {
 	// 统一 Apply（三维度一次性提交）
 	GetAllExcludesFunc     func() (execComms, fileComms, ips []string, err error)
 	ReplaceAllExcludesFunc func(execComms, fileComms, ips []string) error
-	RebuildRulesFunc       func() error                                                            // 排除名单更新回调
-	ListStarEventsFunc     func(corrID string) ([]map[string]interface{}, error)                   // PSQL 攻击链查询
-	GetLatestAssetFunc     func(agentID string) (interface{}, interface{}, interface{}, error)     // PSQL 资产查询
-	SaveAssetFunc          func(agentID string, processesJSON, usersJSON, systemJSON []byte) error // PSQL 资产保存
-	GetAllAssetsFunc       func(agentID string) (map[string]interface{}, error)                    // 所有资产类型
-	SaveTypedAssetFunc     func(agentID, assetType, assetName string, data interface{}) error      // 保存指定类型资产
+	RebuildRulesFunc       func() error                                                                    // 排除名单更新回调
+	ListStarEventsFunc     func(corrID string) ([]map[string]interface{}, error)                           // PSQL 攻击链查询
+	GetLatestAssetFunc     func(agentID string) (json.RawMessage, json.RawMessage, json.RawMessage, error) // PSQL 资产查询
+	SaveAssetFunc          func(agentID string, processesJSON, usersJSON, systemJSON []byte) error         // PSQL 资产保存
+	GetAllAssetsFunc       func(agentID string) (map[string]interface{}, error)                            // 所有资产类型
+	SaveTypedAssetFunc     func(agentID, assetType, assetName string, data interface{}) error              // 保存指定类型资产
 	GetSettingFunc         func(key string) (string, error)
 	SetSettingFunc         func(key, value string) error
 	ListSettingsFunc       func() (map[string]string, error)
@@ -158,7 +169,7 @@ func (h *Handler) SetGetAllAssetsFunc(fn func(string) (map[string]interface{}, e
 }
 
 // SetGetLatestAssetFunc 设置资产查询回调
-func (h *Handler) SetGetLatestAssetFunc(fn func(string) (interface{}, interface{}, interface{}, error)) {
+func (h *Handler) SetGetLatestAssetFunc(fn func(string) (json.RawMessage, json.RawMessage, json.RawMessage, error)) {
 	h.GetLatestAssetFunc = fn
 }
 
@@ -253,6 +264,41 @@ func (h *Handler) SetAuditCallbacks(
 	h.ListAuditFunc = list
 }
 
+// ============================================================
+// Step 2：SQLite 移除迁移 setter
+// ============================================================
+
+func (h *Handler) SetListGroupsFunc(fn func() ([]string, error)) {
+	h.ListGroupsFunc = fn
+}
+func (h *Handler) SetCreateGroupFunc(fn func(name string) error) {
+	h.CreateGroupFunc = fn
+}
+func (h *Handler) SetDeleteGroupFunc(fn func(name string) error) {
+	h.DeleteGroupFunc = fn
+}
+func (h *Handler) SetGetAlertStatsFunc(fn func() map[string]interface{}) {
+	h.GetAlertStatsFunc = fn
+}
+func (h *Handler) SetSaveAlertFeedbackFunc(fn func(alertID string, feedback, username string) error) {
+	h.SaveAlertFeedbackFunc = fn
+}
+func (h *Handler) SetSaveFeedbackFeatureFunc(fn func(featureKey string) error) {
+	h.SaveFeedbackFeatureFunc = fn
+}
+func (h *Handler) SetGetFeedbackFeaturesFunc(fn func() ([]string, error)) {
+	h.GetFeedbackFeaturesFunc = fn
+}
+func (h *Handler) SetGetAllLatestAssetsFunc(fn func() (map[string]map[string]int, error)) {
+	h.GetAllLatestAssetsFunc = fn
+}
+func (h *Handler) SetGetProbeConfigsFunc(fn func(agentID string) ([]map[string]interface{}, error)) {
+	h.GetProbeConfigsFunc = fn
+}
+func (h *Handler) SetGetEventsAsRecordsFunc(fn func(limit int, agentID string) ([]map[string]interface{}, error)) {
+	h.GetEventsAsRecordsFunc = fn
+}
+
 // writeAudit 写入一条审计，自动补全环境字段
 //
 // 设计：
@@ -300,21 +346,8 @@ func (h *Handler) auditFromCtx(c *gin.Context, action, actionCode, targetType, t
 	}
 }
 
-func NewHandler(st *store.Store, am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {
+func NewHandler(am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {
 	return &Handler{
-		Store:       st,
-		Auth:        am,
-		Agents:      make(map[string]*AgentInfo),
-		movedGroups: make(map[string]string),
-		Events:      make([]ProbeEvent, 0, 10000),
-		sendCmd:     sendCmd,
-	}
-}
-
-// NewHandlerWithNilStore 创建无 Store 的 Handler（PSQL 模式过渡期使用）
-func NewHandlerWithNilStore(am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {
-	return &Handler{
-		Store:       nil,
 		Auth:        am,
 		Agents:      make(map[string]*AgentInfo),
 		movedGroups: make(map[string]string),
@@ -345,8 +378,6 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 					c.JSON(500, gin.H{"error": err.Error()})
 					return
 				}
-			} else if h.Store != nil {
-				h.Store.DeleteAgentAll(agentID)
 			}
 			h.Mu.Lock()
 			delete(h.Agents, agentID)
@@ -395,12 +426,12 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/assets", h.AssetsOverview)
 		api.GET("/assets/:agent_id", h.AssetDetail)
 		api.GET("/groups", func(c *gin.Context) {
-			if h.Store == nil {
-				c.JSON(200, gin.H{"groups": []interface{}{}})
+			if h.ListGroupsFunc != nil {
+				groups, _ := h.ListGroupsFunc()
+				c.JSON(200, gin.H{"groups": groups})
 				return
 			}
-			groups, _ := h.Store.GetGroups()
-			c.JSON(200, gin.H{"groups": groups})
+			c.JSON(200, gin.H{"groups": []interface{}{}})
 		})
 		api.POST("/groups", h.roleMiddleware("admin", "operator"), func(c *gin.Context) {
 			var req struct {
@@ -411,11 +442,14 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				c.JSON(400, gin.H{"error": "组名不能为空"})
 				return
 			}
-			if h.Store == nil {
-				c.JSON(501, gin.H{"error": "PSQL 模式暂未接入分组创建"})
+			var createErr error
+			if h.CreateGroupFunc != nil {
+				createErr = h.CreateGroupFunc(req.Name)
+			} else {
+				c.JSON(501, gin.H{"error": "分组创建未初始化"})
 				return
 			}
-			if err := h.Store.CreateGroup(req.Name); err != nil {
+			if createErr != nil {
 				c.JSON(500, gin.H{"error": "创建失败"})
 				return
 			}
@@ -424,11 +458,14 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		})
 		api.DELETE("/groups/:name", h.roleMiddleware("admin"), func(c *gin.Context) {
 			name := c.Param("name")
-			if h.Store == nil {
-				c.JSON(501, gin.H{"error": "PSQL 模式暂未接入分组删除"})
+			var delErr error
+			if h.DeleteGroupFunc != nil {
+				delErr = h.DeleteGroupFunc(name)
+			} else {
+				c.JSON(501, gin.H{"error": "分组删除未初始化"})
 				return
 			}
-			if err := h.Store.DeleteGroup(name); err != nil {
+			if delErr != nil {
 				c.JSON(500, gin.H{"error": "删除失败"})
 				return
 			}
@@ -459,14 +496,6 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				if err != nil {
 					c.JSON(500, gin.H{"error": err.Error()})
 					return
-				}
-				c.JSON(200, gin.H{"alerts": alerts})
-				return
-			}
-			if h.Store != nil {
-				alerts, _ := h.Store.GetAlerts(100)
-				if alerts == nil {
-					alerts = []store.AlertRecord{}
 				}
 				c.JSON(200, gin.H{"alerts": alerts})
 				return
@@ -523,11 +552,11 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		})
 
 		api.GET("/alerts/stats", h.rbacMiddleware("alerts", "read"), func(c *gin.Context) {
-			if h.Store == nil {
-				c.JSON(200, gin.H{})
+			if h.GetAlertStatsFunc != nil {
+				c.JSON(200, h.GetAlertStatsFunc())
 				return
 			}
-			c.JSON(200, h.Store.GetAlertStats())
+			c.JSON(200, gin.H{})
 		})
 		api.POST("/alerts/:id/feedback", h.rbacMiddleware("alerts", "write"), func(c *gin.Context) {
 			id := c.Param("id")
@@ -535,21 +564,15 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				Type string `json:"type"`
 			}
 			c.BindJSON(&req)
-			if h.Store == nil {
-				c.JSON(501, gin.H{"error": "PSQL 模式暂未接入告警反馈"})
+			var fbErr error
+			if h.SaveAlertFeedbackFunc != nil {
+				fbErr = h.SaveAlertFeedbackFunc(id, req.Type, h.getUsername(c))
+			} else {
+				c.JSON(501, gin.H{"error": "告警反馈未初始化"})
 				return
 			}
-			h.Store.SaveAlertFeedback(id, req.Type, h.getUsername(c))
-
-			// 误报 → 记录特征到黑名单
-			if req.Type == "false_positive" && h.Store != nil {
-				// 从告警里提取特征信息存入黑名单
-				alerts, _ := h.Store.GetAlerts(1)
-				if len(alerts) > 0 {
-					featureKey := alerts[0].Comm + ":" + alerts[0].Filename
-					h.Store.SaveFeedbackFeature(featureKey)
-					log.Printf("📝 误报特征已记录: %s", featureKey)
-				}
+			if fbErr != nil {
+				log.Printf("⚠️ 保存告警反馈失败: %v", fbErr)
 			}
 			c.JSON(200, gin.H{"success": true})
 		})
@@ -574,8 +597,6 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			var logs []map[string]interface{}
 			if h.ListAuditFunc != nil {
 				logs, _ = h.ListAuditFunc(10000)
-			} else if h.Store != nil {
-				logs, _ = h.Store.GetAuditLogs(10000)
 			}
 			c.Header("Content-Type", "text/csv")
 			c.Header("Content-Disposition", "attachment; filename=audit_logs.csv")
@@ -590,8 +611,6 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			var logs []map[string]interface{}
 			if h.ListAuditFunc != nil {
 				logs, _ = h.ListAuditFunc(200)
-			} else if h.Store != nil {
-				logs, _ = h.Store.GetAuditLogs(200)
 			}
 			c.JSON(200, gin.H{"logs": logs})
 		})
