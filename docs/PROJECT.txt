@@ -172,10 +172,10 @@ AsterTrack 项目主文档
     8. execve 的 filename 是占位符，真实命令在 details
     9. pre-commit hook
        - hook 脚本：scripts/hooks/pre-commit
-       - install-hooks.sh 已存在
+       - 安装脚本：scripts/install-hooks.sh（已存在）
        - core.hooksPath 需每台机器手动设
        - 跳过：SKIP_HOOKS=1 或 git commit --no-verify
-       - 新机器 clone 后必跑 install-hooks.sh
+       - 新机器 clone 后必跑 scripts/install-hooks.sh
 
   1.5 环境信息
 
@@ -245,18 +245,21 @@ AsterTrack 项目主文档
 
   3.1 当前表清单（28 张）
 
+    （核验于 2026-10-10，方法 count(*)；小表 n_live_tup 失真不可用，
+      行数会随系统运行增长，以 count(*) 为准）
+
     agent_current_state            (0 行)
     agent_rules                    (23 行，e2e 产物)
     agents                         (6 行)
-    alerts                         (1253 行)
+    alerts                         (1333 行)
     audit_logs                     (0 行，已存在未接入)
     baseline_snapshots             (0 行)
     baselines                      (0 行)
     cmdb_assets                    (24 行)
-    enrollment_tokens              (6 行)
+    enrollment_tokens              (19 行)
     events                         (0 行，主表)
     events_2026_09_archive         (389,914 行，DETACH)
-    events_2026_10                 (377,149 行)
+    events_2026_10                 (404,289 行)
     events_2026_11                 (0 行)
     events_2026_12                 (0 行)
     events_2027_01                 (0 行)
@@ -386,31 +389,34 @@ AsterTrack 项目主文档
          3306,6379,5985,8080,8443]},"exclude":{}}}
     → P1.10 008a 需把这份内容作为默认模板
 
-  3.8 alerts 分布
+  3.8 alerts 分布（核验于 2026-10-10）
 
     rule_name：
-      密码文件读取        914 (73%)
-      数据库配置读取      329 (26%)
+      密码文件读取        972 (73%)
+      数据库配置读取      350 (26%)
       网络信息收集          4
       可疑命令执行          3
       反弹Shell检测        3
       敏感文件访问          1
       计划任务持久化        1
     agent_id：
-      agent-obgfyuh4vphibkdtw6ekz2gsc4   1255 条
+      agent-obgfyuh4vphibkdtw6ekz2gsc4   1333 条
     → 只有 1 台活跃 Agent 产生告警
+    → 99.2% 集中在两条规则，根因见 §4 A6
+      （已于 c999c51 修复：去重窗口分级 + rules.toml 去 /etc/passwd）
 
-  3.9 events_2026_10 按探针
+  3.9 events_2026_10 按探针（核验于 2026-10-10，分组列名 probe_name）
 
-    xdp              211,014  (56%)
-    execve            63,107  (17%)
-    file_access       48,630  (13%)
-    process           26,522  (7%)
-    tcp_connect       23,458  (6%)
-    cron               3,972  (1%)
-    bash_input           618
-    baseline_anomaly     431
+    xdp              218,758  (54.1%)
+    execve            71,166  (17.6%)
+    file_access       55,220  (13.7%)
+    process           30,167  (7.5%)
+    tcp_connect       26,815  (6.6%)
+    cron               4,500  (1.1%)
+    bash_input           662
+    baseline_anomaly     511
     → XDP 是最大噪音源
+    → 列名：probe_name（非 probe），source_channel 全部 grpc
 
   3.10 RBAC
 
@@ -430,42 +436,74 @@ AsterTrack 项目主文档
     | agents 软删除 | 复用 revoked_at | revoked_at 是证书撤销专用 |
     | PROJECT-STATUS #9 | main.go:573 SetWhitelist | 方法不存在 |
 
+    追加核验（2026-10-10）：
+
+    | # | 项 | 旧文档 | 实际 |
+    |---|-----|-------|------|
+    | D1 | enrollment_tokens 行数 | 6 | 19 |
+    | D2 | events_2026_10 分组列名 | probe | probe_name |
+    | D3 | install-hooks.sh 路径 | 根目录 | scripts/install-hooks.sh |
+    | D4 | alerts 行数 | 1253 | 1333 |
+    | D5 | events_2026_10 行数 | 377,149 | 404,289 |
+    | D6 | HEAD | 7a1e1a1 | c999c51（Phase A 提交后） |
+    | D7 | 行数核验方法 | 未说明 | 必须 count(*)，n_live_tup 失真 |
+    | D8 | events_2026_10 列数 | 未列 | 15 列 |
+
 
 【四、待办分类】
 
   A 待修复（有 bug/死代码/文档漂移，不涉架构）
   ────────────────────────────────
 
-    A1  file_access /home/ 默认值收窄
+    A1  [过渡态-不修] file_access /home/ 默认值
         位置：agent/internal/probe/plugins/file_probe.go:47
-        修复：收窄为具体敏感文件路径
-        预估：1 天
+        现状：Agent 启动兜底值已收窄（c999c51，/home/ → /var/spool/cron/）
+        说明：Server 下发规则（agent_rules v23）仍含 /home/，
+              只改 Agent 默认值无效，Server 一连上即被覆盖
+        决策：不在本层修，P1.10 规则模型 v2 统一模板时处理
+        预估：0（P1.10 内解决）
 
-    A2  main.go 死代码删除
+    A2  [已完成] main.go 死代码删除
         位置：server/cmd/main.go:590-599
-        现状：读 ProbeExcludeComms 字段，字段无人读
-        修复：删 goroutine + 字段
-        预估：0.5 小时
+        提交：c999c51（仅删 goroutine）
+        修正：handler.go:35 ProbeExcludeComms 字段未删
+              原因：probe_exclude_comms_handler.go 仍引用该字段
+              该字段与整个 handler 文件归入 P1.10 阶段 B 一起删
+        预估：0.5 小时（已用）
 
-    A3  文档漂移修正
-        范围：见 §3.11 差异清单
-        预估：0.5 天
+    A3  [已完成] 文档漂移修正
+        范围：见 §3.11 差异清单（含追加 D1-D8）
+        本次同步：§1.4 / §3.1 / §3.8 / §3.9 / §3.11 / §4 / §6
+        预估：0.5 天（已用）
 
-    A4  install-hooks.sh 已存在，README 补强调
-        预估：0.5 小时
+    A4  [已完成] install-hooks.sh 路径澄清
+        实际路径：scripts/install-hooks.sh
+        本次同步：§1.4 已更新
+        预估：0.5 小时（已用）
 
     A5  [已完成] HANDOVER.md 已删
 
-    A6  alerts 去重/抑制
-        现象：914/1253 条同规则
-        位置：server/internal/alert/engine.go
-        预估：0.5 天
+    A6  [已完成] alerts 去重/抑制
+        现象：972/1333 条同规则（99.2%）
+        根因：rules.toml「密码文件读取」匹配 /etc/passwd，
+              /etc/passwd 是账户信息文件，systemd/sshd/cron 高频读取
+        修复：c999c51
+          - engine.go：去重窗口按 severity 分级
+            CRITICAL=30s / HIGH=2m / MEDIUM=5m / 其他=15m
+          - rules.toml：密码文件读取去掉 /etc/passwd，
+            改为 /etc/shadow|/etc/gshadow|/etc/sudoers
+        预估：0.5 天（已用）
 
-    A7  空表用途审计（废表前置）
-        范围：playbooks / probe_templates / rules
-              host_groups / agent_current_state / probe_configs
-        方法：grep 代码引用
-        预估：0.5 天
+    A7  [已完成] 空表用途审计（废表前置）
+        审计结论（2026-10-10，grep --include=*.go）：
+          零引用（可列入 §5.1.2 待废）：
+            playbooks / probe_templates / rules / agent_current_state
+          有引用（保留）：
+            host_groups（store.go + enroll_repo.go）
+            probe_configs（store.go）
+            baselines（按 DESIGN.txt P1 保留）
+            baseline_snapshots（psql.go 清理任务）
+        预估：0.5 天（已用）
 
   B 待开发（设计完成，无新架构）
   ────────────────────────────────
@@ -730,8 +768,8 @@ AsterTrack 项目主文档
 
 【六、当前 commit 状态】
 
-  分支：main
-  HEAD：7a1e1a1（chore(build): .o 脱离 git 跟踪）
+  分支：main（ahead of origin/main by 7 commits）
+  HEAD：c999c51（fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪）
 
   工作区：
     ?? docs/DB-RECONCILIATION.txt（将被归档）
