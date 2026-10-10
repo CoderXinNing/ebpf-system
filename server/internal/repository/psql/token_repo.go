@@ -11,15 +11,15 @@ import (
 
 // EnrollmentToken 注册 Token
 type EnrollmentToken struct {
-	ID         int64      `json:"id"`
-	Name       string     `json:"name"`
-	GroupID    *int64     `json:"group_id"`
-	MaxUses    int        `json:"max_uses"`
-	UsedCount  int        `json:"used_count"`
-	ExpiresAt  time.Time  `json:"expires_at"`
-	CreatedBy  string     `json:"created_by"`
-	CreatedAt  time.Time  `json:"created_at"`
-	RevokedAt  *time.Time `json:"revoked_at"`
+	ID        int64      `json:"id"`
+	Name      string     `json:"name"`
+	GroupID   *int64     `json:"group_id"`
+	MaxUses   int        `json:"max_uses"`
+	UsedCount int        `json:"used_count"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	CreatedBy string     `json:"created_by"`
+	CreatedAt time.Time  `json:"created_at"`
+	RevokedAt *time.Time `json:"revoked_at"`
 }
 
 // GenerateToken 生成注册 Token
@@ -86,11 +86,21 @@ func (p *PSQL) RevokeToken(ctx context.Context, id int64) error {
 	return nil
 }
 
-// CleanupExpiredTokens 清理已过期且已撤销的 Token（可选，定期调用）
-func (p *PSQL) CleanupExpiredTokens(ctx context.Context) error {
-	_, err := p.pool.Exec(ctx,
+// CleanupExpiredTokens 清理过期 / 已撤销的 Token
+//
+// retentionDays：保留天数，由 runCleanup 从 log_settings.token_days 读入
+//
+//	等保建议 180 天
+//	过期且超过 retentionDays → 删除
+//	已撤销且超过 retentionDays → 删除
+func (p *PSQL) CleanupExpiredTokens(ctx context.Context, retentionDays int) error {
+	if retentionDays <= 0 {
+		retentionDays = 180
+	}
+	_, err := p.pool.Exec(ctx, fmt.Sprintf(
 		`DELETE FROM enrollment_tokens 
-		 WHERE expires_at < NOW() - INTERVAL '30 days'
-		 OR (revoked_at IS NOT NULL AND revoked_at < NOW() - INTERVAL '30 days')`)
+		 WHERE expires_at < NOW() - INTERVAL '%d days'
+		 OR (revoked_at IS NOT NULL AND revoked_at < NOW() - INTERVAL '%d days')`,
+		retentionDays, retentionDays))
 	return err
 }

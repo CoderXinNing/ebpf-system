@@ -104,9 +104,11 @@ const (
 	ActionBaselineReset = "baseline.reset"
 
 	// 系统
-	ActionSystemTimeSet   = "system.time_set"
-	ActionSystemNTPSync   = "system.ntp_sync"
-	ActionSystemPageVisit = "system.page_visit"
+	ActionSystemTimeSet     = "system.time_set"
+	ActionSystemNTPSync     = "system.ntp_sync"
+	ActionSystemPageVisit   = "system.page_visit"
+	ActionSystemDataCleanup = "system.data_cleanup"
+	ActionSystemLogCleanup  = "system.log_cleanup"
 
 	// 用户
 	ActionUserCreate = "user.create"

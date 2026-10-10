@@ -2,6 +2,7 @@ package psql
 
 import (
 	"context"
+	"strconv"
 )
 
 // GetLogSetting 获取单个设置
@@ -21,6 +22,23 @@ func (p *PSQL) SetLogSetting(ctx context.Context, key, value string) error {
 		 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
 		key, value)
 	return err
+}
+
+// ReadIntSetting 读取整数设置，失败返回默认值
+//
+// 安全性：
+//   - 值必须能 Atoi 成合法整数，否则返回默认值
+//   - 防止脏数据 / 注入进入 SQL（下游用 %d 格式化）
+func (p *PSQL) ReadIntSetting(ctx context.Context, key string, defaultVal int) int {
+	v, err := p.GetLogSetting(ctx, key)
+	if err != nil || v == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return defaultVal
+	}
+	return n
 }
 
 // ListSettings 列出所有设置

@@ -152,11 +152,17 @@ func (p *PSQL) runMaintenance(ctx context.Context) {
 //   - 归档而非 DROP：DETACH + RENAME 加 _archive 后缀
 //     理由：DROP 不可逆，归档保留取证能力，成本极低
 func (p *PSQL) runCleanup(ctx context.Context) {
-	// events：按月粒度计算 cutoff（保留 N 个月，含当前月）
+	// ============ 读用户配置（log_settings），失败用默认值兜底 ============
+	alertDays := p.ReadIntSetting(ctx, "alert_days", 90)
+	auditDays := p.ReadIntSetting(ctx, "audit_days", 180)
+	eventDays := p.ReadIntSetting(ctx, "event_days", 180)
+	tokenDays := p.ReadIntSetting(ctx, "token_days", 180)
+
+	// ============ events 主表：按月归档 ============
+	// 保留最近 PartitionMonthsKeep 个月（含当前月），更早的 DETACH → _archive
 	cutoffMonth := time.Now().AddDate(0, -(PartitionMonthsKeep - 1), 0)
 	cutoffName := fmt.Sprintf("events_%s", cutoffMonth.Format("2006_01"))
 
-	// 白名单：查分区树，只清理"严格早于 cutoff 且未归档"的分区
 	rows, err := p.pool.Query(ctx, `
 		SELECT c.relname
 		FROM pg_class c
@@ -179,13 +185,11 @@ func (p *PSQL) runCleanup(ctx context.Context) {
 
 		for _, name := range toArchive {
 			archiveName := name + "_archive"
-			// 1. 脱离分区树
 			if _, err := p.pool.Exec(ctx,
 				fmt.Sprintf("ALTER TABLE events DETACH PARTITION %s", name)); err != nil {
 				log.Printf("⚠️ DETACH %s 失败: %v", name, err)
 				continue
 			}
-			// 2. 改名归档
 			if _, err := p.pool.Exec(ctx,
 				fmt.Sprintf("ALTER TABLE %s RENAME TO %s", name, archiveName)); err != nil {
 				log.Printf("⚠️ 归档 %s 失败: %v", name, err)
@@ -195,29 +199,74 @@ func (p *PSQL) runCleanup(ctx context.Context) {
 		}
 	}
 
-	// alerts 保留 90 天
-	_, err = p.pool.Exec(ctx, "DELETE FROM alerts WHERE created_at < NOW() - INTERVAL '90 days'")
+	// ============ events 归档表：按月保留，过期 DROP ============
+	// eventDays 转月（向上取整）：180 天 ≈ 6 个月
+	eventMonths := (eventDays + 29) / 30
+	if eventMonths < 1 {
+		eventMonths = 1
+	}
+	archiveCutoff := time.Now().AddDate(0, -eventMonths, 0)
+	archiveCutoffName := fmt.Sprintf("events_%s_archive", archiveCutoff.Format("2006_01"))
+
+	archRows, err := p.pool.Query(ctx, `
+		SELECT relname FROM pg_class
+		WHERE relname ~ '^events_[0-9]{4}_[0-9]{2}_archive$'
+		  AND relname < $1
+		ORDER BY relname`, archiveCutoffName)
+	if err != nil {
+		log.Printf("⚠️ 查询待删归档表失败: %v", err)
+	} else {
+		var toDrop []string
+		for archRows.Next() {
+			var name string
+			if err := archRows.Scan(&name); err == nil {
+				toDrop = append(toDrop, name)
+			}
+		}
+		archRows.Close()
+
+		for _, name := range toDrop {
+			if _, err := p.pool.Exec(ctx,
+				fmt.Sprintf("DROP TABLE IF EXISTS %s", name)); err != nil {
+				log.Printf("⚠️ DROP 归档表 %s 失败: %v", name, err)
+				continue
+			}
+			log.Printf("🗑️  删除过期归档表: %s (保留 %d 天 ≈ %d 月)",
+				name, eventDays, eventMonths)
+		}
+	}
+
+	// ============ alerts：读 alert_days ============
+	_, err = p.pool.Exec(ctx, fmt.Sprintf(
+		"DELETE FROM alerts WHERE created_at < NOW() - INTERVAL '%d days'", alertDays))
 	if err != nil {
 		log.Printf("⚠️ 清理旧告警失败: %v", err)
 	}
 
-	// audit_logs 保留 180 天
-	_, err = p.pool.Exec(ctx, "DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '180 days'")
+	// ============ audit_logs：读 audit_days ============
+	_, err = p.pool.Exec(ctx, fmt.Sprintf(
+		"DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '%d days'", auditDays))
 	if err != nil {
 		log.Printf("⚠️ 清理旧审计日志失败: %v", err)
 	}
 
-	// baseline_snapshots 保留 90 天
+	// ============ enrollment_tokens：读 token_days ============
+	if err := p.CleanupExpiredTokens(ctx, tokenDays); err != nil {
+		log.Printf("⚠️ 清理过期 Token 失败: %v", err)
+	}
+
+	// ============ baseline_snapshots：保留 90 天（非用户配置）============
 	_, err = p.pool.Exec(ctx, "DELETE FROM baseline_snapshots WHERE recorded_at < NOW() - INTERVAL '90 days'")
 	if err != nil {
 		log.Printf("⚠️ 清理旧基线快照失败: %v", err)
 	}
 
-	// sessions 保留 7 天
+	// ============ sessions：保留 7 天（非用户配置）============
 	_, err = p.pool.Exec(ctx, "DELETE FROM sessions WHERE created_at < NOW() - INTERVAL '7 days' AND revoked_at IS NULL")
 	if err != nil {
 		log.Printf("⚠️ 清理过期会话失败: %v", err)
 	}
 
-	log.Println("🧹 定时清理完成")
+	log.Printf("🧹 定时清理完成（alert=%dd audit=%dd event=%dd token=%dd）",
+		alertDays, auditDays, eventDays, tokenDays)
 }

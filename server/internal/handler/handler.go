@@ -42,7 +42,8 @@ type Handler struct {
 	GetAllLatestAssetsFunc      func() (map[string]map[string]int, error)
 	GetProbeConfigsFunc         func(agentID string) ([]map[string]interface{}, error)
 	GetEventsAsRecordsFunc      func(limit int, agentID string) ([]map[string]interface{}, error)
-	UpdateAlertStatusFunc       func(ids []int64, status string) error // 告警状态更新
+	CleanupFunc                 func(target, mode string, days int) (int64, error) // 数据/日志清理
+	UpdateAlertStatusFunc       func(ids []int64, status string) error             // 告警状态更新
 	ListProbeExcludeCommsFunc   func() ([]string, error)
 	AddProbeExcludeCommsFunc    func(comm, reason string) error
 	RemoveProbeExcludeCommsFunc func(comm string) error
@@ -297,6 +298,9 @@ func (h *Handler) SetGetProbeConfigsFunc(fn func(agentID string) ([]map[string]i
 }
 func (h *Handler) SetGetEventsAsRecordsFunc(fn func(limit int, agentID string) ([]map[string]interface{}, error)) {
 	h.GetEventsAsRecordsFunc = fn
+}
+func (h *Handler) SetCleanupFunc(fn func(target, mode string, days int) (int64, error)) {
+	h.CleanupFunc = fn
 }
 
 // writeAudit 写入一条审计，自动补全环境字段
@@ -720,9 +724,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 
 		api.GET("/log-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
 			c.JSON(200, gin.H{
-				"event_days": h.GetStringSetting("event_days", "30"),
+				"event_days": h.GetStringSetting("event_days", "180"),
 				"alert_days": h.GetStringSetting("alert_days", "90"),
 				"audit_days": h.GetStringSetting("audit_days", "180"),
+				"token_days": h.GetStringSetting("token_days", "180"),
 			})
 		})
 		api.POST("/log-settings", h.roleMiddleware("admin"), func(c *gin.Context) {
@@ -730,6 +735,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				EventDays string `json:"event_days"`
 				AlertDays string `json:"alert_days"`
 				AuditDays string `json:"audit_days"`
+				TokenDays string `json:"token_days"`
 			}
 			c.BindJSON(&req)
 			if req.EventDays != "" {
@@ -741,7 +747,90 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			if req.AuditDays != "" {
 				h.SetStringSetting("audit_days", req.AuditDays)
 			}
+			if req.TokenDays != "" {
+				h.SetStringSetting("token_days", req.TokenDays)
+			}
 			c.JSON(200, gin.H{"success": true})
+		})
+
+		// 数据 / 日志清理（admin only + confirm 二次确认）
+		api.POST("/admin/cleanup", h.roleMiddleware("admin"), func(c *gin.Context) {
+			var req struct {
+				Target  string `json:"target"`
+				Mode    string `json:"mode"`
+				Days    int    `json:"days"`
+				Confirm string `json:"confirm"`
+			}
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(400, gin.H{"error": "请求格式错误"})
+				return
+			}
+
+			if req.Confirm != "CLEANUP" {
+				c.JSON(400, gin.H{"error": "二次确认失败：confirm 字段必须为 CLEANUP"})
+				return
+			}
+
+			validTargets := map[string]bool{
+				"events": true, "alerts": true,
+				"audit_logs": true, "tokens": true,
+			}
+			if !validTargets[req.Target] {
+				c.JSON(400, gin.H{"error": "无效的 target"})
+				return
+			}
+
+			if req.Mode != "all" && req.Mode != "before_days" {
+				c.JSON(400, gin.H{"error": "mode 必须为 all 或 before_days"})
+				return
+			}
+			if req.Mode == "before_days" && req.Days <= 0 {
+				c.JSON(400, gin.H{"error": "before_days 模式必须指定正整数 days"})
+				return
+			}
+
+			if h.CleanupFunc == nil {
+				c.JSON(501, gin.H{"error": "清理功能未初始化"})
+				return
+			}
+
+			affected, err := h.CleanupFunc(req.Target, req.Mode, req.Days)
+			if err != nil {
+				h.writeAudit(c, audit.Record{
+					Action:     "数据清理失败",
+					ActionCode: "system.data_cleanup",
+					TargetType: audit.TargetSystem,
+					TargetName: req.Target,
+					Detail:     fmt.Sprintf("mode=%s days=%d err=%v", req.Mode, req.Days, err),
+					EventRW:    audit.RWWrite,
+					Result:     audit.ResultFailure,
+				})
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+
+			actionCode := "system.data_cleanup"
+			if req.Target != "events" {
+				actionCode = "system.log_cleanup"
+			}
+			h.writeAudit(c, audit.Record{
+				Action:     "数据清理",
+				ActionCode: actionCode,
+				TargetType: audit.TargetSystem,
+				TargetName: req.Target,
+				Detail:     fmt.Sprintf("mode=%s days=%d affected=%d", req.Mode, req.Days, affected),
+				EventRW:    audit.RWWrite,
+				Result:     audit.ResultSuccess,
+			})
+
+			log.Printf("🧹 手动清理: target=%s mode=%s days=%d affected=%d user=%s",
+				req.Target, req.Mode, req.Days, affected, h.getUsername(c))
+			c.JSON(200, gin.H{
+				"success":  true,
+				"target":   req.Target,
+				"mode":     req.Mode,
+				"affected": affected,
+			})
 		})
 
 		// 通用设置接口

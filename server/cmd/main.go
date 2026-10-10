@@ -189,6 +189,20 @@ func main() {
 				return out, nil
 			})
 
+			h.SetCleanupFunc(func(target, mode string, days int) (int64, error) {
+				ctx := context.Background()
+				switch target {
+				case "events":
+					return psqlDB.CleanupEvents(ctx, mode, days)
+				case "alerts":
+					return psqlDB.CleanupAlerts(ctx, mode, days)
+				case "audit_logs":
+					return psqlDB.CleanupAuditLogs(ctx, mode, days)
+				case "tokens":
+					return psqlDB.CleanupTokens(ctx, mode, days)
+				}
+				return 0, fmt.Errorf("未知 target: %s", target)
+			})
 			h.SetGetEventsAsRecordsFunc(func(limit int, agentID string) ([]map[string]interface{}, error) {
 				records, err := psqlDB.ListEventsAsRecords(context.Background(), limit, agentID)
 				if err != nil {
