@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/CoderXinNing/ebpf-system/server/internal/audit"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
+	"github.com/gin-gonic/gin"
 )
 
 // Login 用户登录
@@ -25,7 +26,16 @@ func (h *Handler) Login(c *gin.Context) {
 	lockUntil := h.GetIntSetting("lock_until:"+req.Username, 0)
 	if lockUntil > int(time.Now().Unix()) {
 		remain := (lockUntil - int(time.Now().Unix())) / 60
-		if h.Store != nil { h.Store.SaveAuditLog(req.Username, "登录失败", fmt.Sprintf("账户锁定中,剩余%d分钟", remain), c.ClientIP()) }
+		h.writeAudit(c, audit.Record{
+			Username:   req.Username,
+			Action:     "登录失败",
+			ActionCode: audit.ActionLoginFail,
+			TargetType: audit.TargetSession,
+			Detail:     fmt.Sprintf("账户锁定中,剩余%d分钟", remain),
+			EventType:  audit.EventConsoleSignin,
+			EventRW:    audit.RWWrite,
+			Result:     audit.ResultFailure,
+		})
 		c.JSON(401, gin.H{"error": fmt.Sprintf("账户已锁定，请 %d 分钟后重试", remain)})
 		return
 	}
@@ -38,11 +48,29 @@ func (h *Handler) Login(c *gin.Context) {
 			lockUntil := int(time.Now().Unix()) + lockMinutes*60
 			h.SetIntSetting("lock_until:"+req.Username, lockUntil)
 			h.SetIntSetting(attemptKey, 0)
-			if h.Store != nil { h.Store.SaveAuditLog(req.Username, "登录锁定", fmt.Sprintf("连续失败%d次,锁定%d分钟", attempts, lockMinutes), c.ClientIP()) }
+			h.writeAudit(c, audit.Record{
+				Username:   req.Username,
+				Action:     "登录锁定",
+				ActionCode: audit.ActionLoginLocked,
+				TargetType: audit.TargetSession,
+				Detail:     fmt.Sprintf("连续失败%d次,锁定%d分钟", attempts, lockMinutes),
+				EventType:  audit.EventConsoleSignin,
+				EventRW:    audit.RWWrite,
+				Result:     audit.ResultFailure,
+			})
 			c.JSON(401, gin.H{"error": fmt.Sprintf("连续失败 %d 次，账户锁定 %d 分钟", maxAttempts, lockMinutes)})
 			return
 		}
-		if h.Store != nil { h.Store.SaveAuditLog(req.Username, "登录失败", fmt.Sprintf("密码错误(%d/%d)", attempts, maxAttempts), c.ClientIP()) }
+		h.writeAudit(c, audit.Record{
+			Username:   req.Username,
+			Action:     "登录失败",
+			ActionCode: audit.ActionLoginFail,
+			TargetType: audit.TargetSession,
+			Detail:     fmt.Sprintf("密码错误(%d/%d)", attempts, maxAttempts),
+			EventType:  audit.EventConsoleSignin,
+			EventRW:    audit.RWWrite,
+			Result:     audit.ResultFailure,
+		})
 		c.JSON(401, gin.H{"error": fmt.Sprintf("用户名或密码错误（剩余尝试 %d 次）", maxAttempts-attempts)})
 		return
 	}
@@ -50,7 +78,16 @@ func (h *Handler) Login(c *gin.Context) {
 	// 登录成功，清除计数
 	h.SetIntSetting(attemptKey, 0)
 	token, _ := h.Auth.GenerateToken(user)
-	if h.Store != nil { h.Store.SaveAuditLog(user.Username, "登录成功", "Web登录", c.ClientIP()) }
+	h.writeAudit(c, audit.Record{
+		Username:   user.Username,
+		Action:     "登录成功",
+		ActionCode: audit.ActionLogin,
+		TargetType: audit.TargetSession,
+		Detail:     "Web登录",
+		EventType:  audit.EventConsoleSignin,
+		EventRW:    audit.RWWrite,
+		Result:     audit.ResultSuccess,
+	})
 	c.JSON(200, gin.H{"token": token, "user": user})
 }
 

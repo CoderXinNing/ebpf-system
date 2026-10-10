@@ -15,6 +15,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/CoderXinNing/ebpf-system/server/internal/alert"
+	"github.com/CoderXinNing/ebpf-system/server/internal/audit"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
 	"github.com/CoderXinNing/ebpf-system/server/internal/build"
 	"github.com/CoderXinNing/ebpf-system/server/internal/ca"
@@ -138,6 +139,14 @@ func main() {
 				},
 				func() (map[string]string, error) {
 					return psqlDB.ListSettings(context.Background())
+				},
+			)
+			h.SetAuditCallbacks(
+				func(rec audit.Record) error {
+					return psqlDB.WriteAudit(context.Background(), rec)
+				},
+				func(limit int) ([]map[string]interface{}, error) {
+					return psqlDB.ListAudit(context.Background(), limit)
 				},
 			)
 			// 证书初始化（首次运行自动生成 CA + Server 证书；旧品牌 CA 会报错退出）

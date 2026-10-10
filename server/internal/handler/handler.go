@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/proto/pb"
+	"github.com/CoderXinNing/ebpf-system/server/internal/audit"
 	"github.com/CoderXinNing/ebpf-system/server/internal/auth"
 	"github.com/CoderXinNing/ebpf-system/server/internal/store"
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,8 @@ type Handler struct {
 	SaveEventFunc               func(evt ProbeEvent) error                        // PSQL 模式注入
 	SaveAgentFunc               func(agent AgentInfo) error                       // PSQL 模式注入
 	ListAlertsFunc              func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入
+	SaveAuditFunc               func(rec audit.Record) error                      // PSQL 模式注入：写审计
+	ListAuditFunc               func(limit int) ([]map[string]interface{}, error) // PSQL 模式注入：读审计
 	UpdateAlertStatusFunc       func(ids []int64, status string) error            // 告警状态更新
 	ListProbeExcludeCommsFunc   func() ([]string, error)
 	AddProbeExcludeCommsFunc    func(comm, reason string) error
@@ -240,6 +243,63 @@ func (h *Handler) SetListAlertsFunc(fn func(int) ([]map[string]interface{}, erro
 	h.ListAlertsFunc = fn
 }
 
+// SetAuditCallbacks 设置审计回调（PSQL 模式）
+// save: 写一条审计；list: 列审计记录（兼容旧 UI 的 map 格式）
+func (h *Handler) SetAuditCallbacks(
+	save func(audit.Record) error,
+	list func(limit int) ([]map[string]interface{}, error),
+) {
+	h.SaveAuditFunc = save
+	h.ListAuditFunc = list
+}
+
+// writeAudit 写入一条审计，自动补全环境字段
+//
+// 设计：
+//   - nil-safe：callback 未注入时静默跳过，不 panic
+//   - 自动从 context 补 username / ip / user_agent / result / event_type
+//   - 失败不阻塞业务，仅打日志
+func (h *Handler) writeAudit(c *gin.Context, rec audit.Record) {
+	if h.SaveAuditFunc == nil {
+		return
+	}
+	if rec.Username == "" {
+		rec.Username = h.getUsername(c)
+	}
+	if rec.IP == "" {
+		rec.IP = c.ClientIP()
+	}
+	if rec.UserAgent == "" {
+		rec.UserAgent = c.Request.UserAgent()
+	}
+	if rec.Result == "" {
+		rec.Result = audit.ResultSuccess
+	}
+	if rec.EventType == "" {
+		rec.EventType = audit.EventConsoleAction
+	}
+	if err := h.SaveAuditFunc(rec); err != nil {
+		log.Printf("⚠️ 审计写入失败: action=%s user=%s err=%v",
+			rec.ActionCode, rec.Username, err)
+	}
+}
+
+// auditFromCtx 便捷构造：从 context 拿环境字段，业务字段由调用方填
+func (h *Handler) auditFromCtx(c *gin.Context, action, actionCode, targetType, targetID, targetName string) audit.Record {
+	return audit.Record{
+		Username:   h.getUsername(c),
+		IP:         c.ClientIP(),
+		UserAgent:  c.Request.UserAgent(),
+		Action:     action,
+		ActionCode: actionCode,
+		TargetType: targetType,
+		TargetID:   targetID,
+		TargetName: targetName,
+		Result:     audit.ResultSuccess,
+		EventType:  audit.EventConsoleAction,
+	}
+}
+
 func NewHandler(st *store.Store, am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) error) *Handler {
 	return &Handler{
 		Store:       st,
@@ -279,11 +339,25 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/star/search", h.rbacMiddleware("events", "read"), h.SearchStarChain)
 		api.DELETE("/agents/:id", h.rbacMiddleware("agents", "delete"), func(c *gin.Context) {
 			agentID := c.Param("id")
-			h.Store.DeleteAgentAll(agentID)
+			if h.DeleteAgentFunc != nil {
+				if err := h.DeleteAgentFunc(agentID); err != nil {
+					log.Printf("⚠️ DB 删除 Agent 失败: %v", err)
+					c.JSON(500, gin.H{"error": err.Error()})
+					return
+				}
+			} else if h.Store != nil {
+				h.Store.DeleteAgentAll(agentID)
+			}
 			h.Mu.Lock()
 			delete(h.Agents, agentID)
 			h.Mu.Unlock()
-			h.Store.SaveAuditLog(h.getUsername(c), "删除主机", agentID, c.ClientIP())
+			h.writeAudit(c, audit.Record{
+				Action:     "删除主机",
+				ActionCode: audit.ActionAgentDelete,
+				TargetType: audit.TargetAgent,
+				TargetID:   agentID,
+				EventRW:    audit.RWWrite,
+			})
 			c.JSON(200, gin.H{"success": true})
 		})
 
@@ -302,7 +376,14 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			}
 			h.Mu.Unlock()
 			log.Printf("📋 移动主机: %v -> %s", req.AgentIDs, req.Group)
-			h.Store.SaveAuditLog(h.getUsername(c), "移动主机", fmt.Sprintf("%v -> %s", req.AgentIDs, req.Group), c.ClientIP())
+			h.writeAudit(c, audit.Record{
+				Action:     "移动主机",
+				ActionCode: audit.ActionAgentMove,
+				TargetType: audit.TargetAgent,
+				TargetID:   fmt.Sprintf("%v", req.AgentIDs),
+				Detail:     fmt.Sprintf("%v -> %s", req.AgentIDs, req.Group),
+				EventRW:    audit.RWWrite,
+			})
 			c.JSON(200, gin.H{"success": true})
 		})
 		api.POST("/command", h.rbacMiddleware("agents", "write"), h.Command)
@@ -459,12 +540,23 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 
 		// 审计日志
 		api.POST("/logout", h.authMiddleware, func(c *gin.Context) {
-			h.Store.SaveAuditLog(h.getUsername(c), "注销", "退出登录", c.ClientIP())
+			h.writeAudit(c, audit.Record{
+				Action:     "注销",
+				ActionCode: audit.ActionLogout,
+				TargetType: audit.TargetSession,
+				Detail:     "退出登录",
+				EventRW:    audit.RWWrite,
+			})
 			c.JSON(200, gin.H{"success": true})
 		})
 
 		api.GET("/logs/export", h.rbacMiddleware("audit", "export"), func(c *gin.Context) {
-			logs, _ := h.Store.GetAuditLogs(10000)
+			var logs []map[string]interface{}
+			if h.ListAuditFunc != nil {
+				logs, _ = h.ListAuditFunc(10000)
+			} else if h.Store != nil {
+				logs, _ = h.Store.GetAuditLogs(10000)
+			}
 			c.Header("Content-Type", "text/csv")
 			c.Header("Content-Disposition", "attachment; filename=audit_logs.csv")
 			c.String(200, "id,username,action,detail,ip,created_at\n")
@@ -475,7 +567,12 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		})
 
 		api.GET("/logs", h.rbacMiddleware("audit", "read"), func(c *gin.Context) {
-			logs, _ := h.Store.GetAuditLogs(200)
+			var logs []map[string]interface{}
+			if h.ListAuditFunc != nil {
+				logs, _ = h.ListAuditFunc(200)
+			} else if h.Store != nil {
+				logs, _ = h.Store.GetAuditLogs(200)
+			}
 			c.JSON(200, gin.H{"logs": logs})
 		})
 
@@ -494,7 +591,14 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			if pageName == "" {
 				pageName = req.Page
 			}
-			h.Store.SaveAuditLog(h.getUsername(c), "访问页面", pageName, c.ClientIP())
+			h.writeAudit(c, audit.Record{
+				Action:     "访问页面",
+				ActionCode: audit.ActionSystemPageVisit,
+				TargetType: audit.TargetSystem,
+				TargetName: pageName,
+				EventType:  audit.EventConsoleAction,
+				EventRW:    audit.RWRead,
+			})
 			c.JSON(200, gin.H{"success": true})
 		})
 
@@ -509,7 +613,13 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 					c.JSON(500, gin.H{"error": "设置失败: " + err.Error()})
 					return
 				}
-				h.Store.SaveAuditLog(h.getUsername(c), "修改系统时间", req.Datetime, c.ClientIP())
+				h.writeAudit(c, audit.Record{
+					Action:     "修改系统时间",
+					ActionCode: audit.ActionSystemTimeSet,
+					TargetType: audit.TargetSystem,
+					TargetName: req.Datetime,
+					EventRW:    audit.RWWrite,
+				})
 			}
 			c.JSON(200, gin.H{"success": true})
 		})
@@ -524,7 +634,13 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 					c.JSON(500, gin.H{"error": "NTP同步失败: " + err.Error()})
 					return
 				}
-				h.Store.SaveAuditLog(h.getUsername(c), "NTP同步", req.Server, c.ClientIP())
+				h.writeAudit(c, audit.Record{
+					Action:     "NTP同步",
+					ActionCode: audit.ActionSystemNTPSync,
+					TargetType: audit.TargetSystem,
+					TargetName: req.Server,
+					EventRW:    audit.RWWrite,
+				})
 			}
 			c.JSON(200, gin.H{"success": true})
 		})
