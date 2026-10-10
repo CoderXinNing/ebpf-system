@@ -771,13 +771,9 @@ AsterTrack 项目主文档
   分支：main（ahead of origin/main by 7 commits）
   HEAD：c999c51（fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪）
 
-  工作区：
-    ?? docs/DB-RECONCILIATION.txt（将被归档）
-    ?? docs/TASK-CLASSIFICATION.txt（将被归档）
-    ?? docs/CLEANUP-PLAN.txt（将被归档）
-    ?? docs/PROJECT.txt（本文件，整合后）
-    ?? docs/DESIGN.txt（整合后）
-    ?? docs/ARCHIVE/（整合后）
+  工作区：clean
+    （原 docs/DB-RECONCILIATION.txt / TASK-CLASSIFICATION.txt /
+      CLEANUP-PLAN.txt / PROJECT-STATUS.txt 等已归入 docs/ARCHIVE/）
 
 
 =================================================
