@@ -14,18 +14,10 @@ http.interceptors.request.use((config) => {
   return config
 })
 
-// 响应拦截器：记录活动 + 处理 401
+// 响应拦截器：处理 401
 let redirecting = false
 http.interceptors.response.use(
-  (response) => {
-    const url = response.config.url || ''
-    // 排除纯查询配置（不算用户活动）
-    if (!url.includes('/session/config')) {
-      // 广播活动事件，useSession 监听后重置倒数
-      window.dispatchEvent(new CustomEvent('astertrack:activity'))
-    }
-    return response
-  },
+  (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')

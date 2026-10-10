@@ -97,7 +97,6 @@ const route = useRoute()
 const router = useRouter()
 const isDark = ref(false)
 const {
-  showWarning,
   idleMinutes,
   heartbeatEnabled,
   heartbeatInterval,
@@ -106,10 +105,6 @@ const {
 
 async function handleToggleHeartbeat() {
   await toggleHeartbeat(!heartbeatEnabled.value)
-}
-
-function dismissWarning() {
-  showWarning.value = false
 }
 const notifications = ref<any[]>([])
 const globalSearch = ref('')
