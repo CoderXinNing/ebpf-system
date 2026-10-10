@@ -129,39 +129,76 @@ AsterTrack 项目主文档
       - 已验证：alerts before_days=7 → affected=634
                   tokens all → affected=19
 
-    Session 机制（2026-10-10）
+    Session 机制（2026-10-10，心跳统一模型）
       - 背景：sessions 表从未真正使用（0 行）；JWT 无状态，
               logout 后 token 仍有效（安全漏洞）
+      - 设计核心：任何后端交互都刷 idle（API 请求 / 心跳）
+          心跳 = 用户显式开启的“自动交互”，与手动操作等价
+          关闭心跳时，用户不操作 → idle 分钟倒数 → 401
+          开启心跳时，每 N 秒自动刷 → 会话保活
+
       - migration 010：system_config 表（namespace 分组）
-          初始配置：session.* 3 条 + security.* 2 条
+          初始配置：session.* 4 条 + security.* 2 条
           预留 namespace：cleanup / agent / cluster
       - migration 011：sessions v2
           删废弃 token_hash；新增 session_id_hash（SHA256）
-          新增 keepalive（“保持登录”标记）
-      - 新增 auth/session_store.go：
+          新增 keepalive（心跳开关标记）
+      - migration 012：session 配置 v2
+          absolute_hours 默认 8 → 0（0 = 禁用绝对超时）
+          新增 heartbeat_interval_seconds = 180
+          keepalive_extend_minutes 标注废止
+
+      - auth/session_store.go：
           SessionStore 接口（未来可切 Redis）+ PGSessionStore
+          Session.ExpiresAt 改 *time.Time（NULL = 禁用）
+          接口：Create / GetByIDHash / GetByID / Touch / Revoke /
+                RevokeByUserID / UpdateHeartbeat
           GenerateSessionID（CSPRNG 32B → base64url）
           HashSessionID（SHA256）
-      - 新增 auth/session_lifecycle.go：
+      - auth/session_lifecycle.go：
           CreateSession / ValidateAndTouch / RevokeSessionByID
-          从 system_config 读 idle / absolute / keepalive 配置
-      - auth.go：GenerateToken(user, sessionID)，TTL = absolute_hours
+          从 system_config 读 idle / absolute / heartbeat 配置
+          readIntConf 带 5 分钟内存缓存（降 DB 压力）
+          UpdateSessionHeartbeat（切换心跳）
+      - auth.go：GenerateToken(user, sessionID)，
+                  TTL = absolute_hours（0 时不过期）
                   ValidateToken 返回 (user, sessionID, error)
       - Login 创建 session，JWT 携带 session_id
       - authMiddleware 走 ValidateAndTouch（校验 + 滑动续期）
       - logout 撤销 session（JWT 立即失效）
       - writeAudit 从 context 补 session_id
-      - 新增 /session/keepalive + /session/close
-      - 前端：useSession composable（idle 检测 + 心跳 + 多标签）
-              LoginView 加“保持登录”复选框
-              http.ts 401 自动跳登录页
-      - 提交：00f8b88 + d60aad2
+      - 路由：/session/keepalive、/session/close、
+              /session/config、/session/heartbeat
+      - psql.go：startSessionTimeoutScanner 每 1 分钟
+                 主动扫描并撤销超时会话（后端独立兜底）
+
+      - 前端：
+          useSession composable（v3）：
+            - 只记“最后 API 请求时间”（http.ts 拦截器广播事件）
+            - 不监听鼠标/键盘（不触发后端）
+            - 心跳开关由用户控制
+            - banner 基于 idle 倒数
+            - syncConfig 定期同步后端配置
+          http.ts：401 清凭证 + 跳登录页（防抖）
+          App.vue：导航栏加“心跳”开关（💓/💔）
+          LoginView.vue：无“保持登录”复选框（概念统一）
+
+      - 配置项（system_config，namespace=session）：
+          idle_minutes               = 10
+          absolute_hours             = 0（禁用）
+          heartbeat_interval_seconds = 180
+      - 约束：heartbeat_interval_seconds < idle_minutes * 30
+              （留 2 次窗口容忍 1 次丢包）
+
       - 已验证：
-          idle=1min 非 keepalive 会话 70 秒后 401「会话空闲超时」
-          keepalive 会话 70 秒后仍 200（用 60 分钟 idle）
-          超时自动撤销（revoked_at 填入）
+          absolute=0 → sessions.expires_at = NULL
+          切换心跳 → sessions.keepalive = t/f
+          GET /session/config 返回 4 字段
+          idle=1min 时非心跳会话 70 秒后 401「会话空闲超时」
           logout 后同 token 401「会话已撤销」
           audit_logs.session_id 非空
+
+      - 提交：00f8b88 + d60aad2 + fee83b8 + 25e33f0 + 5c0ec62
       - 预留（未实现，配置位已留）：
           security.reauth_enabled（二次验证，默认 false）
           SessionStore 接口可换 Redis（多实例）
@@ -435,8 +472,9 @@ AsterTrack 项目主文档
     009_audit_logs_v2.up.sql         (2026-10-10)
     010_system_config.up.sql         (2026-10-10)
     011_sessions_v2.up.sql           (2026-10-10)
+    012_session_config_v2.up.sql     (2026-10-10)
     README.txt
-    下一个编号：012
+    下一个编号：013
 
   3.4 proto RPC 清单（AgentService，22 个）
 
@@ -740,19 +778,28 @@ AsterTrack 项目主文档
           - 审计写入完整
         预估：0.5 天（已用）
 
-    A12 [已完成] 补全 Session 机制
+    A12 [已完成] 补全 Session 机制（心跳统一模型）
         背景：
           - sessions 表从未真正使用（0 行）
           - JWT 无状态，logout 后 token 仍有效（安全漏洞）
           - authMiddleware 只校验签名，无会话状态
 
+        设计核心：
+          统一模型 = 任何后端交互都刷 idle
+            ├─ API 请求 → authMiddleware → Touch
+            └─ 心跳请求 → authMiddleware → Touch
+          心跳 = 用户显式开启的“自动交互”
+            关闭：用户不操作 → idle 分钟倒数 → 401
+            开启：每 N 秒自动刷 → 会话保活（除 absolute）
+          absolute_hours = 0 表示禁用（会话永不过期，除手动登出）
+
         migration 010：system_config
-          - 新建 system_config（namespace / key / value / value_type /
+          - 新建 system_config 表（namespace / key / value / value_type /
             description / updated_by / updated_at）
           - 初始配置：
               session.idle_minutes = 10
-              session.absolute_hours = 8
-              session.keepalive_extend_minutes = 60
+              session.absolute_hours = 0（禁用）
+              session.heartbeat_interval_seconds = 180
               security.reauth_enabled = false
               security.reauth_timeout_min = 5
           - 预留 namespace：cleanup / agent / cluster
@@ -760,50 +807,68 @@ AsterTrack 项目主文档
         migration 011：sessions v2
           - 删废弃 token_hash（0 行表无历史）
           - 新增 session_id_hash VARCHAR(128)（SHA256 hex）
-          - 新增 keepalive BOOLEAN
+          - 新增 keepalive BOOLEAN（心跳开关）
           - 加活跃会话查询索引
 
+        migration 012：session 配置 v2
+          - absolute_hours 默认 8 → 0
+          - 新增 heartbeat_interval_seconds
+          - keepalive_extend_minutes 标注废止
+
         auth 包：
-          - session_store.go：SessionStore 接口 + PGSessionStore
-            GenerateSessionID（CSPRNG 32B）+ HashSessionID（SHA256）
+          - session_store.go：
+              SessionStore 接口 + PGSessionStore
+              Session.ExpiresAt *time.Time（NULL = 禁用）
+              GetByID / GetByIDHash / Touch / Revoke / UpdateHeartbeat
+              GenerateSessionID（CSPRNG 32B）+ HashSessionID（SHA256）
           - session_lifecycle.go：
-              CreateSession（登录后创建）
+              CreateSession（登录后创建，absolute=0 时 expires_at=NULL）
               ValidateAndTouch（JWT 校验 + session 校验 + 滑动续期）
               RevokeSessionByID / RevokeSessionsByUserID
-              从 system_config 读 idle / absolute / keepalive 配置
+              readIntConf 带 5 分钟内存缓存
+              UpdateSessionHeartbeat
           - auth.go：
-              AuthManager 加 sessionStore + readIntConf
               GenerateToken(user, sessionID)，TTL = absolute_hours
               ValidateToken 返回 (user, sessionID, error)
 
         handler：
-          - Login 创建 session + JWT 携带 session_id + 响应返回配置
+          - Login 创建 session + JWT 携带 session_id + 返回配置
           - authMiddleware 走 ValidateAndTouch
           - writeAudit 从 context 补 session_id
           - logout 撤销 session
-          - 加路由 /session/keepalive + /session/close
+          - 路由：/session/keepalive /session/close
+                  /session/config /session/heartbeat
+          - SessionHeartbeat：切换心跳开关
+
+        repository/psql：
+          - startSessionTimeoutScanner：每 1 分钟扫超时会话并主动撤销
+            （后端独立兜底，不依赖客户端请求）
 
         前端：
-          - api/auth.ts：login 支持 keepalive 参数
-          - api/http.ts：401 清凭证 + 跳登录页（防抖）
-          - composables/useSession.ts：
-              idle 检测（30s 检查）+ 心跳（5min，页面可见时）
-              多标签 BroadcastChannel 同步
-              beforeunload fetch keepalive:true 通知后端
-              showWarning 暴露超时前 1 分钟警告
-          - LoginView.vue：加“保持登录”复选框
-          - App.vue：挂载 useSession
+          - api/auth.ts：login 去 keepalive 参数，session 结构更新
+          - api/http.ts：每次请求广播 asterTrack:activity（排除 config）
+                        401 清凭证 + 跳登录页
+          - composables/useSession.ts（v3）：
+              只记最后 API 请求时间（不监听鼠标/键盘）
+              心跳开关由用户控制
+              banner 基于 idle 倒数
+              syncConfig 定期同步后端配置
+          - App.vue：导航栏加“心跳”开关（💓 开 / 💔 关）
+          - LoginView.vue：无“保持登录”复选框
 
         语义：
           - Idle Timeout：无操作 N 分钟（默认 10）→ 强制登出
-          - Absolute Timeout：创建后 N 小时（默认 8）→ 强制登出
+          - Absolute Timeout：创建后 N 小时（0=禁用）→ 强制登出
           - Sliding Expiration：每次请求刷新 last_activity_at（30s 去重）
-          - 保持登录：idle 延长到 60 分钟，absolute 不变
-          - 关闭浏览器：不主动撤销，靠 idle 兜底
+          - 心跳开关：用户级，动态切换
+          - 关闭浏览器：心跳停 + 后端独立扫描 → 超时撤销
 
         已验证：
-          - idle=1min 非 keepalive 会话 70 秒后 401「会话空闲超时」
-          - keepalive 会话 70 秒后仍 200（用 60 分钟 idle）
+          - absolute=0 → sessions.expires_at = NULL
+          - 切换心跳 → keepalive = t/f
+          - GET /session/config 返回 4 字段
+          - idle=1min 时非心跳会话 70 秒后 401「会话空闲超时」
+          - 心跳开 → 70 秒后仍 200（用 60 分钟 idle）
           - 超时自动撤销（revoked_at 填入）
           - logout 后同 token 401「会话已撤销」
           - audit_logs.session_id 非空（登录 target_id=session_id）
@@ -812,8 +877,7 @@ AsterTrack 项目主文档
           - security.reauth_enabled（二次验证，默认关闭）
           - SessionStore 接口可换 Redis（多实例共享）
 
-        提交：00f8b88（后端）+ d60aad2（前端）
-        预估：1 天（已用）
+        提交：00f8b88 + d60aad2 + fee83b8 + 25e33f0 + 5c0ec62
 
   B 待开发（设计完成，无新架构）
   ────────────────────────────────
@@ -1078,10 +1142,10 @@ AsterTrack 项目主文档
 
 【六、当前 commit 状态】
 
-  分支：main（ahead of origin/main by 19 commits）
-  HEAD：d60aad2（feat(session): 前端接入 idle 检测 + 心跳 + 保持登录）
+  分支：main（ahead of origin/main by 6 commits）
+  HEAD：fd276bd（refactor: 代码清理（P0/P1 遗留））
 
-  本批提交（2026-10-10，13 个）：
+  本批提交（2026-10-10，19 个）：
     c999c51  fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪
     4d1995f  docs(phase-a): A3 文档漂移修正
     3ecbdcb  docs(phase-a): A3 文档漂移修正（§6 工作区）
@@ -1095,6 +1159,11 @@ AsterTrack 项目主文档
     d8d2cde  docs: 同步数据/日志清理系统到 PROJECT.txt
     00f8b88  feat(session): 补全 Session 机制
     d60aad2  feat(session): 前端接入 idle 检测 + 心跳 + 保持登录
+    fee83b8  refactor(session): 心跳统一模型（第二批后端）
+    25e33f0  refactor(session): 心跳统一模型（第三批前端）
+    5c0ec62  fix(web): useSession 心跳时同步配置
+    fd276bd  refactor: 代码清理（P0/P1 遗留）
+    （注：commit 数已按 git log 校正）
 
   工作区：clean
     （原 docs/DB-RECONCILIATION.txt / TASK-CLASSIFICATION.txt /
