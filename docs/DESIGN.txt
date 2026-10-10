@@ -662,7 +662,111 @@ AsterTrack 设计定稿
     10. 前端删除加假进度条（VMware 风格）
 
 
-【五、文档定位说明】
+【五、本地缓存加密】
+
+  5.1 背景与动机
+
+    离线保命模式要求 Agent 在 Server 不可达时仍能：
+      - 加载探针（按最后一次下发的名单）
+      - 应用规则（按最后一次下发的 RuleSet）
+      - 保持敏感路径监控等核心能力
+
+    因此必须有本地缓存。缓存内容是安全资产：
+
+      | 缓存           | 内容                          | 泄露后果                     |
+      |----------------|-------------------------------|------------------------------|
+      | rules.enc      | 规则 canonical JSON           | 攻击者知道监控策略，可规避   |
+      | probes.enc     | 探针名单 + .o SHA256          | 攻击者知道防御能力清单，可绕过 |
+      | baseline.enc   | 软基线特征（进程/服务/账号）  | 攻击者推断宿主画像           |
+
+    故 v3 起本地缓存一律加密（baseline 见待办 B11）。
+
+  5.2 加密方案
+
+    算法：AES-256-GCM
+    密钥源：
+      IKM  = /etc/machine-id + "\x00" + agent.id
+      KDF  = HKDF-SHA256(salt=nil, info="astertrack-rules-v1")
+      KEY  = 32 字节（每 Agent 独立）
+
+    文件格式：
+      [nonce(12) | ciphertext | tag(16)]
+      权限 0600，文件名 *.enc
+
+    为什么混入 agent.id：
+      - 只靠 machine-id 时，克隆虚拟机 → 相同密钥 → 密文可跨机器解
+      - 混入 agent.id（每 Agent 唯一）→ 换机器密文立即失效
+      - agent.id 本身是 Agent 身份，变了等于换机器，规则重拉是正常的
+
+    为什么不做签名/HMAC 于缓存层：
+      - 规则本身有 Server 签名（rules.sig），缓存解密后仍走验签
+      - 探针 .o SHA256 由 Server 下发时携带，加载时校验
+      - 缓存层再套 HMAC 是重复防护，无增益
+
+  5.3 文件布局
+
+    agent/data/
+      rules.enc       规则 canonical JSON（AES-GCM）
+      rules.sig       规则签名（明文，签名本身不敏感）
+      probes.enc      探针名单（AES-GCM）
+      baseline.json   软基线（待 B11 加密）
+      agent.id        Agent 身份（明文，密钥派生输入之一）
+
+    迁移规则：
+      - 旧明文 rules.json / probes.json → 读到后加密落地 + 删明文
+      - 日志标记：「🗑️ 旧明文 XXX 已删除（已迁移至 YYY.enc）」
+
+  5.4 启动与断连流程
+
+    Agent 启动 → 尝试 connectAndRegister()
+      ├─ 成功（在线）
+      │    ├─ fetchProbeList() → 下发名单 + SHA256 → 缓存 probes.enc
+      │    ├─ loadProbesByList()（SHA256 校验）
+      │    ├─ syncRulesFromServer() → 拉规则 → 验签 → ApplyConfig
+      │    └─ saveRulesCache() → 写 rules.enc
+      │
+      └─ 失败（离线保命模式）
+           ├─ loadProbesFromCacheOffline()
+           │    ├─ 解密 probes.enc → 5 个探针 → loadProbesByList()
+           │    └─ 无缓存 → 跳过（等重连）
+           ├─ syncRulesOnStartup()
+           │    ├─ 解密 rules.enc → 验签 → ApplyConfig
+           │    └─ 无缓存/解密失败 → 空跑
+           └─ go retryConnectLoop()（指数退避 3/6/12/30/60s）
+
+    重连成功后：
+      - 重新 fetchProbeList() → 缓存更新
+      - loadProbesByList()（增量，已加载的跳过）
+      - 补报资产
+
+  5.5 降级策略（可用性优先）
+
+    | 场景                          | 行为                                  |
+    |-------------------------------|---------------------------------------|
+    | /etc/machine-id 不可读        | 落回明文缓存 + 警告日志，Agent 不拒启 |
+    | agent.id 不可读               | 同上                                  |
+    | 缓存解密失败（换机器/被篡改） | 空跑，等 Server 重连下发              |
+    | 缓存文件不存在（首次部署）    | 空跑，等 Server 首次下发              |
+    | 缓存 JSON 解析失败            | 空跑 + 警告日志                       |
+
+    原则：Agent 可用性 > 本地缓存加密强度。
+    本地文件系统已被攻破的场景，加密强度本身也无法保障。
+
+  5.6 不做的事
+
+    - 不用 TPM：部署复杂度高，收益在当前威胁模型下有限（P2 评估）
+    - 不做 HMAC：规则有 Server 签名，探针有 SHA256，缓存层不重复
+    - 不做密钥轮换：agent.id 变了等于换机器，自动失效
+    - 不加密 agent.id：它是密钥派生输入，加密会形成递归依赖
+
+  5.7 关联
+
+    - 规则结构：见 §2.7
+    - 规则 Apply：见 §3
+    - 待办：baseline.json 加密见 PROJECT.txt §4 B11
+
+
+【六、文档定位说明】
 
   本文件（DESIGN.txt）：设计参考
   PROJECT.txt：现状 / 事实源 / 待办 / 清理计划

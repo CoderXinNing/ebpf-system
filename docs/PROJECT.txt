@@ -103,6 +103,32 @@ AsterTrack 项目主文档
               MinCmdlineLen 废弃
       - 提交：c32ee0b（v3 主体）+ 1a07ec6（清理）
 
+    本地安全资产加密 + 离线保命加载（2026-10-10，Phase 3）
+      - 新增 agent/internal/crypto（AES-GCM + HKDF-SHA256）
+          密钥源：/etc/machine-id + agent.id
+          KDF:   HKDF-SHA256(salt=nil, info="astertrack-rules-v1")
+          输出：32 字节 AES-256 密钥，每 Agent 独立
+      - 加密落地：
+          rules.enc    规则 canonical JSON（替代旧明文 rules.json）
+          probes.enc   探针名单 + SHA256（替代旧明文 probes.json）
+          格式：[nonce(12) | ciphertext | tag(16)]，权限 0600
+      - 离线保命加载：
+          Server 不可达 → 读缓存解密 → 验签 → ApplyConfig
+          probes.enc → 5 个探针名单 → 加载（保留 SHA256 校验）
+          rules.enc  → 规则应用 → 敏感路径恢复
+      - 降级策略：
+          machine-id / agent.id 不可读 → 落回明文 + 警告日志
+          缓存解密失败（换机器）→ 空跑，等 Server 重连
+          无缓存（首次部署）→ 空跑，等 Server 首次下发
+      - 迁移：旧明文 rules.json / probes.json 读到后加密落地 + 删明文
+      - 已验证：
+          probes.enc 626 字节，rules.enc 323 字节，旧明文消失
+          离线启动 → 「📋 离线模式：从缓存加载探针名单（5 个）」
+                    → 「📋 启动加载本地规则: version=23」
+                    → 「📋 敏感路径已应用: 精确 3 条, 前缀 3 条」
+      - 提交：21dfac6（规则加密）+ dfc93fb（探针名单加密 + 离线加载）
+      - 待办：baseline.json 加密（等软基线修复完成后，见 §4 B11）
+
     探针排除三维度（后端，2026-10-09）
       - migration 007 已应用
       - C 层 sentinel_xip（LPM_TRIE）已加载
@@ -975,6 +1001,17 @@ AsterTrack 项目主文档
         预估：2-3 天
 
 
+    B11 baseline.json 加密（与 rules.enc / probes.enc 同套）
+        背景：软基线当前有 BUG 未修，修复前不动加密，
+              避免两件事混在一起排障
+        方案：复用 agent/internal/crypto（AES-GCM + HKDF）
+              文件：baseline.json → baseline.enc
+              迁移：读到明文后加密落地 + 删明文
+        理由：软基线特征能推断宿主画像（进程/服务/账号分布），
+              与规则、探针名单同等级别的安全资产
+        归属：软基线 BUG 修复完成后
+        预估：0.5 天
+
     B10 数据生命周期管理（设计待定）
         背景：
           - events / alerts / audit_logs 各自独立保留策略
@@ -1222,9 +1259,12 @@ AsterTrack 项目主文档
 【六、当前 commit 状态】
 
   分支：main（已 push 到 origin/main）
-  HEAD：c32ee0b（feat(rules): 规则结构 v3）
+  HEAD：dfc93fb（feat(agent): 离线探针加载）
 
-  本批提交（2026-10-10，24 个）：
+  本批提交（2026-10-10，26 个）：
+    dfc93fb  feat(agent): 离线探针加载（probes.enc 加密缓存 + Server 名单兜底）
+    21dfac6  feat(agent): 规则缓存加密落地（AES-GCM + HKDF，Phase 3）
+    f8a8ac1  docs: 同步规则结构 v3（PROJECT.txt §1.1/§6 + DESIGN.txt §2.7/§3.3）
     c32ee0b  feat(rules): 规则结构 v3（bash 独立节 + cmdline 排除 + tcp comm/combo）
     1a07ec6  cleanup: 删除 file_probe 本地兜底 + bash 重复过滤 + 废弃 MinCmdlineLen
     c999c51  fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪
