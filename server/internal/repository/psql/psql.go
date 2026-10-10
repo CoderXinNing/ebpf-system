@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -114,6 +115,9 @@ func (p *PSQL) EnsurePartitions(ctx context.Context) error {
 //  2. 之后每 24 小时跑一次
 //  3. 每次先 EnsurePartitions（保证未来分区存在），再 runCleanup（清理过期数据）
 func (p *PSQL) StartMaintenanceTask(ctx context.Context) {
+	// 独立启动"超时会话扫描"（每分钟）
+	go p.startSessionTimeoutScanner(ctx)
+
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -134,6 +138,43 @@ func (p *PSQL) StartMaintenanceTask(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// startSessionTimeoutScanner 每 1 分钟扫描超时会话并主动撤销
+func (p *PSQL) startSessionTimeoutScanner(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			p.scanTimeoutSessions(ctx)
+		}
+	}
+}
+
+func (p *PSQL) scanTimeoutSessions(ctx context.Context) {
+	idleMinutes := 10
+	var v string
+	if err := p.pool.QueryRow(ctx,
+		`SELECT value FROM system_config WHERE namespace='session' AND key='idle_minutes'`,
+	).Scan(&v); err == nil {
+		if n, e := strconv.Atoi(v); e == nil && n > 0 {
+			idleMinutes = n
+		}
+	}
+
+	_, err := p.pool.Exec(ctx, fmt.Sprintf(`
+		UPDATE sessions SET revoked_at = NOW()
+		WHERE revoked_at IS NULL
+		  AND (
+		    (expires_at IS NOT NULL AND expires_at < NOW())
+		    OR (last_activity_at < NOW() - INTERVAL '%d minutes')
+		  )`, idleMinutes))
+	if err != nil {
+		log.Printf("⚠️ 扫描超时会话失败: %v", err)
+	}
 }
 
 // runMaintenance 一次完整维护：确保分区 + 清理
@@ -261,8 +302,11 @@ func (p *PSQL) runCleanup(ctx context.Context) {
 		log.Printf("⚠️ 清理旧基线快照失败: %v", err)
 	}
 
-	// ============ sessions：保留 7 天（非用户配置）============
-	_, err = p.pool.Exec(ctx, "DELETE FROM sessions WHERE created_at < NOW() - INTERVAL '7 days' AND revoked_at IS NULL")
+	// ============ sessions：清理已失效（保留 7 天供审计）============
+	_, err = p.pool.Exec(ctx, `
+		DELETE FROM sessions
+		WHERE (expires_at IS NOT NULL AND expires_at < NOW() - INTERVAL '7 days')
+		   OR (revoked_at IS NOT NULL AND revoked_at < NOW() - INTERVAL '7 days')`)
 	if err != nil {
 		log.Printf("⚠️ 清理过期会话失败: %v", err)
 	}

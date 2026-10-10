@@ -617,6 +617,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.POST("/session/keepalive", h.authMiddleware, h.SessionKeepalive)
 		api.POST("/session/close", h.authMiddleware, h.SessionClose)
 		api.GET("/session/config", h.authMiddleware, h.SessionConfig)
+		api.POST("/session/heartbeat", h.authMiddleware, h.SessionHeartbeat)
 
 		api.GET("/logs/export", h.rbacMiddleware("audit", "export"), func(c *gin.Context) {
 			var logs []map[string]interface{}

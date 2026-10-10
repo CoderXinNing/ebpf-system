@@ -33,14 +33,20 @@ func defaultReadIntConf(pool *pgxpool.Pool) func(ctx context.Context, namespace,
 //
 //	sessionID  明文（嵌入 JWT，前端不直接看到）
 //	dbID       sessions 表主键（用于审计关联）
-func (am *AuthManager) CreateSession(ctx context.Context, userID int, ip, userAgent string, keepalive bool) (string, int64, error) {
+func (am *AuthManager) CreateSession(ctx context.Context, userID int, ip, userAgent string) (string, int64, error) {
 	sessionID, err := GenerateSessionID()
 	if err != nil {
 		return "", 0, err
 	}
 
-	absoluteHours := am.readIntConf(ctx, "session", "absolute_hours", 8)
+	absoluteHours := am.readIntConf(ctx, "session", "absolute_hours", 0)
 	now := time.Now()
+
+	var expiresAt *time.Time
+	if absoluteHours > 0 {
+		t := now.Add(time.Duration(absoluteHours) * time.Hour)
+		expiresAt = &t
+	}
 
 	sess := &Session{
 		UserID:         userID,
@@ -48,9 +54,9 @@ func (am *AuthManager) CreateSession(ctx context.Context, userID int, ip, userAg
 		IP:             ip,
 		UserAgent:      userAgent,
 		CreatedAt:      now,
-		ExpiresAt:      now.Add(time.Duration(absoluteHours) * time.Hour),
+		ExpiresAt:      expiresAt,
 		LastActivityAt: now,
-		Keepalive:      keepalive,
+		Keepalive:      false,
 	}
 
 	dbID, err := am.sessionStore.Create(ctx, sess)
@@ -90,17 +96,14 @@ func (am *AuthManager) ValidateAndTouch(ctx context.Context, tokenStr string) (*
 		return nil, 0, fmt.Errorf("会话已撤销")
 	}
 
-	// 绝对超时
-	if time.Now().After(sess.ExpiresAt) {
+	// 绝对超时（NULL 表示禁用）
+	if sess.ExpiresAt != nil && time.Now().After(*sess.ExpiresAt) {
 		_ = am.sessionStore.Revoke(ctx, sess.ID)
 		return nil, 0, fmt.Errorf("会话已过期")
 	}
 
-	// 空闲超时
+	// 空闲超时（统一：任何后端交互都刷，由 Touch 完成）
 	idleMinutes := am.readIntConf(ctx, "session", "idle_minutes", 10)
-	if sess.Keepalive {
-		idleMinutes = am.readIntConf(ctx, "session", "keepalive_extend_minutes", 60)
-	}
 	idleTimeout := time.Duration(idleMinutes) * time.Minute
 	if time.Since(sess.LastActivityAt) > idleTimeout {
 		_ = am.sessionStore.Revoke(ctx, sess.ID)
@@ -132,11 +135,18 @@ func (am *AuthManager) GetSessionByID(ctx context.Context, id int64) (*Session, 
 
 // GetSessionConfig 返回前端需要的会话配置
 //
-// 返回：idleMinutes / absoluteHours
-func (am *AuthManager) GetSessionConfig(ctx context.Context) (int, int) {
+// 返回：idleMinutes / absoluteHours / heartbeatIntervalSeconds
+//   - absoluteHours = 0 表示禁用
+func (am *AuthManager) GetSessionConfig(ctx context.Context) (int, int, int) {
 	idleMinutes := am.readIntConf(ctx, "session", "idle_minutes", 10)
-	absoluteHours := am.readIntConf(ctx, "session", "absolute_hours", 8)
-	return idleMinutes, absoluteHours
+	absoluteHours := am.readIntConf(ctx, "session", "absolute_hours", 0)
+	heartbeatInterval := am.readIntConf(ctx, "session", "heartbeat_interval_seconds", 180)
+	return idleMinutes, absoluteHours, heartbeatInterval
+}
+
+// UpdateSessionHeartbeat 切换会话心跳开关
+func (am *AuthManager) UpdateSessionHeartbeat(ctx context.Context, sessionID int64, enabled bool) error {
+	return am.sessionStore.UpdateHeartbeat(ctx, sessionID, enabled)
 }
 
 // RevokeSessionByID 撤销会话（logout 调用）

@@ -13,9 +13,8 @@ import (
 // Login 用户登录
 func (h *Handler) Login(c *gin.Context) {
 	var req struct {
-		Username  string `json:"username"`
-		Password  string `json:"password"`
-		Keepalive bool   `json:"keepalive"`
+		Username string `json:"username"`
+		Password string `json:"password"`
 	}
 	if err := c.BindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "请求格式错误"})
@@ -85,7 +84,7 @@ func (h *Handler) Login(c *gin.Context) {
 
 	// 创建会话
 	sessionID, dbID, err := h.Auth.CreateSession(
-		c.Request.Context(), user.ID, c.ClientIP(), c.Request.UserAgent(), req.Keepalive)
+		c.Request.Context(), user.ID, c.ClientIP(), c.Request.UserAgent())
 	if err != nil {
 		log.Printf("⚠️ 创建会话失败: %v", err)
 		c.JSON(500, gin.H{"error": "创建会话失败"})
@@ -112,14 +111,15 @@ func (h *Handler) Login(c *gin.Context) {
 		EventRW:    audit.RWWrite,
 		Result:     audit.ResultSuccess,
 	})
-	idleMinutes, absoluteHours := h.Auth.GetSessionConfig(c.Request.Context())
+	idleMinutes, absoluteHours, heartbeatInterval := h.Auth.GetSessionConfig(c.Request.Context())
 	c.JSON(200, gin.H{
 		"token": token,
 		"user":  user,
 		"session": gin.H{
-			"idle_minutes":   idleMinutes,
-			"absolute_hours": absoluteHours,
-			"keepalive":      req.Keepalive,
+			"idle_minutes":               idleMinutes,
+			"absolute_hours":             absoluteHours,
+			"heartbeat_enabled":          false,
+			"heartbeat_interval_seconds": heartbeatInterval,
 		},
 	})
 }

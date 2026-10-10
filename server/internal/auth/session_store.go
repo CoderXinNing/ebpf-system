@@ -20,10 +20,10 @@ type Session struct {
 	IP             string
 	UserAgent      string
 	CreatedAt      time.Time
-	ExpiresAt      time.Time // 绝对过期时间
+	ExpiresAt      *time.Time // 绝对过期时间；NULL 表示禁用
 	RevokedAt      *time.Time
 	LastActivityAt time.Time
-	Keepalive      bool
+	Keepalive      bool // 心跳开关
 }
 
 // SessionStore 会话存储抽象
@@ -38,6 +38,7 @@ type SessionStore interface {
 	Touch(ctx context.Context, id int64) error
 	Revoke(ctx context.Context, id int64) error
 	RevokeByUserID(ctx context.Context, userID int) error
+	UpdateHeartbeat(ctx context.Context, id int64, enabled bool) error
 }
 
 // PGSessionStore PostgreSQL 实现
@@ -101,6 +102,12 @@ func (s *PGSessionStore) RevokeByUserID(ctx context.Context, userID int) error {
 	_, err := s.pool.Exec(ctx,
 		`UPDATE sessions SET revoked_at = NOW()
 		 WHERE user_id = $1 AND revoked_at IS NULL`, userID)
+	return err
+}
+
+func (s *PGSessionStore) UpdateHeartbeat(ctx context.Context, id int64, enabled bool) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE sessions SET keepalive = $1 WHERE id = $2`, enabled, id)
 	return err
 }
 

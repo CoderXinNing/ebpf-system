@@ -16,26 +16,54 @@ func (h *Handler) SessionKeepalive(c *gin.Context) {
 }
 
 // SessionConfig 返回当前会话配置
-//
-// 前端心跳后调用，同步 idle / absolute 配置（配置被改后，前端最多 5 分钟感知）
 func (h *Handler) SessionConfig(c *gin.Context) {
-	idleMinutes, absoluteHours := h.Auth.GetSessionConfig(c.Request.Context())
+	idleMinutes, absoluteHours, heartbeatInterval := h.Auth.GetSessionConfig(c.Request.Context())
 
-	keepalive := false
+	heartbeatEnabled := false
 	if sid, ok := c.Get("session_id"); ok {
 		if id, ok := sid.(int64); ok && id > 0 {
-			// 从会话记录读 keepalive 状态
 			if sess, err := h.Auth.GetSessionByID(c.Request.Context(), id); err == nil {
-				keepalive = sess.Keepalive
+				heartbeatEnabled = sess.Keepalive
 			}
 		}
 	}
 
 	c.JSON(200, gin.H{
-		"idle_minutes":   idleMinutes,
-		"absolute_hours": absoluteHours,
-		"keepalive":      keepalive,
+		"idle_minutes":               idleMinutes,
+		"absolute_hours":             absoluteHours,
+		"heartbeat_enabled":          heartbeatEnabled,
+		"heartbeat_interval_seconds": heartbeatInterval,
 	})
+}
+
+// SessionHeartbeat 切换心跳开关
+func (h *Handler) SessionHeartbeat(c *gin.Context) {
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "请求格式错误"})
+		return
+	}
+
+	sid, ok := c.Get("session_id")
+	if !ok {
+		c.JSON(401, gin.H{"error": "会话不存在"})
+		return
+	}
+	id, ok := sid.(int64)
+	if !ok || id <= 0 {
+		c.JSON(500, gin.H{"error": "会话 ID 异常"})
+		return
+	}
+
+	if err := h.Auth.UpdateSessionHeartbeat(c.Request.Context(), id, req.Enabled); err != nil {
+		log.Printf("⚠️ 切换心跳开关失败: %v", err)
+		c.JSON(500, gin.H{"error": "切换失败"})
+		return
+	}
+
+	c.JSON(200, gin.H{"success": true, "enabled": req.Enabled})
 }
 
 // SessionClose 关闭会话
