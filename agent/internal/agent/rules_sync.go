@@ -8,6 +8,8 @@ import (
 	"os"
 	"time"
 
+	localcrypto "github.com/CoderXinNing/ebpf-system/agent/internal/crypto"
+
 	"github.com/CoderXinNing/ebpf-system/agent/internal/paths"
 	"github.com/CoderXinNing/ebpf-system/agent/internal/probe/framework"
 	"github.com/CoderXinNing/ebpf-system/internal/rules"
@@ -265,17 +267,75 @@ func (a *Agent) markApplyFailure() {
 
 // ========== 本地缓存 ==========
 
+// saveRulesCache 加密写本地规则缓存。
+//
+// 流程：
+//  1. 加密 canonical JSON → rules.enc
+//  2. 写签名 → rules.sig
+//  3. 加密成功后删除旧明文 rules.json（迁移）
+//
+// 降级：machine-id / agent.id 不可读时，落回明文 rules.json 并打警告。
 func saveRulesCache(content []byte, sig string) error {
 	if err := os.MkdirAll(paths.AgentDataDir(), 0755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(paths.RulesCacheFile(), content, 0644); err != nil {
+
+	// 1. 尝试加密
+	enc, err := localcrypto.Encrypt(content, paths.AgentIDFile())
+	if err != nil {
+		log.Printf("⚠️ 规则加密失败（降级明文）: %v", err)
+		if werr := os.WriteFile(paths.RulesCacheFile(), content, 0600); werr != nil {
+			return werr
+		}
+		return os.WriteFile(paths.RulesSigFile(), []byte(sig), 0600)
+	}
+
+	// 2. 写加密文件（先删旧，保证新文件权限）
+	_ = os.Remove(paths.RulesEncFile())
+	if err := os.WriteFile(paths.RulesEncFile(), enc, 0600); err != nil {
 		return err
 	}
-	return os.WriteFile(paths.RulesSigFile(), []byte(sig), 0644)
+	if err := os.WriteFile(paths.RulesSigFile(), []byte(sig), 0600); err != nil {
+		return err
+	}
+
+	// 3. 迁移：旧明文删掉
+	if _, err := os.Stat(paths.RulesCacheFile()); err == nil {
+		if err := os.Remove(paths.RulesCacheFile()); err != nil {
+			log.Printf("⚠️ 删除旧明文缓存失败（不影响运行）: %v", err)
+		} else {
+			log.Printf("🗑️ 旧明文规则缓存已删除（已迁移至 rules.enc）")
+		}
+	}
+
+	return nil
 }
 
+// loadRulesCache 读本地规则缓存。
+//
+// 优先级：
+//  1. rules.enc（加密）→ 解密
+//  2. rules.json（旧明文）→ 读明文 + 提示迁移（下次 saveRulesCache 时完成）
+//  3. 都没有 → 返回 os.ErrNotExist
+//
+// 加密文件解密失败（比如换机器）→ 返回错误，Agent 全空等 Server 下发。
 func loadRulesCache() (content []byte, sig string, err error) {
+	// 1. 优先加密文件
+	if enc, err := os.ReadFile(paths.RulesEncFile()); err == nil {
+		plain, derr := localcrypto.Decrypt(enc, paths.AgentIDFile())
+		if derr != nil {
+			return nil, "", fmt.Errorf("规则缓存解密失败（可能换机器）: %w", derr)
+		}
+		sigBytes, serr := os.ReadFile(paths.RulesSigFile())
+		if serr != nil {
+			return nil, "", serr
+		}
+		return plain, string(sigBytes), nil
+	} else if !os.IsNotExist(err) {
+		return nil, "", err
+	}
+
+	// 2. 降级：旧明文
 	content, err = os.ReadFile(paths.RulesCacheFile())
 	if err != nil {
 		return nil, "", err
@@ -284,6 +344,7 @@ func loadRulesCache() (content []byte, sig string, err error) {
 	if err != nil {
 		return nil, "", err
 	}
+	log.Printf("📋 检测到旧明文缓存（rules.json），下次应用规则时自动迁移至 rules.enc")
 	return content, string(sigBytes), nil
 }
 

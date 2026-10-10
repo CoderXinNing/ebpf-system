@@ -75,6 +75,11 @@ func RulesCacheFile() string { return filepath.Join(AgentDataDir(), "rules.json"
 // RulesSigFile 规则签名缓存路径
 func RulesSigFile() string { return filepath.Join(AgentDataDir(), "rules.sig") }
 
+// RulesEncFile 规则加密缓存路径（Phase 3）
+// 格式：[nonce(12) | ciphertext | tag(16)]，AES-GCM
+// 密钥源：/etc/machine-id + agent.id → HKDF-SHA256 → 32 字节
+func RulesEncFile() string { return filepath.Join(AgentDataDir(), "rules.enc") }
+
 // ========== BPF pin（固定路径，与 root 无关）==========
 
 // PinBase BPF pin 基路径
