@@ -60,12 +60,7 @@ type FileAccessExclude struct {
 
 // ExecRules exec 探针规则
 type ExecRules struct {
-	Rules   *ExecRulesInner `json:"rules,omitempty"`
-	Exclude *ExecExclude    `json:"exclude,omitempty"`
-}
-
-type ExecRulesInner struct {
-	MinCmdlineLen int `json:"min_cmdline_len,omitempty"`
+	Exclude *ExecExclude `json:"exclude,omitempty"`
 }
 
 // ExecExclude exec 探针排除名单

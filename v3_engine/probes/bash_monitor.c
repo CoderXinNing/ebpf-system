@@ -70,11 +70,6 @@ int trace_readline(struct pt_regs *ctx) {
         return 0;
     }
     
-    // 过滤空命令
-    if (evt->data[0] == '\0') {
-        bpf_ringbuf_discard(evt, 0);
-        return 0;
-    }
 
     // correlation_key
     evt->correlation_key = make_correlation_key(pid);
