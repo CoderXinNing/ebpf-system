@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-import http from '@/api/http'
+import http from '../api/http'
 
 const HEARTBEAT_INTERVAL_MS   = 5 * 60 * 1000   // 心跳间隔：5 分钟
 const ACTIVITY_CHECK_MS       = 30 * 1000       // 空闲检查：30 秒
