@@ -222,7 +222,7 @@ AsterTrack 设计定稿
     ⚠️ 两个 version 概念，勿混淆：
       - DB 列 version   ← 本表删除（冗余，SHA256 替代）
       - content.version ← JSON 内部结构版本号，保留
-                          （见 §3.3 示例 JSON 的 "version": 2）
+                          （见 §3.3 示例 JSON 的 "version": 3）
       两者独立：DB 列被删，content 内的 version 继续演进
 
   2.4 核心流程
