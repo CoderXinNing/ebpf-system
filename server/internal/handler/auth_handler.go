@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/CoderXinNing/ebpf-system/server/internal/audit"
@@ -77,12 +78,31 @@ func (h *Handler) Login(c *gin.Context) {
 
 	// 登录成功，清除计数
 	h.SetIntSetting(attemptKey, 0)
-	token, _ := h.Auth.GenerateToken(user)
+
+	// 创建会话
+	sessionID, dbID, err := h.Auth.CreateSession(
+		c.Request.Context(), user.ID, c.ClientIP(), c.Request.UserAgent(), false)
+	if err != nil {
+		log.Printf("⚠️ 创建会话失败: %v", err)
+		c.JSON(500, gin.H{"error": "创建会话失败"})
+		return
+	}
+
+	// 生成 JWT（携带 session_id）
+	token, err := h.Auth.GenerateToken(user, sessionID)
+	if err != nil {
+		log.Printf("⚠️ 生成 token 失败: %v", err)
+		c.JSON(500, gin.H{"error": "生成 token 失败"})
+		return
+	}
+
 	h.writeAudit(c, audit.Record{
 		Username:   user.Username,
 		Action:     "登录成功",
 		ActionCode: audit.ActionLogin,
 		TargetType: audit.TargetSession,
+		TargetID:   fmt.Sprintf("%d", dbID),
+		SessionID:  &dbID, // 登录时中间件未跑，手动填
 		Detail:     "Web登录",
 		EventType:  audit.EventConsoleSignin,
 		EventRW:    audit.RWWrite,
@@ -113,13 +133,15 @@ func (h *Handler) authMiddleware(c *gin.Context) {
 	if len(token) > 7 && token[:7] == "Bearer " {
 		token = token[7:]
 	}
-	user, err := h.Auth.ValidateToken(token)
+	// 验证 JWT + 校验 session 生命周期 + 滑动续期
+	user, sessionDBID, err := h.Auth.ValidateAndTouch(c.Request.Context(), token)
 	if err != nil {
-		c.JSON(401, gin.H{"error": "token无效"})
+		c.JSON(401, gin.H{"error": err.Error()})
 		c.Abort()
 		return
 	}
 	c.Set("user", user)
+	c.Set("session_id", sessionDBID)
 	c.Next()
 }
 

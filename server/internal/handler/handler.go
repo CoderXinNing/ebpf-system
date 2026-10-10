@@ -328,6 +328,14 @@ func (h *Handler) writeAudit(c *gin.Context, rec audit.Record) {
 	if rec.EventType == "" {
 		rec.EventType = audit.EventConsoleAction
 	}
+	// 从 context 补 session_id（登录时无，其他接口有）
+	if rec.SessionID == nil {
+		if sid, ok := c.Get("session_id"); ok {
+			if id, ok := sid.(int64); ok && id > 0 {
+				rec.SessionID = &id
+			}
+		}
+	}
 	if err := h.SaveAuditFunc(rec); err != nil {
 		log.Printf("⚠️ 审计写入失败: action=%s user=%s err=%v",
 			rec.ActionCode, rec.Username, err)
@@ -587,6 +595,14 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 
 		// 审计日志
 		api.POST("/logout", h.authMiddleware, func(c *gin.Context) {
+			// 撤销会话（JWT 立即失效）
+			if sid, ok := c.Get("session_id"); ok {
+				if id, ok := sid.(int64); ok {
+					if err := h.Auth.RevokeSessionByID(c.Request.Context(), id); err != nil {
+						log.Printf("⚠️ 撤销会话失败: %v", err)
+					}
+				}
+			}
 			h.writeAudit(c, audit.Record{
 				Action:     "注销",
 				ActionCode: audit.ActionLogout,
@@ -596,6 +612,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			})
 			c.JSON(200, gin.H{"success": true})
 		})
+
+		// 会话管理
+		api.POST("/session/keepalive", h.authMiddleware, h.SessionKeepalive)
+		api.POST("/session/close", h.authMiddleware, h.SessionClose)
 
 		api.GET("/logs/export", h.rbacMiddleware("audit", "export"), func(c *gin.Context) {
 			var logs []map[string]interface{}

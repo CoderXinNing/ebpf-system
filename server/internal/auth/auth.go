@@ -38,17 +38,33 @@ type User struct {
 }
 
 type AuthManager struct {
-	pool   *pgxpool.Pool
-	config AuthConfig
+	pool         *pgxpool.Pool
+	config       AuthConfig
+	sessionStore SessionStore
+	// readIntConf 从 system_config 读取整数配置（用于 session 超时参数）
+	// 独立成函数字段，便于测试替换
+	readIntConf func(ctx context.Context, namespace, key string, defaultVal int) int
 }
 
 // NewAuthManager 创建认证管理器（PSQL）
 func NewAuthManager(pool *pgxpool.Pool) (*AuthManager, error) {
-	return NewAuthManagerWithConfig(pool, DefaultAuthConfig())
+	return NewAuthManagerWithStore(pool, DefaultAuthConfig(),
+		NewPGSessionStore(pool), defaultReadIntConf(pool))
 }
 
-func NewAuthManagerWithConfig(pool *pgxpool.Pool, config AuthConfig) (*AuthManager, error) {
-	am := &AuthManager{pool: pool, config: config}
+// NewAuthManagerWithStore 允许注入自定义 SessionStore（测试或未来 Redis）
+func NewAuthManagerWithStore(
+	pool *pgxpool.Pool,
+	config AuthConfig,
+	sessionStore SessionStore,
+	readIntConf func(ctx context.Context, namespace, key string, defaultVal int) int,
+) (*AuthManager, error) {
+	am := &AuthManager{
+		pool:         pool,
+		config:       config,
+		sessionStore: sessionStore,
+		readIntConf:  readIntConf,
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -90,31 +106,44 @@ func (am *AuthManager) VerifyPassword(ctx context.Context, username, password st
 	return &user, nil
 }
 
-// GenerateToken 生成 JWT
-func (am *AuthManager) GenerateToken(user *User) (string, error) {
+// GenerateToken 生成 JWT（携带 session_id）
+//
+// TTL = session.absolute_hours（默认 8 小时）
+func (am *AuthManager) GenerateToken(user *User, sessionID string) (string, error) {
+	absoluteHours := am.readIntConf(context.Background(), "session", "absolute_hours", 8)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id":  user.ID,
-		"username": user.Username,
-		"role":     user.Role,
-		"exp":      time.Now().Add(24 * time.Hour).Unix(),
+		"user_id":    user.ID,
+		"username":   user.Username,
+		"role":       user.Role,
+		"session_id": sessionID,
+		"exp":        time.Now().Add(time.Duration(absoluteHours) * time.Hour).Unix(),
 	})
 	return token.SignedString([]byte(am.config.JWTSecret))
 }
 
-// ValidateToken 验证 JWT
-func (am *AuthManager) ValidateToken(tokenStr string) (*User, error) {
+// ValidateToken 验证 JWT，返回 user + sessionID
+func (am *AuthManager) ValidateToken(tokenStr string) (*User, string, error) {
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 		return []byte(am.config.JWTSecret), nil
 	})
 	if err != nil || !token.Valid {
-		return nil, fmt.Errorf("token无效")
+		return nil, "", fmt.Errorf("token无效")
 	}
 	claims := token.Claims.(jwt.MapClaims)
+
+	userID, ok := claims["user_id"].(float64)
+	if !ok {
+		return nil, "", fmt.Errorf("token无效：缺少 user_id")
+	}
+	username, _ := claims["username"].(string)
+	role, _ := claims["role"].(string)
+	sessionID, _ := claims["session_id"].(string)
+
 	return &User{
-		ID:       int(claims["user_id"].(float64)),
-		Username: claims["username"].(string),
-		Role:     claims["role"].(string),
-	}, nil
+		ID:       int(userID),
+		Username: username,
+		Role:     role,
+	}, sessionID, nil
 }
 
 // ListUsers 用户列表
