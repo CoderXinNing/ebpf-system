@@ -96,6 +96,21 @@ AsterTrack 项目主文档
       - 14 处 h.Store.X 加 nil guard（防 PSQL 模式 panic）
       - 已验证：登录/删主机/移动/注销/访问页面/时间/NTP 全部落库
 
+    SQLite 完全移除（2026-10-10）
+      - 新增 4 个 PSQL repo 函数：
+          group_repo.go（ListGroups / CreateGroup / DeleteGroup）
+          asset_overview_repo.go（GetAllLatestAssets）
+          feedback_repo.go（SaveFeedbackFeature / GetFeedbackFeatures）
+          event_repo.go 补充 ListEventsAsRecords
+      - handler 新增 10 个 callback 字段 + setter
+      - handler / grpcservice / probe_handler / settings 全量改走 callback
+      - 删 server/internal/store/（608 行）
+      - 删 server/internal/repository/sqlite/（104 行）
+      - 删 server/_test/test_baseline_replay.go（93 行）
+      - go.mod 删 github.com/mattn/go-sqlite3
+      - 提交：410af3c
+      - 验证：Server 重启后全链路正常，无 panic
+
   1.2 半成品
 
     (1) 血缘表
@@ -469,7 +484,7 @@ AsterTrack 项目主文档
     | D8 | events_2026_10 列数 | 未列 | 15 列 |
     | D9 | audit_logs 状态 | 0 行，已存在未接入 | 0 行，且写入路径全废（panic） |
     | D10 | audit_logs.capability_level | 未提 | 语义错误，已改 target_type |
-    | D11 | store.go CleanExpiredLogs | 未提 | SQLite 死代码，零调用 |
+    | D11 | store.go CleanExpiredLogs | 未提 | SQLite 死代码，零调用（410af3c 已删整包） |
 
 
 【四、待办分类】
@@ -533,8 +548,8 @@ AsterTrack 项目主文档
                                    cmdb_assets（进程+资产）+
                                    血缘表（P1 实现）+ agents 表
           有引用（保留）：
-            host_groups（store.go + enroll_repo.go）
-            probe_configs（store.go）
+            host_groups（group_repo.go + enroll_repo.go）
+            probe_configs（probe_config_repo.go）
             baselines（按 DESIGN.txt P1 保留）
             baseline_snapshots（psql.go 清理任务）
         预估：0.5 天（已用）
@@ -568,6 +583,52 @@ AsterTrack 项目主文档
             alerts/:id/feedback + false_positive 特征记录 6 处加 guard
         原则：只加 nil 检查，不改业务逻辑
         预估：0.5 天（已用）
+
+    A10 [已完成] SQLite 完全移除
+        背景：
+          - 生产模式 PSQL，SQLite 路径从未被走
+          - handler / grpcservice 仍调用 h.Store.X（死代码 + panic 风险）
+          - store 包 608 行 / sqlite 包 104 行 / _test 93 行全为死代码
+
+        新增 PSQL 函数（4 个文件）：
+          - group_repo.go：ListGroups / CreateGroup / DeleteGroup
+          - asset_overview_repo.go：GetAllLatestAssets（cmdb_assets 聚合）
+          - feedback_repo.go：SaveFeedbackFeature / GetFeedbackFeatures
+                              （复用 log_settings 的 fp_ 前缀）
+          - event_repo.go：ListEventsAsRecords（兼容旧 EventRecord）
+
+        handler 侧：
+          - 新增 10 个 callback 字段 + setter
+          - 删 Store *store.Store 字段
+          - 合并 NewHandler + NewHandlerWithNilStore → NewHandler(am, sendCmd)
+          - 11 处 h.Store.X 改走 callback / 删 fallback
+          - GetLatestAssetFunc 签名统一为 json.RawMessage
+          - SaveAlertFeedbackFunc 签名改为 (alertID string, ...)
+
+        grpcservice：
+          - 15 处 s.handler.Store.X 全部改走 SaveAgentFunc / SaveAssetFunc
+          - GetProbeList 直接走默认名单（等 probe_templates 设计）
+
+        probe_handler：
+          - ListProbeConfigs 走 GetProbeConfigsFunc
+          - DeployProbe / DestroyProbe 返回 501（等 probe_templates 设计）
+
+        settings.go：
+          - 删 h.Store fallback，只走 GetSettingFunc / SetSettingFunc
+
+        main.go：
+          - 删 sqlite import / 变量 / 分支 / 定时清理
+          - 改为强制 PostgreSQL
+
+        删除：
+          - server/internal/store/
+          - server/internal/repository/sqlite/
+          - server/_test/test_baseline_replay.go
+          - go.mod: github.com/mattn/go-sqlite3
+
+        提交：410af3c
+        验证：Server 重启后全链路正常，无 panic
+        预估：1 天（已用）
 
   B 待开发（设计完成，无新架构）
   ────────────────────────────────
@@ -832,8 +893,8 @@ AsterTrack 项目主文档
 
 【六、当前 commit 状态】
 
-  分支：main（ahead of origin/main by 11 commits）
-  HEAD：bca760d（fix(handler): PSQL 模式下 nil 风险清零（Step 7c））
+  分支：main（ahead of origin/main by 13 commits）
+  HEAD：410af3c（refactor: 完全移除 SQLite，PSQL callback 迁移完成）
 
   本批提交（2026-10-10）：
     c999c51  fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪
@@ -841,6 +902,7 @@ AsterTrack 项目主文档
     3ecbdcb  docs(phase-a): A3 文档漂移修正（§6 工作区）
     60d6051  feat(audit): 审计系统接入 PostgreSQL（第一批）
     bca760d  fix(handler): PSQL 模式下 nil 风险清零（Step 7c）
+    410af3c  refactor: 完全移除 SQLite，PSQL callback 迁移完成
 
   工作区：clean
     （原 docs/DB-RECONCILIATION.txt / TASK-CLASSIFICATION.txt /
