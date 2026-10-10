@@ -86,6 +86,16 @@ AsterTrack 项目主文档
       - 统一 Apply API（POST /probe-exclude/apply + GET /all）
       - 前端未接入
 
+    审计系统接入 PostgreSQL（2026-10-10）
+      - migration 009：capability_level → target_type，新增 5 字段
+      - 新包 server/internal/audit（codes.go + audit.go）
+      - psql/audit_repo.go：WriteAudit / ListAudit
+      - handler.SetAuditCallbacks：nil-safe 写入
+      - 8 处 SaveAuditLog 全部改走 writeAudit
+      - 4 处 auth_handler 静默跳过改为正式写入
+      - 14 处 h.Store.X 加 nil guard（防 PSQL 模式 panic）
+      - 已验证：登录/删主机/移动/注销/访问页面/时间/NTP 全部落库
+
   1.2 半成品
 
     (1) 血缘表
@@ -252,7 +262,7 @@ AsterTrack 项目主文档
     agent_rules                    (23 行，e2e 产物)
     agents                         (6 行)
     alerts                         (1333 行)
-    audit_logs                     (0 行，已存在未接入)
+    audit_logs                     (2+ 行，2026-10-10 起接入)
     baseline_snapshots             (0 行)
     baselines                      (0 行)
     cmdb_assets                    (24 行)
@@ -306,14 +316,22 @@ AsterTrack 项目主文档
     索引：pkey(id), idx_agent_rules_version(version DESC)
     缺：agent_id 列、(agent_id, sha256) 唯一索引
 
-    audit_logs（已存在）：
-      id, session_id, username, action, detail, before_value(jsonb),
-      after_value(jsonb), result, ip, user_agent, capability_level,
-      created_at
+    audit_logs（v2，2026-10-10 起接入）：
+      id, session_id, username, action, action_code, detail,
+      target_type, target_id, target_name,
+      event_type, event_rw,
+      before_value(jsonb), after_value(jsonb),
+      result, ip, user_agent, created_at
     FK：session_id → sessions(id) ON DELETE SET NULL
     CHECK：result ∈ {success,failure}
-           capability_level ∈ {lsm,xdp,ebpf,cmdb}
-    索引：created_at DESC / username / capability_level
+           target_type ∈ {user,agent,rule,rule_template,probe,config,
+                          token,session,alert,baseline,system,asset}
+           event_type ∈ {api_call,console_action,console_signin,service_event}
+           event_rw ∈ {read,write}
+    索引：created_at DESC / username / (target_type,target_id) / action_code
+    migration：009_audit_logs_v2.up.sql
+    说明：capability_level 语义错误（抄自 alerts.detection_level），已改
+          target_type + target_id，操作对象用结构化字段描述
 
     probe_exclude_*（三张，0 行，待废）
 
@@ -330,6 +348,7 @@ AsterTrack 项目主文档
     005_agent_rules.up.sql           (2026-09-24)
     006_probe_exclude_comms.up.sql   (2026-10-09)
     007_probe_exclude_3dim.up.sql    (2026-10-09)
+    009_audit_logs_v2.up.sql         (2026-10-10)
     README.txt
     下一个编号：008
 
@@ -448,6 +467,9 @@ AsterTrack 项目主文档
     | D6 | HEAD | 7a1e1a1 | c999c51（Phase A 提交后） |
     | D7 | 行数核验方法 | 未说明 | 必须 count(*)，n_live_tup 失真 |
     | D8 | events_2026_10 列数 | 未列 | 15 列 |
+    | D9 | audit_logs 状态 | 0 行，已存在未接入 | 0 行，且写入路径全废（panic） |
+    | D10 | audit_logs.capability_level | 未提 | 语义错误，已改 target_type |
+    | D11 | store.go CleanExpiredLogs | 未提 | SQLite 死代码，零调用 |
 
 
 【四、待办分类】
@@ -483,7 +505,7 @@ AsterTrack 项目主文档
 
     A5  [已完成] HANDOVER.md 已删
 
-    A6  [已完成] alerts 去重/抑制
+    A6  [已完成+已验证] alerts 去重/抑制
         现象：972/1333 条同规则（99.2%）
         根因：rules.toml「密码文件读取」匹配 /etc/passwd，
               /etc/passwd 是账户信息文件，systemd/sshd/cron 高频读取
@@ -492,17 +514,59 @@ AsterTrack 项目主文档
             CRITICAL=30s / HIGH=2m / MEDIUM=5m / 其他=15m
           - rules.toml：密码文件读取去掉 /etc/passwd，
             改为 /etc/shadow|/etc/gshadow|/etc/sudoers
+        验证（2026-10-10 重启后）：
+          - /etc/passwd 告警：0 条（修复前 972 条）
+          - 告警密度：30s/条（修复前每分钟 2-3 条）
+          - 残留 sudo/cron/agent 读 shadow/sudoers 属正常行为
+        → 剩余可信进程白名单问题归 P1.10 排除表机制
         预估：0.5 天（已用）
 
     A7  [已完成] 空表用途审计（废表前置）
         审计结论（2026-10-10，grep --include=*.go）：
-          零引用（可列入 §5.1.2 待废）：
-            playbooks / probe_templates / rules / agent_current_state
+          零引用：
+            rules（已被 agent_rules 替代 → 待废）
+          用户已确认用途（保留，待设计）：
+            playbooks      ← 编排引擎数据源（DESIGN.txt §1.10）
+            probe_templates ← 探针自定义下发（待设计，等编排引擎）
+          用户已确认废除：
+            agent_current_state ← 状态应实时，快照职责归
+                                   cmdb_assets（进程+资产）+
+                                   血缘表（P1 实现）+ agents 表
           有引用（保留）：
             host_groups（store.go + enroll_repo.go）
             probe_configs（store.go）
             baselines（按 DESIGN.txt P1 保留）
             baseline_snapshots（psql.go 清理任务）
+        预估：0.5 天（已用）
+
+    A8  [已完成] 审计系统接入 PostgreSQL
+        背景：生产模式 PSQL，但 handler 调 SQLite h.Store
+              audit_logs 永远 0 行，且 8 处调用直接 panic
+        修复：60d6051
+          - migration 009：capability_level → target_type
+            新增 target_id / target_name / event_type / event_rw / action_code
+          - 新包 server/internal/audit（codes.go + audit.go）
+          - psql/audit_repo.go：WriteAudit / ListAudit
+          - handler.SetAuditCallbacks + writeAudit（nil-safe）
+          - 8 处 SaveAuditLog 改走 writeAudit
+          - 4 处 auth_handler 静默跳过改为正式写入
+        验证（2026-10-10 重启后）：
+          - 登录成功/失败：结构化落库
+          - action_code / target_type / event_type / event_rw 全对
+          - user_agent 正确捕获
+        预估：0.5 天（已用）
+
+    A9  [已完成] PSQL 模式下 nil 风险清零
+        背景：14 处 h.Store.X 无 nil 检查，PSQL 模式直接 panic
+        修复：bca760d
+          - agent_handler：GetEvents 前加 guard
+          - asset_handler：AssetsOverview / getOS / AssetsByCategory /
+            性能字段 4 处加 guard
+          - probe_handler：ListProbeConfigs / DeployProbe / DestroyProbe
+            3 处加 guard（返回 501 Not Implemented）
+          - handler.go：GET/POST/DELETE /groups + alerts/stats +
+            alerts/:id/feedback + false_positive 特征记录 6 处加 guard
+        原则：只加 nil 检查，不改业务逻辑
         预估：0.5 天（已用）
 
   B 待开发（设计完成，无新架构）
@@ -768,8 +832,15 @@ AsterTrack 项目主文档
 
 【六、当前 commit 状态】
 
-  分支：main（ahead of origin/main by 7 commits）
-  HEAD：c999c51（fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪）
+  分支：main（ahead of origin/main by 11 commits）
+  HEAD：bca760d（fix(handler): PSQL 模式下 nil 风险清零（Step 7c））
+
+  本批提交（2026-10-10）：
+    c999c51  fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪
+    4d1995f  docs(phase-a): A3 文档漂移修正
+    3ecbdcb  docs(phase-a): A3 文档漂移修正（§6 工作区）
+    60d6051  feat(audit): 审计系统接入 PostgreSQL（第一批）
+    bca760d  fix(handler): PSQL 模式下 nil 风险清零（Step 7c）
 
   工作区：clean
     （原 docs/DB-RECONCILIATION.txt / TASK-CLASSIFICATION.txt /
