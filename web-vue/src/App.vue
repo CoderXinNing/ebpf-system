@@ -54,6 +54,20 @@
               <n-button size="small" @click="isDark = !isDark">
                 {{ isDark ? '🌞' : '🌙' }}
               </n-button>
+              <n-tooltip trigger="hover">
+                <template #trigger>
+                  <n-button
+                    size="small"
+                    :type="heartbeatEnabled ? 'primary' : 'default'"
+                    @click="handleToggleHeartbeat"
+                  >
+                    {{ heartbeatEnabled ? '💓 心跳开' : '💔 心跳关' }}
+                  </n-button>
+                </template>
+                {{ heartbeatEnabled
+                  ? `心跳已开启（${heartbeatInterval}秒），会话保持在线`
+                  : `心跳已关闭，${idleMinutes}分钟无操作自动退出` }}
+              </n-tooltip>
               <n-text>{{ username }}</n-text>
               <n-button size="small" @click="handleLogout">退出</n-button>
             </n-space>
@@ -77,12 +91,22 @@ import { computed, onMounted, ref } from 'vue'
 import { connectWS, onWSMessage } from './api/ws'
 import { useRoute, useRouter } from 'vue-router'
 import { useSession } from './composables/useSession'
-import { NConfigProvider, NMessageProvider, NDialogProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme, lightTheme, NBadge, NPopover, NList, NListItem, NEmpty, NInput, NAlert } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, NDialogProvider, NLayout, NLayoutHeader, NLayoutContent, NSpace, NH3, NMenu, NButton, NText, darkTheme, lightTheme, NBadge, NPopover, NList, NListItem, NEmpty, NInput, NAlert, NTooltip } from 'naive-ui'
 
 const route = useRoute()
 const router = useRouter()
 const isDark = ref(false)
-const { showWarning } = useSession()
+const {
+  showWarning,
+  idleMinutes,
+  heartbeatEnabled,
+  heartbeatInterval,
+  toggleHeartbeat,
+} = useSession()
+
+async function handleToggleHeartbeat() {
+  await toggleHeartbeat(!heartbeatEnabled.value)
+}
 
 function dismissWarning() {
   showWarning.value = false

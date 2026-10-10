@@ -10,10 +10,6 @@
       <n-space vertical :size="16">
         <n-input v-model:value="username" placeholder="用户名" size="large" />
         <n-input v-model:value="password" type="password" placeholder="密码" size="large" @keyup.enter="handleLogin" />
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <n-checkbox v-model:checked="keepalive">保持登录</n-checkbox>
-          <n-text depth="3" style="font-size: 12px;">延长空闲超时，关闭浏览器不立即退出</n-text>
-        </div>
         <n-button type="primary" block size="large" :loading="loading" @click="handleLogin">
           登 录
         </n-button>
@@ -28,14 +24,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NSpace, NInput, NButton, NAlert, NCheckbox, NText } from 'naive-ui'
+import { NCard, NSpace, NInput, NButton, NAlert } from 'naive-ui'
 import { login } from '../api/auth'
 
 const username = ref('')
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
-const keepalive = ref(false)
 const router = useRouter()
 
 async function handleLogin() {
@@ -48,7 +43,7 @@ async function handleLogin() {
   error.value = ''
 
   try {
-    const resp = await login(username.value, password.value, keepalive.value)
+    const resp = await login(username.value, password.value)
     localStorage.setItem('token', resp.token)
     localStorage.setItem('user', JSON.stringify(resp.user))
     if (resp.session) {

@@ -14,21 +14,26 @@ http.interceptors.request.use((config) => {
   return config
 })
 
-// 响应拦截器：处理 401
+// 响应拦截器：记录活动 + 处理 401
 let redirecting = false
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const url = response.config.url || ''
+    // 排除纯查询配置（不算用户活动）
+    if (!url.includes('/session/config')) {
+      // 广播活动事件，useSession 监听后重置倒数
+      window.dispatchEvent(new CustomEvent('astertrack:activity'))
+    }
+    return response
+  },
   (error) => {
     if (error.response?.status === 401) {
-      // 清理本地凭证
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       localStorage.removeItem('session')
 
-      // 防抖：避免并发请求多次跳转
       if (!redirecting && window.location.pathname !== '/login') {
         redirecting = true
-        // 用 location.href 而非 router，因为不在 Vue 组件上下文
         window.location.href = '/login'
       }
     }

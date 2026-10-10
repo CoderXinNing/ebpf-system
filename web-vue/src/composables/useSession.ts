@@ -1,85 +1,63 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import http from '../api/http'
 
-const HEARTBEAT_INTERVAL_MS   = 5 * 60 * 1000   // 心跳间隔：5 分钟
-const ACTIVITY_CHECK_MS       = 30 * 1000       // 空闲检查：30 秒
-const WARN_BEFORE_TIMEOUT_MS  = 60 * 1000       // 超时前 1 分钟警告
-const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart']
-
-// 多标签同步通道（同源同页面共享）
-const channel: BroadcastChannel | null =
-  typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('astertrack_session') : null
-
-let visibleTabs = 0
+const WARN_BEFORE_TIMEOUT_MS = 60 * 1000  // 超时前 1 分钟警告
 
 /**
- * useSession 会话管理
+ * useSession 会话管理（v3：统一心跳模型）
  *
- * 职责：
- *   1. 跟踪用户活动（滑动续期由后端 Touch 完成，前端只判 idle 警告）
- *   2. 页面可见时定时心跳（POST /session/keepalive）
- *   3. 多标签页协同：只在至少一个标签可见时发心跳
- *   4. 页面卸载时通知后端（best-effort）
- *   5. idle 超时前 1 分钟弹警告
+ * 设计：
+ *   1. idle 由任何后端交互重置（API 请求 / 心跳）
+ *   2. 心跳 = 用户显式开启的“自动交互”，每 N 秒发一次 keepalive
+ *   3. 心跳关闭时，用户不操作 → idle 分钟倒数 → 后端踢（401）
+ *   4. banner 基于“最后一次 API 请求”时间
+ *
+ * 与 v2 的差异：
+ *   - 去掉鼠标/键盘监听（不触发后端）
+ *   - 去掉 visibilitychange 逻辑
+ *   - 心跳开关由用户控制（导航栏）
  */
 export function useSession() {
-  const lastActivityAt = ref(Date.now())
-  const idleMinutes    = ref(10)   // 从 localStorage.session 读，登录时写入
-  const keepalive      = ref(false)
-  const showWarning    = ref(false)
+  const lastRequestAt   = ref(Date.now())
+  const idleMinutes     = ref(10)
+  const heartbeatEnabled = ref(false)
+  const heartbeatInterval = ref(180)  // 秒
+  const showWarning     = ref(false)
 
   let heartbeatTimer: number | null = null
-  let activityTimer:  number | null = null
+  let warnTimer: number | null = null
 
-  // ---------- 配置加载 ----------
+  // ---------- 配置加载/保存 ----------
   function loadConfig() {
     const raw = localStorage.getItem('session')
     if (!raw) return
     try {
       const cfg = JSON.parse(raw)
       idleMinutes.value = cfg.idle_minutes || 10
-      keepalive.value = cfg.keepalive || false
+      heartbeatEnabled.value = cfg.heartbeat_enabled || false
+      heartbeatInterval.value = cfg.heartbeat_interval_seconds || 180
     } catch {}
   }
 
-  // ---------- 活动追踪 ----------
-  function onActivity() {
-    lastActivityAt.value = Date.now()
-    showWarning.value = false
+  function saveConfig() {
+    const cfg = {
+      idle_minutes: idleMinutes.value,
+      heartbeat_enabled: heartbeatEnabled.value,
+      heartbeat_interval_seconds: heartbeatInterval.value,
+    }
+    localStorage.setItem('session', JSON.stringify(cfg))
   }
 
   // ---------- 心跳 ----------
   function startHeartbeat() {
     if (heartbeatTimer) return
-    // 立即拉一次配置 + 心跳
-    syncConfig()
     heartbeatTimer = window.setInterval(async () => {
       try {
         await http.post('/session/keepalive')
-        // 同步配置（配置被改后最多 5 分钟前端感知）
-        await syncConfig()
       } catch {
-        // 401 由 http.ts 拦截器处理（跳登录页）
+        // 401 由 http.ts 拦截器处理
       }
-    }, HEARTBEAT_INTERVAL_MS)
-  }
-
-  // 从后端拉会话配置，更新本地 idle / keepalive
-  async function syncConfig() {
-    try {
-      const { data } = await http.get('/session/config')
-      if (data.idle_minutes) idleMinutes.value = data.idle_minutes
-      if (data.keepalive !== undefined) keepalive.value = data.keepalive
-      // 同步到 localStorage
-      const raw = localStorage.getItem('session')
-      const cfg = raw ? JSON.parse(raw) : {}
-      cfg.idle_minutes = data.idle_minutes
-      cfg.absolute_hours = data.absolute_hours
-      cfg.keepalive = data.keepalive
-      localStorage.setItem('session', JSON.stringify(cfg))
-    } catch {
-      // 网络错误或 401：忽略（401 由拦截器处理）
-    }
+    }, heartbeatInterval.value * 1000)
   }
 
   function stopHeartbeat() {
@@ -89,22 +67,51 @@ export function useSession() {
     }
   }
 
-  // ---------- 空闲检查 ----------
-  function checkIdle() {
-    const idleMs = idleMinutes.value * 60 * 1000
-    const elapsed = Date.now() - lastActivityAt.value
-    // 超时前 1 分钟警告
-    if (elapsed > idleMs - WARN_BEFORE_TIMEOUT_MS) {
-      showWarning.value = true
+  async function toggleHeartbeat(enabled: boolean) {
+    try {
+      await http.post('/session/heartbeat', { enabled })
+      heartbeatEnabled.value = enabled
+      saveConfig()
+      if (enabled) {
+        startHeartbeat()
+      } else {
+        stopHeartbeat()
+      }
+      showWarning.value = false
+    } catch (err) {
+      console.error('切换心跳失败:', err)
     }
-    // 实际超时由后端判定（下次请求返回 401），前端不主动踢
+  }
+
+  // ---------- 活动追踪 ----------
+  function onActivity() {
+    lastRequestAt.value = Date.now()
+    showWarning.value = false
+    scheduleWarning()
+  }
+
+  // ---------- 超时警告 ----------
+  function scheduleWarning() {
+    if (warnTimer) clearTimeout(warnTimer)
+
+    const idleMs = idleMinutes.value * 60 * 1000
+    const elapsed = Date.now() - lastRequestAt.value
+    const remain = idleMs - elapsed - WARN_BEFORE_TIMEOUT_MS
+
+    if (remain <= 0) {
+      showWarning.value = true
+      return
+    }
+
+    warnTimer = window.setTimeout(() => {
+      scheduleWarning()
+    }, remain)
   }
 
   // ---------- 卸载通知 ----------
   function onBeforeUnload() {
     const token = localStorage.getItem('token')
     if (!token) return
-    // fetch keepalive 允许页面卸载后继续请求
     try {
       fetch('/api/session/close', {
         method: 'POST',
@@ -117,60 +124,30 @@ export function useSession() {
   // ---------- 生命周期 ----------
   onMounted(() => {
     loadConfig()
+    if (heartbeatEnabled.value) startHeartbeat()
 
-    // 活动监听
-    ACTIVITY_EVENTS.forEach((evt) =>
-      window.addEventListener(evt, onActivity, { passive: true })
-    )
+    // 监听 http.ts 广播的活动事件
+    window.addEventListener('astertrack:activity', onActivity)
 
-    // 页面可见性
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        visibleTabs++
-        startHeartbeat()
-        channel?.postMessage('visible')
-      } else {
-        visibleTabs = Math.max(0, visibleTabs - 1)
-        // 只有无任何可见标签时才停
-        if (visibleTabs === 0) {
-          stopHeartbeat()
-          channel?.postMessage('hidden')
-        }
-      }
-    })
-
-    // 多标签同步
-    if (channel) {
-      channel.onmessage = (e) => {
-        if (e.data === 'visible') {
-          startHeartbeat()
-        } else if (e.data === 'hidden') {
-          // 其他标签隐藏了，若本标签也隐藏才停（简化：不做复杂协调）
-        }
-      }
-    }
-
-    // 卸载
+    // 卸载通知
     window.addEventListener('beforeunload', onBeforeUnload)
 
-    // 定时检查
-    activityTimer = window.setInterval(checkIdle, ACTIVITY_CHECK_MS)
-
-    // 初始启动
-    if (document.visibilityState === 'visible') {
-      visibleTabs = 1
-      startHeartbeat()
-    }
+    // 启动警告计时
+    scheduleWarning()
   })
 
   onUnmounted(() => {
     stopHeartbeat()
-    if (activityTimer) clearInterval(activityTimer)
-    ACTIVITY_EVENTS.forEach((evt) =>
-      window.removeEventListener(evt, onActivity)
-    )
+    if (warnTimer) clearTimeout(warnTimer)
+    window.removeEventListener('astertrack:activity', onActivity)
     window.removeEventListener('beforeunload', onBeforeUnload)
   })
 
-  return { showWarning, idleMinutes, keepalive }
+  return {
+    showWarning,
+    idleMinutes,
+    heartbeatEnabled,
+    heartbeatInterval,
+    toggleHeartbeat,
+  }
 }
