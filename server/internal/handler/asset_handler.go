@@ -11,6 +11,10 @@ import (
 
 // AssetsOverview 资产概览
 func (h *Handler) AssetsOverview(c *gin.Context) {
+	if h.Store == nil {
+		c.JSON(200, gin.H{"agents": []interface{}{}})
+		return
+	}
 	data, err := h.Store.GetAllLatestAssets()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "查询失败"})
@@ -42,7 +46,9 @@ func (h *Handler) AssetsOverview(c *gin.Context) {
 			}
 		}
 		var cpuP, memP, diskP float64
-		if _, _, sysJSON, err := h.Store.GetLatestAsset(agentID); err == nil {
+		if h.Store == nil {
+			// PSQL 模式：跳过性能字段
+		} else if _, _, sysJSON, err := h.Store.GetLatestAsset(agentID); err == nil {
 			var sysData map[string]interface{}
 			json.Unmarshal(sysJSON, &sysData)
 			if perf, ok := sysData["perf"].(map[string]interface{}); ok {
@@ -156,6 +162,9 @@ func (h *Handler) AssetsByCategory(c *gin.Context) {
 			continue
 		}
 
+		if h.Store == nil {
+			continue
+		}
 		_, _, sysJSON, err := h.Store.GetLatestAsset(aid)
 		if err != nil {
 			continue
@@ -225,6 +234,9 @@ func (h *Handler) AssetsByCategory(c *gin.Context) {
 
 // getOS 获取 Agent 的 OS 名称
 func (h *Handler) getOS(agentID string) string {
+	if h.Store == nil {
+		return "-"
+	}
 	_, _, sysJSON, err := h.Store.GetLatestAsset(agentID)
 	if err != nil {
 		return "-"

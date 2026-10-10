@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
+	"github.com/gin-gonic/gin"
 )
 
 // Health 健康检查
@@ -44,10 +44,12 @@ func (h *Handler) ListEvents(c *gin.Context) {
 			limit = n
 		}
 	}
-	dbEvents, dbErr := h.Store.GetEvents(limit, agentID)
-	if dbErr == nil && len(dbEvents) > 0 {
-		c.JSON(200, gin.H{"total": len(dbEvents), "events": dbEvents, "source": "sqlite"})
-		return
+	if h.Store != nil {
+		dbEvents, dbErr := h.Store.GetEvents(limit, agentID)
+		if dbErr == nil && len(dbEvents) > 0 {
+			c.JSON(200, gin.H{"total": len(dbEvents), "events": dbEvents, "source": "sqlite"})
+			return
+		}
 	}
 	h.EventMu.RLock()
 	defer h.EventMu.RUnlock()

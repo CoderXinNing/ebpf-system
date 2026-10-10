@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/gin-gonic/gin"
 	"github.com/CoderXinNing/ebpf-system/server/internal/store"
+	"github.com/gin-gonic/gin"
 )
 
 // ListProbeConfigs 查询探针配置
@@ -15,6 +15,10 @@ func (h *Handler) ListProbeConfigs(c *gin.Context) {
 	agentID := c.Query("agent_id")
 	if agentID == "" {
 		c.JSON(400, gin.H{"error": "缺少agent_id"})
+		return
+	}
+	if h.Store == nil {
+		c.JSON(200, gin.H{"configs": []interface{}{}})
 		return
 	}
 	configs, err := h.Store.GetProbeConfigs(agentID)
@@ -57,6 +61,10 @@ func (h *Handler) DeployProbe(c *gin.Context) {
 		sha256Hash = hex.EncodeToString(hash[:])
 	}
 
+	if h.Store == nil {
+		c.JSON(501, gin.H{"error": "PSQL 模式暂未接入探针配置写入"})
+		return
+	}
 	err := h.Store.UpsertProbeConfig(store.ProbeConfigRecord{
 		AgentID:   req.AgentID,
 		ProbeName: req.ProbeName,
@@ -85,6 +93,10 @@ func (h *Handler) DestroyProbe(c *gin.Context) {
 	}
 	if req.AgentID == "" || req.ProbeName == "" {
 		c.JSON(400, gin.H{"error": "agent_id和probe_name必填"})
+		return
+	}
+	if h.Store == nil {
+		c.JSON(501, gin.H{"error": "PSQL 模式暂未接入探针配置删除"})
 		return
 	}
 	if err := h.Store.DeleteProbeConfig(req.AgentID, req.ProbeName); err != nil {

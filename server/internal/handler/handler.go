@@ -395,6 +395,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		api.GET("/assets", h.AssetsOverview)
 		api.GET("/assets/:agent_id", h.AssetDetail)
 		api.GET("/groups", func(c *gin.Context) {
+			if h.Store == nil {
+				c.JSON(200, gin.H{"groups": []interface{}{}})
+				return
+			}
 			groups, _ := h.Store.GetGroups()
 			c.JSON(200, gin.H{"groups": groups})
 		})
@@ -407,6 +411,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				c.JSON(400, gin.H{"error": "组名不能为空"})
 				return
 			}
+			if h.Store == nil {
+				c.JSON(501, gin.H{"error": "PSQL 模式暂未接入分组创建"})
+				return
+			}
 			if err := h.Store.CreateGroup(req.Name); err != nil {
 				c.JSON(500, gin.H{"error": "创建失败"})
 				return
@@ -416,6 +424,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		})
 		api.DELETE("/groups/:name", h.roleMiddleware("admin"), func(c *gin.Context) {
 			name := c.Param("name")
+			if h.Store == nil {
+				c.JSON(501, gin.H{"error": "PSQL 模式暂未接入分组删除"})
+				return
+			}
 			if err := h.Store.DeleteGroup(name); err != nil {
 				c.JSON(500, gin.H{"error": "删除失败"})
 				return
@@ -511,6 +523,10 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		})
 
 		api.GET("/alerts/stats", h.rbacMiddleware("alerts", "read"), func(c *gin.Context) {
+			if h.Store == nil {
+				c.JSON(200, gin.H{})
+				return
+			}
 			c.JSON(200, h.Store.GetAlertStats())
 		})
 		api.POST("/alerts/:id/feedback", h.rbacMiddleware("alerts", "write"), func(c *gin.Context) {
@@ -519,10 +535,14 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				Type string `json:"type"`
 			}
 			c.BindJSON(&req)
+			if h.Store == nil {
+				c.JSON(501, gin.H{"error": "PSQL 模式暂未接入告警反馈"})
+				return
+			}
 			h.Store.SaveAlertFeedback(id, req.Type, h.getUsername(c))
 
 			// 误报 → 记录特征到黑名单
-			if req.Type == "false_positive" {
+			if req.Type == "false_positive" && h.Store != nil {
 				// 从告警里提取特征信息存入黑名单
 				alerts, _ := h.Store.GetAlerts(1)
 				if len(alerts) > 0 {
