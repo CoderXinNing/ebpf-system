@@ -787,11 +787,7 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				return
 			}
 
-			if req.Confirm != "CLEANUP" {
-				c.JSON(400, gin.H{"error": "二次确认失败：confirm 字段必须为 CLEANUP"})
-				return
-			}
-
+			// 1. target 校验
 			validTargets := map[string]bool{
 				"events": true, "alerts": true,
 				"audit_logs": true, "tokens": true,
@@ -801,12 +797,40 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 				return
 			}
 
+			// 2. mode 校验
 			if req.Mode != "all" && req.Mode != "before_days" {
 				c.JSON(400, gin.H{"error": "mode 必须为 all 或 before_days"})
 				return
 			}
 			if req.Mode == "before_days" && req.Days <= 0 {
 				c.JSON(400, gin.H{"error": "before_days 模式必须指定正整数 days"})
+				return
+			}
+
+			// 3. audit_logs 特殊规则（等保）
+			if req.Target == "audit_logs" {
+				if req.Mode == "all" {
+					c.JSON(400, gin.H{"error": "审计日志不允许全清（等保要求）"})
+					return
+				}
+				if req.Days < 180 {
+					c.JSON(400, gin.H{"error": "审计日志至少保留 180 天（等保要求）"})
+					return
+				}
+			}
+
+			// 4. confirm 分级
+			//    普通清理：CLEANUP
+			//    全清（危险）：I_UNDERSTAND_TOTAL_LOSS
+			expectedConfirm := "CLEANUP"
+			if req.Mode == "all" {
+				expectedConfirm = "I_UNDERSTAND_TOTAL_LOSS"
+			}
+			if req.Confirm != expectedConfirm {
+				c.JSON(400, gin.H{
+					"error": fmt.Sprintf("二次确认失败：mode=%s 时 confirm 必须为 %s",
+						req.Mode, expectedConfirm),
+				})
 				return
 			}
 

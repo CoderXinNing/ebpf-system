@@ -347,28 +347,76 @@ function handleRestoreLogDefaults() {
   })
 }
 
+const CONFIRM_ALL = 'I_UNDERSTAND_TOTAL_LOSS'
+
 async function handleCleanup(target: CleanupTarget, mode: CleanupMode) {
   const days = mode === 'before_days' ? cleanupDays.value[target] : 0
   const label = cleanupTargets.find(t => t.key === target)?.label || target
 
-  const tip = mode === 'all'
-    ? `确认清空全部「${label}」数据？此操作不可恢复。`
-    : `确认清理「${label}」中 ${days} 天前的数据？`
+  // audit_logs 等保前置校验
+  if (target === 'audit_logs') {
+    if (mode === 'all') {
+      message.error('审计日志不允许全清（等保要求），请使用"清理 N 天前"')
+      return
+    }
+    if (days < 180) {
+      message.error('审计日志至少保留 180 天（等保要求）')
+      return
+    }
+  }
 
-  dialog.warning({
-    title: '清理确认',
-    content: tip,
-    positiveText: '确认清理',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        const resp = await cleanup(target, mode, days)
-        message.success(`清理完成，影响 ${resp.affected} 条`)
-      } catch (err: any) {
-        message.error(err.response?.data?.error || '清理失败')
-      }
-    },
-  })
+  if (mode === 'all') {
+    // 危险操作：要求输入确认串
+    const inputValue = ref('')
+    dialog.warning({
+      title: '⚠️ 危险操作',
+      content: () => h('div', [
+        h('p', { style: 'margin-bottom: 12px; color: #d03050; font-weight: bold;' },
+          `即将清空全部「${label}」数据，此操作不可恢复！`),
+        h('p', { style: 'margin-bottom: 8px; font-size: 13px;' },
+          '请输入以下确认串以继续：'),
+        h('code', {
+          style: 'display:block; padding:6px 8px; background:#f5f5f5; margin-bottom:12px; font-size:12px; border-radius:4px;',
+        }, CONFIRM_ALL),
+        h(NInput, {
+          value: inputValue.value,
+          'onUpdate:value': (v: string) => { inputValue.value = v },
+          placeholder: '输入上方确认串',
+          size: 'small',
+        }),
+      ]),
+      positiveText: '确认清空',
+      negativeText: '取消',
+      onPositiveClick: async () => {
+        if (inputValue.value !== CONFIRM_ALL) {
+          message.error('确认串不匹配')
+          return false
+        }
+        try {
+          const resp = await cleanup(target, mode, days, CONFIRM_ALL)
+          message.success(`清理完成，影响 ${resp.affected} 条`)
+        } catch (err: any) {
+          message.error(err.response?.data?.error || '清理失败')
+        }
+      },
+    })
+  } else {
+    // 普通清理：单次确认
+    dialog.warning({
+      title: '清理确认',
+      content: `确认清理「${label}」中 ${days} 天前的数据？`,
+      positiveText: '确认清理',
+      negativeText: '取消',
+      onPositiveClick: async () => {
+        try {
+          const resp = await cleanup(target, mode, days, 'CLEANUP')
+          message.success(`清理完成，影响 ${resp.affected} 条`)
+        } catch (err: any) {
+          message.error(err.response?.data?.error || '清理失败')
+        }
+      },
+    })
+  }
 }
 
 const roleOptions = [

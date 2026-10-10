@@ -122,7 +122,20 @@ func (p *PSQL) CleanupAlerts(ctx context.Context, mode string, days int) (int64,
 }
 
 // CleanupAuditLogs 清理 audit_logs
+//
+// 等保 2.0 要求：审计日志至少保留 180 天
+//   - mode=all 被拒绝（不允许全清）
+//   - mode=before_days 时 days 最小 180
 func (p *PSQL) CleanupAuditLogs(ctx context.Context, mode string, days int) (int64, error) {
+	if mode == "all" {
+		return 0, fmt.Errorf("审计日志不允许全清（等保要求），请使用 before_days")
+	}
+	if mode != "before_days" {
+		return 0, fmt.Errorf("未知 mode: %s", mode)
+	}
+	if days < 180 {
+		return 0, fmt.Errorf("审计日志至少保留 180 天（等保要求），days=%d 过小", days)
+	}
 	return p.cleanupGeneric(ctx, "audit_logs", "created_at", mode, days)
 }
 
