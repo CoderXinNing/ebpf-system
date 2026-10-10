@@ -129,6 +129,43 @@ AsterTrack 项目主文档
       - 已验证：alerts before_days=7 → affected=634
                   tokens all → affected=19
 
+    Session 机制（2026-10-10）
+      - 背景：sessions 表从未真正使用（0 行）；JWT 无状态，
+              logout 后 token 仍有效（安全漏洞）
+      - migration 010：system_config 表（namespace 分组）
+          初始配置：session.* 3 条 + security.* 2 条
+          预留 namespace：cleanup / agent / cluster
+      - migration 011：sessions v2
+          删废弃 token_hash；新增 session_id_hash（SHA256）
+          新增 keepalive（“保持登录”标记）
+      - 新增 auth/session_store.go：
+          SessionStore 接口（未来可切 Redis）+ PGSessionStore
+          GenerateSessionID（CSPRNG 32B → base64url）
+          HashSessionID（SHA256）
+      - 新增 auth/session_lifecycle.go：
+          CreateSession / ValidateAndTouch / RevokeSessionByID
+          从 system_config 读 idle / absolute / keepalive 配置
+      - auth.go：GenerateToken(user, sessionID)，TTL = absolute_hours
+                  ValidateToken 返回 (user, sessionID, error)
+      - Login 创建 session，JWT 携带 session_id
+      - authMiddleware 走 ValidateAndTouch（校验 + 滑动续期）
+      - logout 撤销 session（JWT 立即失效）
+      - writeAudit 从 context 补 session_id
+      - 新增 /session/keepalive + /session/close
+      - 前端：useSession composable（idle 检测 + 心跳 + 多标签）
+              LoginView 加“保持登录”复选框
+              http.ts 401 自动跳登录页
+      - 提交：00f8b88 + d60aad2
+      - 已验证：
+          idle=1min 非 keepalive 会话 70 秒后 401「会话空闲超时」
+          keepalive 会话 70 秒后仍 200（用 60 分钟 idle）
+          超时自动撤销（revoked_at 填入）
+          logout 后同 token 401「会话已撤销」
+          audit_logs.session_id 非空
+      - 预留（未实现，配置位已留）：
+          security.reauth_enabled（二次验证，默认 false）
+          SessionStore 接口可换 Redis（多实例）
+
   1.2 半成品
 
     (1) 血缘表
@@ -329,7 +366,8 @@ AsterTrack 项目主文档
     role_permissions               (27 行)
     roles                          (3 行)
     rules                          (0 行)
-    sessions                       (0 行)
+    sessions                       (N 行，2026-10-10 起接入)
+    system_config                  (5 行，2026-10-10 新建)
     users                          (3 行)
 
     未存在但 DESIGN.txt 提到：
@@ -393,9 +431,12 @@ AsterTrack 项目主文档
     005_agent_rules.up.sql           (2026-09-24)
     006_probe_exclude_comms.up.sql   (2026-10-09)
     007_probe_exclude_3dim.up.sql    (2026-10-09)
+    008_*                            (P1.10 预留：rule_templates + agent_rules 改造)
     009_audit_logs_v2.up.sql         (2026-10-10)
+    010_system_config.up.sql         (2026-10-10)
+    011_sessions_v2.up.sql           (2026-10-10)
     README.txt
-    下一个编号：008
+    下一个编号：012
 
   3.4 proto RPC 清单（AgentService，22 个）
 
@@ -699,6 +740,81 @@ AsterTrack 项目主文档
           - 审计写入完整
         预估：0.5 天（已用）
 
+    A12 [已完成] 补全 Session 机制
+        背景：
+          - sessions 表从未真正使用（0 行）
+          - JWT 无状态，logout 后 token 仍有效（安全漏洞）
+          - authMiddleware 只校验签名，无会话状态
+
+        migration 010：system_config
+          - 新建 system_config（namespace / key / value / value_type /
+            description / updated_by / updated_at）
+          - 初始配置：
+              session.idle_minutes = 10
+              session.absolute_hours = 8
+              session.keepalive_extend_minutes = 60
+              security.reauth_enabled = false
+              security.reauth_timeout_min = 5
+          - 预留 namespace：cleanup / agent / cluster
+
+        migration 011：sessions v2
+          - 删废弃 token_hash（0 行表无历史）
+          - 新增 session_id_hash VARCHAR(128)（SHA256 hex）
+          - 新增 keepalive BOOLEAN
+          - 加活跃会话查询索引
+
+        auth 包：
+          - session_store.go：SessionStore 接口 + PGSessionStore
+            GenerateSessionID（CSPRNG 32B）+ HashSessionID（SHA256）
+          - session_lifecycle.go：
+              CreateSession（登录后创建）
+              ValidateAndTouch（JWT 校验 + session 校验 + 滑动续期）
+              RevokeSessionByID / RevokeSessionsByUserID
+              从 system_config 读 idle / absolute / keepalive 配置
+          - auth.go：
+              AuthManager 加 sessionStore + readIntConf
+              GenerateToken(user, sessionID)，TTL = absolute_hours
+              ValidateToken 返回 (user, sessionID, error)
+
+        handler：
+          - Login 创建 session + JWT 携带 session_id + 响应返回配置
+          - authMiddleware 走 ValidateAndTouch
+          - writeAudit 从 context 补 session_id
+          - logout 撤销 session
+          - 加路由 /session/keepalive + /session/close
+
+        前端：
+          - api/auth.ts：login 支持 keepalive 参数
+          - api/http.ts：401 清凭证 + 跳登录页（防抖）
+          - composables/useSession.ts：
+              idle 检测（30s 检查）+ 心跳（5min，页面可见时）
+              多标签 BroadcastChannel 同步
+              beforeunload fetch keepalive:true 通知后端
+              showWarning 暴露超时前 1 分钟警告
+          - LoginView.vue：加“保持登录”复选框
+          - App.vue：挂载 useSession
+
+        语义：
+          - Idle Timeout：无操作 N 分钟（默认 10）→ 强制登出
+          - Absolute Timeout：创建后 N 小时（默认 8）→ 强制登出
+          - Sliding Expiration：每次请求刷新 last_activity_at（30s 去重）
+          - 保持登录：idle 延长到 60 分钟，absolute 不变
+          - 关闭浏览器：不主动撤销，靠 idle 兜底
+
+        已验证：
+          - idle=1min 非 keepalive 会话 70 秒后 401「会话空闲超时」
+          - keepalive 会话 70 秒后仍 200（用 60 分钟 idle）
+          - 超时自动撤销（revoked_at 填入）
+          - logout 后同 token 401「会话已撤销」
+          - audit_logs.session_id 非空（登录 target_id=session_id）
+
+        预留（未实现，配置位已留）：
+          - security.reauth_enabled（二次验证，默认关闭）
+          - SessionStore 接口可换 Redis（多实例共享）
+
+        提交：00f8b88（后端）+ d60aad2（前端）
+        预估：1 天（已用）
+
   B 待开发（设计完成，无新架构）
   ────────────────────────────────
 
@@ -962,10 +1078,10 @@ AsterTrack 项目主文档
 
 【六、当前 commit 状态】
 
-  分支：main（ahead of origin/main by 16 commits）
-  HEAD：29b515a（feat(cleanup): 数据/日志清理系统接入配置 + 手动清理 API）
+  分支：main（ahead of origin/main by 19 commits）
+  HEAD：d60aad2（feat(session): 前端接入 idle 检测 + 心跳 + 保持登录）
 
-  本批提交（2026-10-10，10 个）：
+  本批提交（2026-10-10，13 个）：
     c999c51  fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪
     4d1995f  docs(phase-a): A3 文档漂移修正
     3ecbdcb  docs(phase-a): A3 文档漂移修正（§6 工作区）
@@ -976,6 +1092,9 @@ AsterTrack 项目主文档
     8cd6928  docs: 同步 SQLite 移除到 PROJECT.txt
     1122669  docs: 记录星轨去重问题，归入 B1 血缘表
     29b515a  feat(cleanup): 数据/日志清理系统接入配置 + 手动清理 API
+    d8d2cde  docs: 同步数据/日志清理系统到 PROJECT.txt
+    00f8b88  feat(session): 补全 Session 机制
+    d60aad2  feat(session): 前端接入 idle 检测 + 心跳 + 保持登录
 
   工作区：clean
     （原 docs/DB-RECONCILIATION.txt / TASK-CLASSIFICATION.txt /
