@@ -138,7 +138,8 @@ AsterTrack 项目主文档
           开启心跳时，每 N 秒自动刷 → 会话保活
 
       - migration 010：system_config 表（namespace 分组）
-          初始配置：session.* 4 条 + security.* 2 条
+          初始配置：session.* 3 条 + security.* 2 条
+          （keepalive_extend_minutes 已于 012 废止并清理）
           预留 namespace：cleanup / agent / cluster
       - migration 011：sessions v2
           删废弃 token_hash；新增 session_id_hash（SHA256）
@@ -214,6 +215,11 @@ AsterTrack 项目主文档
           - 5 探针锚点逻辑不统一
         详见 DESIGN.txt §1.2-1.3
 
+        实施说明（B1）：
+          - Key 从 pid 单键改为 (pid, start_time_ns) 复合键
+            属于「索引结构重写」，不是「加字段」
+          - 工作量含这块（B1 3-5 天已估）
+
     (2) 探针排除名单
         后端：三维度全部完成（含 e2e 验证）
         前端：ProbeExcludeCommsView 存在但未浏览器实测，
@@ -279,10 +285,10 @@ AsterTrack 项目主文档
         - 改名后 API/路由/组件路径全改
         - 仅 npm run build 通过
 
-    11. alerts 去重/抑制缺失（新发现 2026-10-09）
+    11. [已解决 2026-10-10] alerts 去重/抑制缺失
         - 1253 条告警里 914 条同规则「密码文件读取」
         - 329 条同规则「数据库配置读取」
-        - 详见 §4 A6
+        - 修复见 §4 A6（c999c51：去重窗口分级 + rules.toml 去 /etc/passwd）
 
     12. TCP 排除维度重构 [已完成]
         - C 层 tcp_monitor.c 已改用 sentinel_xip
@@ -468,13 +474,16 @@ AsterTrack 项目主文档
     005_agent_rules.up.sql           (2026-09-24)
     006_probe_exclude_comms.up.sql   (2026-10-09)
     007_probe_exclude_3dim.up.sql    (2026-10-09)
-    008_*                            (P1.10 预留：rule_templates + agent_rules 改造)
+    008_*                            (空号；原 P1.10 预留，但 009-012 已落地)
     009_audit_logs_v2.up.sql         (2026-10-10)
     010_system_config.up.sql         (2026-10-10)
     011_sessions_v2.up.sql           (2026-10-10)
     012_session_config_v2.up.sql     (2026-10-10)
     README.txt
     下一个编号：013
+
+    说明：008 原定 P1.10 使用，但 009-012 已提前落地。
+          为避免编号乱序，P1.10 改用 013a / 013b（见 §5.3）
 
   3.4 proto RPC 清单（AgentService，22 个）
 
@@ -532,21 +541,15 @@ AsterTrack 项目主文档
          3306,6379,5985,8080,8443]},"exclude":{}}}
     → P1.10 008a 需把这份内容作为默认模板
 
-  3.8 alerts 分布（核验于 2026-10-10）
+  3.8 alerts 分布（核验于 2026-10-10 下午，A6 修复 + 手动清理后）
 
     rule_name：
-      密码文件读取        972 (73%)
-      数据库配置读取      350 (26%)
-      网络信息收集          4
-      可疑命令执行          3
-      反弹Shell检测        3
-      敏感文件访问          1
-      计划任务持久化        1
-    agent_id：
-      agent-obgfyuh4vphibkdtw6ekz2gsc4   1333 条
-    → 只有 1 台活跃 Agent 产生告警
-    → 99.2% 集中在两条规则，根因见 §4 A6
-      （已于 c999c51 修复：去重窗口分级 + rules.toml 去 /etc/passwd）
+      密码文件读取          5
+      数据库配置读取        2
+    → 共 7 条
+    → A6 修复前为 1333 条（972 + 350 + 其他 11），
+      99.2% 集中在两条规则；清理后为当前量
+    → 根因见 §4 A6（c999c51）
 
   3.9 events_2026_10 按探针（核验于 2026-10-10，分组列名 probe_name）
 
@@ -1119,7 +1122,7 @@ AsterTrack 项目主文档
   5.3 执行顺序（P1.10 三阶段）
 
     阶段 A：数据迁移（先做，1 天）
-      A.1  migration 008a（加列 + 建模板表）
+      A.1  migration 013a（加列 + 建模板表；不用 008，避免编号乱序）
       A.2  agent_rules v23 内容写入 rule_templates (is_default=true)
       A.3  三张 probe_exclude 表内容合并到默认模板 exclude 节
       A.4  验证：模板表 1 行 + agent_rules 23 行仍有 agent_id=NULL
@@ -1132,18 +1135,22 @@ AsterTrack 项目主文档
       B.4  删 §5.2.1 所有 probe_exclude 代码
       B.5  Agent 侧 hash 缓存
       B.6  注册触发 EnsureAgentRule
-      B.7  前端改接 rules API
+      B.7  前端改接 rules API（仅"Apply 触发 + 显示当前规则"）
+           注：完整草稿 / diff 预览（DESIGN §3.7 阶段 E）
+               不在 P1.10 范围内，单独估工
       验证：e2e 单机 apply / 模板批量 apply
       回滚：git revert 整个 PR
 
     阶段 C：废表（观察一周后，1 小时）
       C.1  pg_dump 三张 probe_exclude 表
-      C.2  migration 008b：
+      C.2  migration 013b：
            DROP TABLE probe_exclude_*
            ALTER agent_rules DROP version
            DELETE agent_rules WHERE agent_id IS NULL
            SET NOT NULL + 加唯一索引
       回滚：pg_restore 备份 + 手写反向 SQL
+
+    注：原 §3.3 里的"008_* P1.10 预留"已废止，改用 013a / 013b
 
   5.4 附带修（不改结构）
 
@@ -1167,10 +1174,10 @@ AsterTrack 项目主文档
 
 【六、当前 commit 状态】
 
-  分支：main（ahead of origin/main by 6 commits）
-  HEAD：fd276bd（refactor: 代码清理（P0/P1 遗留））
+  分支：main（已 push 到 origin/main）
+  HEAD：aaa921a（refactor(web): 去掉「会话即将过期」banner）
 
-  本批提交（2026-10-10，19 个）：
+  本批提交（2026-10-10，22 个，已 push）：
     c999c51  fix(phase-a): A1 收窄 + A2 删死代码 + A6 告警降噪
     4d1995f  docs(phase-a): A3 文档漂移修正
     3ecbdcb  docs(phase-a): A3 文档漂移修正（§6 工作区）
@@ -1188,7 +1195,10 @@ AsterTrack 项目主文档
     25e33f0  refactor(session): 心跳统一模型（第三批前端）
     5c0ec62  fix(web): useSession 心跳时同步配置
     fd276bd  refactor: 代码清理（P0/P1 遗留）
-    （注：commit 数已按 git log 校正）
+    38f71aa  docs: 同步 Session 心跳统一模型到 PROJECT.txt
+    a4e3253  fix(cleanup): 加固清理 API（等保 + 危险操作确认）
+    a4b24b3  docs: 记录 B10 数据生命周期管理待办
+    aaa921a  refactor(web): 去掉「会话即将过期」banner
 
   工作区：clean
     （原 docs/DB-RECONCILIATION.txt / TASK-CLASSIFICATION.txt /
