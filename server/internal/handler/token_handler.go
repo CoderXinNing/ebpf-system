@@ -50,9 +50,8 @@ func (h *Handler) CreateEnrollmentToken(c *gin.Context) {
 		return
 	}
 
-	// 从 JWT 里取当前用户
-	createdBy, _ := c.Get("username")
-	createdByStr, _ := createdBy.(string)
+	// 从 context 里取当前用户（BUG-024：username 不存在，走 getUsername 辅助）
+	createdByStr := h.getUsername(c)
 
 	token, err := h.GenerateTokenFunc(req.Name, req.GroupID, req.MaxUses, req.TTLHours, createdByStr)
 	if err != nil {

@@ -85,11 +85,11 @@ func (h *Handler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	// 防止删除自己
-	curUser, _ := c.Get("username")
+	// 防止删除自己（BUG-024：读 context 里的 user，不是不存在的 username）
+	curUsername := h.getUsername(c)
 	users, _ := h.Auth.ListUsers(c.Request.Context())
 	for _, u := range users {
-		if u.ID == req.ID && u.Username == curUser {
+		if u.ID == req.ID && u.Username == curUsername {
 			c.JSON(400, gin.H{"error": "不能删除当前登录用户"})
 			return
 		}
