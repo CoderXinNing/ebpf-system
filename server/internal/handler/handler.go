@@ -80,6 +80,7 @@ type Handler struct {
 
 	// Enroll（事务化）
 	EnrollAgentFunc           func(req EnrollRequest) (*EnrollResult, error)
+	PeekEnrollTokenFunc       func(token string) error // BUG-016：签名前先验 token
 	ComputeAgentIDFunc        func(publicKeyDER []byte) string
 	UpdateAgentCertFunc       func(agentID, serial string, expiresAt time.Time) error
 	GetAgentPublicKeyHashFunc func(agentID string) ([]byte, error)

@@ -109,9 +109,9 @@ func EnsureAgentBinary(cfg Config) error {
 // detectGo 探测 Go 路径
 //
 // 顺序：
-//   1. 配置指定的路径
-//   2. PATH 环境变量
-//   3. 常见安装路径
+//  1. 配置指定的路径
+//  2. PATH 环境变量
+//  3. 常见安装路径
 func detectGo(configured string) string {
 	// 1. 配置优先
 	if configured != "" {
@@ -227,7 +227,6 @@ func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
-
 
 // readGoModVersion 从 go.mod 读取要求的 Go 版本
 func readGoModVersion() string {

@@ -2,8 +2,8 @@ package psql
 
 import (
 	"context"
-	"time"
 	"fmt"
+	"time"
 
 	"github.com/CoderXinNing/ebpf-system/server/internal/model"
 )
@@ -135,7 +135,6 @@ func (p *PSQL) UpdateLastSeen(ctx context.Context, agentID string, lastSeen time
 	return nil
 }
 
-
 // UpdateAgentCert 更新 Agent 证书元信息
 func (p *PSQL) UpdateAgentCert(ctx context.Context, agentID, serial string, expiresAt time.Time) error {
 	_, err := p.pool.Exec(ctx,
@@ -143,4 +142,3 @@ func (p *PSQL) UpdateAgentCert(ctx context.Context, agentID, serial string, expi
 		serial, expiresAt, agentID)
 	return err
 }
-

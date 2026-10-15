@@ -268,6 +268,9 @@ func main() {
 						GroupName: res.GroupName,
 					}, nil
 				}
+				h.PeekEnrollTokenFunc = func(token string) error {
+					return psqlDB.PeekEnrollToken(context.Background(), token)
+				}
 				h.UpdateAgentCertFunc = func(agentID, serial string, expiresAt time.Time) error {
 					return psqlDB.UpdateAgentCert(context.Background(), agentID, serial, expiresAt)
 				}
@@ -698,11 +701,26 @@ func defaultConfig() *ServerConfig {
 	return cfg
 }
 
+// loadConfig 加载配置文件。
+//
+// 语义（BUG-014 fail-closed）：
+//   - 文件不存在      → 返回 nil（调用方用 defaultConfig，开发场景）
+//   - 文件存在但解析失败 → log.Fatalf，退出进程
+//   - 文件存在且解析成功 → 返回 cfg
+//
+// 背景：原先所有错误都返回 nil → 调用方用 defaultConfig（StrictMTLS=false），
+// 配置文件写错一个字符即静默退回弱认证路径。安全开关必须 fail-closed。
 func loadConfig(path string) *ServerConfig {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		log.Fatalf("❌ 配置文件不可访问: %v", err)
+	}
+
 	var cfg ServerConfig
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
-		log.Printf("⚠️ 配置文件读取失败，使用默认配置: %v", err)
-		return nil
+		log.Fatalf("❌ 配置文件解析失败（安全开关无法确认，拒绝启动）: %v", err)
 	}
 	return &cfg
 }

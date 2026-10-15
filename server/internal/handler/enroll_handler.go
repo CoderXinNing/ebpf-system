@@ -82,7 +82,20 @@ func (h *Handler) Enroll(c *gin.Context) {
 		}
 	}
 
-	// 3. CA 签证书
+	// 3. 先校验 token（BUG-016）
+	//
+	// 顺序刻意放在签名前：无 token 的请求应在消耗 CA CPU 之前被拒绝。
+	// 真正的原子消费仍在 EnrollAgentFunc 的事务里（SELECT FOR UPDATE）。
+	// Peek 只读，不加锁。
+	if h.PeekEnrollTokenFunc != nil {
+		if err := h.PeekEnrollTokenFunc(req.Token); err != nil {
+			log.Printf("⚠️ Enroll token 预校验失败: %v", err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// 4. CA 签证书
 	if h.SignCSRFunc == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "CA 未初始化"})
 		return
@@ -94,7 +107,7 @@ func (h *Handler) Enroll(c *gin.Context) {
 		return
 	}
 
-	// 4. 事务化注册
+	// 5. 事务化注册
 	if h.EnrollAgentFunc == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "enrollment 未初始化"})
 		return
@@ -114,14 +127,14 @@ func (h *Handler) Enroll(c *gin.Context) {
 		return
 	}
 
-	// 5. 更新证书序列号（可选）
+	// 6. 更新证书序列号（可选）
 	if h.UpdateAgentCertFunc != nil {
 		h.UpdateAgentCertFunc(req.AgentID, serial, expiresAt)
 	}
 
 	log.Printf("✅ Agent 注册成功: %s (%s) 分组=%s", result.AgentID, req.Hostname, result.GroupName)
 
-	// 6. 计算 gRPC 地址（回报给 Agent，供其写 agent.toml）
+	// 7. 计算 gRPC 地址（回报给 Agent，供其写 agent.toml）
 	// 推导：用 Agent 请求时用的 Host（去掉端口）+ Server 配置的 GRPCPort
 	// 这样 Agent 能访问到的地址就是它连得上的地址
 	grpcHost := c.Request.Host
@@ -134,7 +147,7 @@ func (h *Handler) Enroll(c *gin.Context) {
 	}
 	grpcAddr := fmt.Sprintf("%s:%d", grpcHost, grpcPort)
 
-	// 7. 返回
+	// 8. 返回
 	c.JSON(http.StatusOK, gin.H{
 		"success":      true,
 		"agent_id":     result.AgentID,

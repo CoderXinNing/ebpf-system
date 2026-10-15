@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"sync/atomic"
 )
 
 type Rule struct {
@@ -52,7 +53,19 @@ type Engine struct {
 	rulesPath string
 	freqCount map[string][]time.Time // 频率统计
 	OnAlert   func(Alert)
+
+	// callCount 用于惰性触发 cleanup（BUG-017）
+	// 避免每次 CheckEvent 都遍历 map 做清理，也避免引入后台 goroutine
+	callCount int64
 }
+
+// dedupMaxWindow 所有 severity 中最长的去重窗口。
+// 超过这个时间的记录一定已过期，可以安全清理。
+const dedupMaxWindow = 15 * time.Minute
+
+// cleanupEvery 每 N 次 CheckEvent 触发一次惰性清理。
+// 权衡：过高 → dedupMap 增长快；过低 → 清理开销大。
+const cleanupEvery = 1000
 
 func NewEngine(rulesPath string, callback func(Alert)) *Engine {
 	e := &Engine{
@@ -116,6 +129,12 @@ func (e *Engine) loadRules(path string) {
 
 // CheckEvent 检查事件是否触发告警
 func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, source string, correlationID string) {
+	// 惰性清理（BUG-017）：每 cleanupEvery 次触发一次，避免 map 无界增长
+	n := atomic.AddInt64(&e.callCount, 1)
+	if n%cleanupEvery == 0 {
+		e.cleanup()
+	}
+
 	e.mu.RLock()
 	rules := e.rules
 	e.mu.RUnlock()
@@ -186,6 +205,42 @@ func (e *Engine) CheckEvent(agentID string, pid int32, comm, cmdline, filename, 
 		if e.OnAlert != nil {
 			e.OnAlert(alert)
 		}
+	}
+}
+
+// cleanup 清理过期的 dedupMap 与 freqCount 条目（BUG-017）。
+//
+// dedupMap：删除 last_seen 早于 dedupMaxWindow 的条目。
+// freqCount：删除已空的切片（保留仍有记录的 key，由检查时清理窗口外的旧值）。
+//
+// 调用者无需持锁，本函数自己加锁。
+func (e *Engine) cleanup() {
+	now := time.Now()
+	cutoff := now.Add(-dedupMaxWindow)
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// dedupMap
+	removedDedup := 0
+	for k, t := range e.dedupMap {
+		if t.Before(cutoff) {
+			delete(e.dedupMap, k)
+			removedDedup++
+		}
+	}
+
+	// freqCount：只删空切片
+	removedFreq := 0
+	for k, list := range e.freqCount {
+		if len(list) == 0 {
+			delete(e.freqCount, k)
+			removedFreq++
+		}
+	}
+
+	if removedDedup > 0 || removedFreq > 0 {
+		log.Printf("🧹 AlertEngine cleanup: dedupMap=%d freqCount=%d", removedDedup, removedFreq)
 	}
 }
 

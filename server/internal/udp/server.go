@@ -2,10 +2,10 @@ package udp
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"sync"
-	"fmt"
 )
 
 type UDPEvent struct {

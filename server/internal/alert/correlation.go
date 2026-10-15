@@ -16,7 +16,7 @@ type CorrelationConfig struct {
 		Seconds      int `toml:"seconds"`
 		DedupSeconds int `toml:"dedup_seconds"`
 	} `toml:"window"`
-	Blacklist         []struct{ Comm string } `toml:"blacklist"`
+	Blacklist         []struct{ Comm string }  `toml:"blacklist"`
 	SensitiveKeywords []struct{ Value string } `toml:"sensitive_keywords"`
 }
 
@@ -240,8 +240,6 @@ func (c *CorrelationEngine) CheckCorrelation(chain *CorrelatedEvent) bool {
 	return false
 }
 
-
-
 func (c *CorrelationEngine) isDuplicate(key string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -253,7 +251,6 @@ func (c *CorrelationEngine) isDuplicate(key string) bool {
 	c.dedupMap[key] = time.Now()
 	return false
 }
-
 
 // extractCommandName 从 details 提取命令名
 // "root: /usr/bin/curl -s http://..." -> "curl"

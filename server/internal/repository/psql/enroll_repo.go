@@ -15,6 +15,46 @@ type EnrollResult struct {
 	GroupName string
 }
 
+// PeekEnrollToken 只读校验 enrollment token（BUG-016）
+//
+// 用途：在调用 CA 签证书之前，先校验 token 是否有效，
+// 避免无 token 的请求无限驱动 CA 做 RSA 签名（CPU 放大）。
+//
+// 语义：
+//   - 只读、不加锁、不消费
+//   - 真正的原子消费仍在 EnrollAgent 事务内（SELECT FOR UPDATE）
+//   - 并发场景下 Peek 通过但 EnrollAgent 失败是允许的（最终一致）
+func (p *PSQL) PeekEnrollToken(ctx context.Context, token string) error {
+	if token == "" {
+		return fmt.Errorf("Token 不能为空")
+	}
+	tokenHashRaw := sha256.Sum256([]byte(token))
+	tokenHash := hex.EncodeToString(tokenHashRaw[:])
+
+	var maxUses, usedCount int
+	var expiresAt time.Time
+	var revokedAt *time.Time
+	err := p.pool.QueryRow(ctx,
+		`SELECT max_uses, used_count, expires_at, revoked_at
+		 FROM enrollment_tokens
+		 WHERE token_hash = $1`,
+		tokenHash,
+	).Scan(&maxUses, &usedCount, &expiresAt, &revokedAt)
+	if err != nil {
+		return fmt.Errorf("Token 无效或不存在")
+	}
+	if revokedAt != nil {
+		return fmt.Errorf("Token 已撤销")
+	}
+	if time.Now().After(expiresAt) {
+		return fmt.Errorf("Token 已过期")
+	}
+	if usedCount >= maxUses {
+		return fmt.Errorf("Token 使用次数已用完")
+	}
+	return nil
+}
+
 // EnrollAgent 事务化注册 Agent
 //
 // 关键：全程在事务内，SELECT FOR UPDATE 锁 token 行

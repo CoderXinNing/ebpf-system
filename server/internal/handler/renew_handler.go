@@ -19,10 +19,10 @@ type RenewCertResult struct {
 // RenewCertHandler 续期逻辑
 //
 // 关键校验：
-//   1. CSR 公钥 hash == DB 中注册的公钥 hash（确保复用旧密钥）
-//   2. agent_id 一致
-//   3. 用 CA 签新证书
-//   4. 更新 DB 的 cert_serial + cert_expires_at
+//  1. CSR 公钥 hash == DB 中注册的公钥 hash（确保复用旧密钥）
+//  2. agent_id 一致
+//  3. 用 CA 签新证书
+//  4. 更新 DB 的 cert_serial + cert_expires_at
 func (h *Handler) RenewCertHandler(agentID string, csrPEM []byte) (*RenewCertResult, error) {
 	// 1. 解析 CSR
 	block, _ := pem.Decode(csrPEM)
