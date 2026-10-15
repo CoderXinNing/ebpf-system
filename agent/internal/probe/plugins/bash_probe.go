@@ -88,3 +88,8 @@ func (p *BashProbe) ApplyConfig(rs *rules.RuleSet) error {
 }
 
 var _ framework.ConfigApplier = (*BashProbe)(nil)
+
+// IsReady 探针是否已 Attach 完成（framework.ReadyChecker）
+func (p *BashProbe) IsReady() bool { return p.probe != nil }
+
+var _ framework.ReadyChecker = (*BashProbe)(nil)

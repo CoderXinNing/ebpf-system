@@ -133,3 +133,8 @@ func (p *FileProbe) ApplyConfig(rs *rules.RuleSet) error {
 }
 
 var _ framework.ConfigApplier = (*FileProbe)(nil)
+
+// IsReady 探针是否已 Attach 完成（framework.ReadyChecker）
+func (p *FileProbe) IsReady() bool { return p.IsLoaded() }
+
+var _ framework.ReadyChecker = (*FileProbe)(nil)

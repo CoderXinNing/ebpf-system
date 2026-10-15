@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-// SentinelEventHeader V3 统一事件头（304 字节）
+// SentinelEventHeader V3 统一事件头（320 字节）
 type SentinelEventHeader struct {
 	PID            uint32
 	PPID           uint32
@@ -30,26 +30,32 @@ type TCPConnDetail struct {
 }
 
 // HeaderSize V3 统一事件头大小
-const HeaderSize = 304
+//
+// 布局（C 侧 packed）：
+//
+//	pid(4) ppid(4) uid(4) event_type(4) timestamp(8)
+//	comm(16) parent_comm(16) data(256) correlation_key(8)
+//	= 320
+const HeaderSize = 320
 
 // DecodeEvent 解码 Ring Buffer 原始数据
-// 硬性校验：len(rawSample) >= 304
-// 只读前 304 字节，超出的安全截断
+// 硬性校验：len(rawSample) >= 320
+// 只读前 320 字节，超出的安全截断
 func DecodeEvent(rawSample []byte) (*SentinelEventHeader, error) {
 	if len(rawSample) < HeaderSize {
 		log.Printf("❌ 短包丢弃: got=%d, want=%d", len(rawSample), HeaderSize)
 		return nil, fmt.Errorf("短包: got=%d, want=%d", len(rawSample), HeaderSize)
 	}
 
-	// 只读前 304 字节
+	// 只读前 320 字节
 	data := rawSample[:HeaderSize]
 
 	header := &SentinelEventHeader{
-		PID:            binary.LittleEndian.Uint32(data[0:4]),
-		PPID:           binary.LittleEndian.Uint32(data[4:8]),
-		UID:            binary.LittleEndian.Uint32(data[8:12]),
-		EventType:      binary.LittleEndian.Uint32(data[12:16]),
-		Timestamp:      binary.LittleEndian.Uint64(data[16:24]),
+		PID:       binary.LittleEndian.Uint32(data[0:4]),
+		PPID:      binary.LittleEndian.Uint32(data[4:8]),
+		UID:       binary.LittleEndian.Uint32(data[8:12]),
+		EventType: binary.LittleEndian.Uint32(data[12:16]),
+		Timestamp: binary.LittleEndian.Uint64(data[16:24]),
 	}
 	copy(header.Comm[:], data[24:40])
 	copy(header.ParentComm[:], data[40:56])

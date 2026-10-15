@@ -172,3 +172,8 @@ func (p *TCPProbe) ApplyConfig(rs *rules.RuleSet) error {
 }
 
 var _ framework.ConfigApplier = (*TCPProbe)(nil)
+
+// IsReady 探针是否已 Attach 完成（framework.ReadyChecker）
+func (p *TCPProbe) IsReady() bool { return p.probe != nil }
+
+var _ framework.ReadyChecker = (*TCPProbe)(nil)

@@ -94,6 +94,16 @@ type ConfigApplier interface {
 	ApplyConfig(rs *rules.RuleSet) error
 }
 
+// ReadyChecker 可选接口：探针可声明自己是否已就绪。
+//
+// 分发规则前框架统一检查，未就绪则跳过（不视为失败）。
+// 避免每个插件作者都要记得写 if p.probe == nil。
+//
+// 不实现 → 视为永远就绪（兼容旧探针）。
+type ReadyChecker interface {
+	IsReady() bool
+}
+
 // SelfTester 可选接口：探针实现一个"已知能被自己捕获的行为"。
 // 用于自检机制，检测 attach 成功但静默失败（loaded-silent）的探针。
 type SelfTester interface {

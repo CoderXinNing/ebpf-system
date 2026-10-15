@@ -802,7 +802,7 @@ func (a *Agent) loadProbesByList(probes []*pb.ProbeInfo) {
 				continue
 			}
 			if localHash != p.Sha256 {
-				log.Printf("❌ %s SHA256不匹配！本地=%s 期望=%s", p.Name, localHash[:16], p.Sha256[:16])
+				log.Printf("❌ %s SHA256不匹配！本地=%s 期望=%s", p.Name, shortHash(localHash), shortHash(p.Sha256))
 				a.probeStateActor.Send(msgSetProbeStatus{name: p.Name, status: "failed: SHA256不匹配"})
 				continue
 			}

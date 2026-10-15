@@ -136,7 +136,7 @@ func (a *Agent) syncRulesFromServer(ctx context.Context, force bool) error {
 	}
 
 	a.setRulesStatus(RulesStatusSynced, rs.Version, fullResp.Sha256)
-	log.Printf("📋 规则已更新: version=%d sha256=%s...", rs.Version, fullResp.Sha256[:16])
+	log.Printf("📋 规则已更新: version=%d sha256=%s...", rs.Version, shortHash(fullResp.Sha256))
 	return nil
 }
 
@@ -180,10 +180,17 @@ func (a *Agent) verifyAndApplyRules(content []byte, sigB64 string) (*rules.RuleS
 	}
 
 	// 遍历所有实现 ConfigApplier 的探针，分发规则
+	//
+	// 统一用 ReadyChecker 拦截未就绪探针，避免每个插件作者
+	// 都要在 ApplyConfig 里写 if p.probe == nil。
 	applied := 0
 	for _, p := range a.probeManager.List() {
 		ca, ok := p.(framework.ConfigApplier)
 		if !ok {
+			continue
+		}
+		if rc, ok := p.(framework.ReadyChecker); ok && !rc.IsReady() {
+			log.Printf("⏭️ %s 未就绪，跳过规则应用", p.Name())
 			continue
 		}
 		if err := ca.ApplyConfig(&rs); err != nil {

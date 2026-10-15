@@ -41,6 +41,18 @@ func generateAgentHash(agentID string) uint32 {
 	return hash
 }
 
+// shortHash 安全截断 hash 用于日志显示。
+//
+// 原因：sha256 字段来自 gRPC 响应（服务端可控），空值时直接 [:16] 会 panic。
+// 在 systemd 下形成崩溃-重启循环（每次 GetRulesFull 都触发）。
+func shortHash(s string) string {
+	const n = 16
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
 // loadAgentID 优先从文件读 agent_id。
 // 文件不存在时生成一个（基于 hostname MD5）并写回文件，下次启动保持稳定。
 // ⚠️ 生产环境应先走 enrollment，由 Server 生成 agent.id，此兜底仅用于开发机。

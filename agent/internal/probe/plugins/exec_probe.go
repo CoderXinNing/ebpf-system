@@ -113,3 +113,8 @@ func (p *ExecProbe) ApplyConfig(rs *rules.RuleSet) error {
 }
 
 var _ framework.ConfigApplier = (*ExecProbe)(nil)
+
+// IsReady 探针是否已 Attach 完成（framework.ReadyChecker）
+func (p *ExecProbe) IsReady() bool { return p.probe != nil }
+
+var _ framework.ReadyChecker = (*ExecProbe)(nil)
