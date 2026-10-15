@@ -1,3 +1,15 @@
+//go:build e2e
+
+// 本测试为端到端调试脚本，需要：
+//   - root 权限
+//   - 真实内核（BPF verifier / tracepoint / kprobe）
+//   - 已编译的 .o 文件
+//
+// 默认不跑（go test ./... 秒过）。
+// 手动跑：go test -tags=e2e -v ./agent/internal/v3_loader/ -run TestXxx
+//
+// 背景：cilium/ebpf 的 ringbuf.Reader 无法从外部安全打断 Read
+// （Close/SetDeadline 与 Read 争锁），所以这类测试不能做常规单测。
 package v3_loader
 
 import (
@@ -11,8 +23,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	
 )
 
 // 模拟 Agent 哈希生成（与正式 Agent 逻辑一致）
@@ -64,7 +74,7 @@ func TestTCPProbeLoad(t *testing.T) {
 			header.PID,
 			(detail.DstIP>>24)&0xFF, (detail.DstIP>>16)&0xFF, (detail.DstIP>>8)&0xFF, detail.DstIP&0xFF,
 			detail.DstPort)
-		
+
 		var corrID string
 		if cached, ok := corrIDCache[header.CorrelationKey]; ok {
 			corrID = cached

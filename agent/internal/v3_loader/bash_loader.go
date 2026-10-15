@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -27,6 +29,10 @@ type BashProbe struct {
 	cmdMu              sync.Mutex
 	lastExactCmdlines  []string
 	lastPrefixCmdlines []string
+
+	// ringbuf reader（Close 时用来唤醒 Read 阻塞的 goroutine）
+	rd     *ringbuf.Reader
+	closed atomic.Bool
 }
 
 type bashObjects struct {
@@ -90,16 +96,27 @@ func (p *BashProbe) Load() error {
 		p.Close()
 		return fmt.Errorf("创建 ring buffer reader 失败: %w", err)
 	}
+	p.rd = rd
 
 	log.Printf("✅ V3 bash 探针已启动")
 
 	go func() {
 		defer rd.Close()
 		for {
+			if p.closed.Load() {
+				return
+			}
+			// 周期性 deadline，让 Read 最多阻塞 500ms
+			// （SetDeadline 无法唤醒已阻塞在 EpollWait 中的 Read，
+			//  必须靠周期性超时让 goroutine 有机会检查 closed 标志）
+			rd.SetDeadline(time.Now().Add(500 * time.Millisecond))
 			record, err := rd.Read()
 			if err != nil {
-				if err == ringbuf.ErrClosed {
+				if isReaderClosed(err) || p.closed.Load() {
 					return
+				}
+				if isReaderTimeout(err) {
+					continue
 				}
 				log.Printf("⚠️ ring buffer 读取错误: %v", err)
 				continue
@@ -172,10 +189,17 @@ func (p *BashProbe) Close() {
 		p.link.Close()
 		p.link = nil
 	}
+	if p.rd != nil {
+		p.closed.Store(true)
+		// 不直接调 rd.Close() 或 SetDeadline：
+		// Read 阻塞时持有 reader 内部锁，这两个方法会死锁。
+		// reader goroutine 会在下一轮 500ms deadline 超时后检查 closed 并退出，
+		// 退出时通过 defer rd.Close() 释放 fd。
+		// 关 objs（含 ringbuf map）会让 epoll 立刻返回错误，加速唤醒。
+		p.rd = nil
+	}
 	if p.objs != nil {
-		if p.objs.TraceReadline != nil {
-			p.objs.TraceReadline.Close()
-		}
+		closeEbpfObjects(p.objs)
 		p.objs = nil
 	}
 }

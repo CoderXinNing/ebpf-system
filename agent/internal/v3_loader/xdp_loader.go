@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync/atomic"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -36,6 +38,7 @@ type XDPProbe struct {
 	link     link.Link
 	objs     *xdpObjects
 	reader   *ringbuf.Reader
+	closed   atomic.Bool
 }
 
 type xdpObjects struct {
@@ -100,10 +103,17 @@ func (p *XDPProbe) Load(objPath string, cfg XDPConfig) error {
 	go func() {
 		defer rd.Close()
 		for {
+			if p.closed.Load() {
+				return
+			}
+			rd.SetDeadline(time.Now().Add(500 * time.Millisecond))
 			record, err := rd.Read()
 			if err != nil {
-				if err == ringbuf.ErrClosed {
+				if isReaderClosed(err) || p.closed.Load() {
 					return
+				}
+				if isReaderTimeout(err) {
+					continue
 				}
 				continue
 			}
@@ -136,14 +146,20 @@ func parseXDPPacket(data [256]byte) *XDPPacketSummary {
 // Close 清理资源
 func (p *XDPProbe) Close() {
 	if p.reader != nil {
-		p.reader.Close()
+		p.closed.Store(true)
+		// 不直接调 reader.Close() 或 SetDeadline：
+		// Read 阻塞时持有 reader 内部锁，这两个方法会死锁。
+		// reader goroutine 会在下一轮 500ms deadline 超时后检查 closed 并退出，
+		// 退出时通过 defer rd.Close() 释放 fd。
+		// 关 objs（含 ringbuf map）会让 epoll 立刻返回错误，加速唤醒。
+		p.reader = nil
 	}
 	if p.link != nil {
 		p.link.Close()
+		p.link = nil
 	}
 	if p.objs != nil {
-		if p.objs.XdpReporter != nil {
-			p.objs.XdpReporter.Close()
-		}
+		closeEbpfObjects(p.objs)
+		p.objs = nil
 	}
 }
