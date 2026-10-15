@@ -24,6 +24,7 @@ TOKEN=""
 INSTALL_DIR="/opt/astertrack"
 HOSTNAME_ARG=""
 BIN_URL=""
+ALLOW_HTTP=0
 
 # ============================================
 # 解析参数
@@ -46,6 +47,8 @@ while [[ $# -gt 0 ]]; do
             HOSTNAME_ARG="${1#*=}"; shift ;;
         --hostname)
             HOSTNAME_ARG="$2"; shift 2 ;;
+        --allow-http)
+            ALLOW_HTTP=1; shift ;;
         *)
             echo "未知参数: $1"; exit 1 ;;
     esac
@@ -136,11 +139,41 @@ mkdir -p ${INSTALL_DIR}/certs
 mkdir -p ${INSTALL_DIR}/data
 
 # ============================================
-# 下载 Agent 二进制
+# HTTPS 检查（BUG-012）
+# ============================================
+if [[ "$SERVER_URL" != https://* ]]; then
+    if [[ "$ALLOW_HTTP" != "1" ]]; then
+        echo "❌ SERVER_URL 必须为 HTTPS"
+        echo "   如确需在可信 LAN 使用 HTTP，加 --allow-http"
+        exit 1
+    fi
+    echo "⚠️  警告：使用 HTTP（非加密通道）"
+    echo "    token 和 Agent 二进制可能被中间人截获/替换"
+    echo ""
+fi
+
+# ============================================
+# 下载 Agent 二进制 + SHA256 完整性校验（BUG-012）
 # ============================================
 BIN_URL="${SERVER_URL%/}/bin/agent-linux-${BIN_ARCH}"
-echo "📥 下载 Agent: $BIN_URL"
+SHA_URL="${BIN_URL}.sha256"
 
+# 1. 先取期望 SHA256
+EXPECTED_SHA=""
+if command -v curl &> /dev/null; then
+    EXPECTED_SHA=$(curl -fsSL "$SHA_URL" 2>/dev/null | awk '{print $1}')
+elif command -v wget &> /dev/null; then
+    EXPECTED_SHA=$(wget -qO- "$SHA_URL" 2>/dev/null | awk '{print $1}')
+fi
+
+if [[ -z "$EXPECTED_SHA" ]] || [[ ${#EXPECTED_SHA} -ne 64 ]]; then
+    echo "❌ 无法获取有效 SHA256: $SHA_URL"
+    echo "   拒绝在无完整性校验的情况下安装"
+    exit 1
+fi
+
+# 2. 下载二进制
+echo "📥 下载 Agent: $BIN_URL"
 if command -v curl &> /dev/null; then
     curl -fSL -o ${INSTALL_DIR}/bin/agent "$BIN_URL"
 elif command -v wget &> /dev/null; then
@@ -149,6 +182,23 @@ else
     echo "❌ 需要 curl 或 wget"
     exit 1
 fi
+
+# 3. 校验
+if ! command -v sha256sum &> /dev/null; then
+    echo "❌ 系统缺少 sha256sum，无法校验"
+    rm -f ${INSTALL_DIR}/bin/agent
+    exit 1
+fi
+ACTUAL_SHA=$(sha256sum ${INSTALL_DIR}/bin/agent | awk '{print $1}')
+if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+    echo "❌ SHA256 校验失败"
+    echo "   期望: $EXPECTED_SHA"
+    echo "   实际: $ACTUAL_SHA"
+    rm -f ${INSTALL_DIR}/bin/agent
+    exit 1
+fi
+echo "✅ SHA256 校验通过"
+
 chmod +x ${INSTALL_DIR}/bin/agent
 
 # ============================================

@@ -6,10 +6,15 @@ const handlers: Map<string, WSMessageHandler[]> = new Map()
 export function connectWS() {
   if (ws && ws.readyState === WebSocket.OPEN) return
 
+  // 未登录不连（避免无谓的重连风暴）
+  const token = localStorage.getItem('token')
+  if (!token) return
+
   const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://'
-  const url = `${protocol}${window.location.host}/ws`
+  // token 放 query（浏览器 WebSocket 无法自定义 header）
+  const url = `${protocol}${window.location.host}/ws?token=${encodeURIComponent(token)}`
   // 通过 vite proxy 代理到 Server 8080
-  // vite.config.ts 已配置 proxy: '/ws' → 'ws://127.0.0.1:8080' 
+  // vite.config.ts 已配置 proxy: '/ws' → 'ws://127.0.0.1:8080'
 
   ws = new WebSocket(url)
 

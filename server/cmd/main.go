@@ -668,9 +668,28 @@ func main() {
 
 	// 启动 HTTP
 	r := gin.Default()
+	// WebSocket 鉴权（BUG-011）：token 走 URL query，校验走 AuthManager
+	ws.SetTokenValidator(func(token string) error {
+		_, _, err := am.ValidateAndTouch(context.Background(), token)
+		return err
+	})
 	r.GET("/ws", gin.WrapF(ws.HandleWS))
-	r.StaticFile("/install.sh", "./server/static/install.sh")
-	r.Static("/bin", "./server/static")
+	// 精确暴露允许下载的文件（BUG-012）
+	// 原先 r.Static("/bin", "./server/static") 会把整个 static 目录公开，
+	// 包括未来可能放入的敏感文件。
+	// 无条件注册；文件不存在时 gin 返回 404，与检查后不注册语义一致。
+	// 好处：运行时生成的文件（如 sha256）无需重启 Server 即可访问。
+	// (urlPath, localPath) 显式映射，避免 URL 前缀与本地目录混淆
+	staticFiles := []struct{ url, local string }{
+		{"/install.sh", "./server/static/install.sh"},
+		{"/bin/agent-linux-amd64", "./server/static/agent-linux-amd64"},
+		{"/bin/agent-linux-amd64.sha256", "./server/static/agent-linux-amd64.sha256"},
+		{"/bin/agent-linux-arm64", "./server/static/agent-linux-arm64"},
+		{"/bin/agent-linux-arm64.sha256", "./server/static/agent-linux-arm64.sha256"},
+	}
+	for _, sf := range staticFiles {
+		r.StaticFile(sf.url, sf.local)
+	}
 	if h != nil {
 		h.SetupRoutes(r)
 	}

@@ -19,6 +19,7 @@ const (
 	agentOutPath   = "bin/agent"
 	agentHashPath  = "bin/agent.src.hash"
 	agentStaticAMD = "server/static/agent-linux-amd64"
+	agentStaticARM = "server/static/agent-linux-arm64"
 )
 
 // Config 编译配置
@@ -34,6 +35,7 @@ func EnsureAgentBinary(cfg Config) error {
 		if !fileExists(agentStaticAMD) {
 			return fmt.Errorf("自动编译已禁用，但 %s 不存在", agentStaticAMD)
 		}
+		writeStaticSHASums()
 		log.Println("✅ 自动编译已禁用，使用预编译 Agent")
 		return nil
 	}
@@ -42,6 +44,7 @@ func EnsureAgentBinary(cfg Config) error {
 	goPath := detectGo(cfg.GoPath)
 	if goPath == "" {
 		if fileExists(agentStaticAMD) {
+			writeStaticSHASums()
 			log.Println("⚠️ 未找到 Go 编译器，使用现有的预编译 Agent")
 			return nil
 		}
@@ -73,6 +76,8 @@ func EnsureAgentBinary(cfg Config) error {
 	staticExists := fileExists(agentStaticAMD)
 
 	if binExists && staticExists && string(oldHash) == newHash {
+		// 即使跳过编译，也确保 .sha256 存在（首次引入时或手动清理后）
+		writeStaticSHASums()
 		log.Println("✅ Agent 二进制已是最新，跳过编译")
 		return nil
 	}
@@ -103,7 +108,48 @@ func EnsureAgentBinary(cfg Config) error {
 	// 6. 更新 hash
 	os.WriteFile(agentHashPath, []byte(newHash), 0644)
 
+	// 7. 生成 .sha256（供 install.sh 完整性校验）
+	writeStaticSHASums()
+
 	return nil
+}
+
+// writeStaticSHASums 为 server/static/ 下的 agent 二进制生成 .sha256 文件。
+//
+// 格式：<hex>  <basename>\n（与 sha256sum 输出兼容）
+// 供 install.sh 下载后对比，防传输损坏。
+// 注：不防 Server 被篡改（hash 与 binary 同源）；完整的防篡改需 Agent 二进制签名。
+func writeStaticSHASums() {
+	for _, f := range []string{agentStaticAMD, agentStaticARM} {
+		if !fileExists(f) {
+			continue
+		}
+		h, err := sha256File(f)
+		if err != nil {
+			log.Printf("⚠️ 计算 %s SHA256 失败: %v", f, err)
+			continue
+		}
+		content := h + "  " + filepath.Base(f) + "\n"
+		if err := os.WriteFile(f+".sha256", []byte(content), 0644); err != nil {
+			log.Printf("⚠️ 写 %s.sha256 失败: %v", f, err)
+			continue
+		}
+		log.Printf("✅ 已生成 %s.sha256", filepath.Base(f))
+	}
+}
+
+// sha256File 计算文件 SHA256
+func sha256File(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // detectGo 探测 Go 路径
