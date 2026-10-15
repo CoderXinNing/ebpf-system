@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os/exec"
+	"regexp"
 	"sync"
 	"time"
 
@@ -368,6 +370,31 @@ func NewHandler(am *auth.AuthManager, sendCmd func(string, *pb.ProbeCommand) err
 	}
 }
 
+// ========== 系统时间 / NTP 入参校验（BUG-005）==========
+
+// dateFormatRe 匹配 `YYYY-MM-DD HH:MM:SS`（严格的 date -s 格式）
+var dateFormatRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`)
+
+// hostPortRe 匹配 hostname / IPv4 / IPv6 简写。NTP server 只接受这些
+var hostRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.:\-]{0,253}[a-zA-Z0-9]$`)
+
+// systemCmdTimeout date / ntpdate 等系统命令的硬超时。
+// 这些命令可能因 NTP server 不可达而挂起，必须限时。
+const systemCmdTimeout = 10 * time.Second
+
+// runSystemCmd 带超时的系统命令执行。
+// 用法：runSystemCmd("date", "-s", "2026-10-15 12:00:00")
+func runSystemCmd(name string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), systemCmdTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return string(out), fmt.Errorf("%s 超时（%v）", name, systemCmdTimeout)
+	}
+	return string(out), err
+}
+
 func (h *Handler) SetupRoutes(r *gin.Engine) {
 	r.POST("/api/login", h.Login)
 
@@ -672,9 +699,12 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			}
 			c.BindJSON(&req)
 			if req.Datetime != "" {
-				cmd := exec.Command("date", "-s", req.Datetime)
-				if err := cmd.Run(); err != nil {
-					c.JSON(500, gin.H{"error": "设置失败: " + err.Error()})
+				if !dateFormatRe.MatchString(req.Datetime) {
+					c.JSON(400, gin.H{"error": "时间格式必须为 YYYY-MM-DD HH:MM:SS"})
+					return
+				}
+				if out, err := runSystemCmd("date", "-s", req.Datetime); err != nil {
+					c.JSON(500, gin.H{"error": "设置失败: " + err.Error() + " " + out})
 					return
 				}
 				h.writeAudit(c, audit.Record{
@@ -693,9 +723,12 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			}
 			c.BindJSON(&req)
 			if req.Server != "" {
-				cmd := exec.Command("ntpdate", req.Server)
-				if err := cmd.Run(); err != nil {
-					c.JSON(500, gin.H{"error": "NTP同步失败: " + err.Error()})
+				if !hostRe.MatchString(req.Server) {
+					c.JSON(400, gin.H{"error": "NTP server 格式非法"})
+					return
+				}
+				if out, err := runSystemCmd("ntpdate", req.Server); err != nil {
+					c.JSON(500, gin.H{"error": "NTP同步失败: " + err.Error() + " " + out})
 					return
 				}
 				h.writeAudit(c, audit.Record{
@@ -895,6 +928,30 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			var req map[string]string
 			if err := c.BindJSON(&req); err != nil {
 				c.JSON(400, gin.H{"error": "请求格式错误"})
+				return
+			}
+			// 键白名单：只接受前端通用设置页用到的字段。
+			// 语义键（如 event_days）走专门的 API（/log-settings），不在此处。
+			allowed := map[string]bool{
+				"system_name":          true,
+				"default_page":         true,
+				"agent_heartbeat":      true,
+				"collect_interval":     true,
+				"offline_threshold":    true,
+				"baseline_sensitivity": true,
+				"alert_dedup_window":   true,
+			}
+			var rejected []string
+			for k := range req {
+				if !allowed[k] {
+					rejected = append(rejected, k)
+				}
+			}
+			if len(rejected) > 0 {
+				c.JSON(400, gin.H{
+					"error":    "包含不允许的配置键",
+					"rejected": rejected,
+				})
 				return
 			}
 			for k, v := range req {

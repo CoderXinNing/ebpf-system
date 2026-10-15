@@ -1,11 +1,9 @@
 /cmd
 bin/
 proto/split/*.pb.go
-agent/data/agent.id
+# 运行时数据：agent.id / baseline.json / rules.enc / probes.enc / rules.sig
+agent/data/
 server/static/agent-linux-amd64
 certs/
 .bak-cert-*/
-agent/data/baseline.json
-agent/data/rules.json
-agent/data/rules.sig
 v3_engine/probes/*.o

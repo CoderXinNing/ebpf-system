@@ -146,6 +146,16 @@ func (am *AuthManager) ValidateAndTouch(ctx context.Context, tokenStr string) (*
 		fmt.Printf("⚠️ 更新会话活动时间失败 (id=%d): %v\n", sess.ID, err)
 	}
 
+	// BUG-007：授权以 DB role 为准，忽略 JWT claims 中的 role。
+	// 原因：JWT 密钥若被猜到即可伪造 role；DB 是唯一事实源。
+	// 影响：管理员降权/删用户后，其 token 立即失效（无需等 exp）。
+	if dbRole, err := am.getRoleCached(ctx, sess.UserID); err == nil {
+		user.Role = dbRole
+	} else {
+		// 用户已被删除 → 拒绝此会话
+		return nil, 0, fmt.Errorf("用户不存在或已失效")
+	}
+
 	return user, sess.ID, nil
 }
 

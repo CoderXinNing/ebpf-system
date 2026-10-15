@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -44,7 +45,23 @@ type AuthManager struct {
 	// readIntConf 从 system_config 读取整数配置（用于 session 超时参数）
 	// 独立成函数字段，便于测试替换
 	readIntConf func(ctx context.Context, namespace, key string, defaultVal int) int
+
+	// roleCache 缓存 user_id → role 映射（BUG-007：授权以 DB role 为准）
+	// 避免 ValidateAndTouch 每次请求都查 DB。
+	// 变更 role/删用户时主动 invalidate（见 UpdateUserRole / DeleteUser）。
+	roleCache sync.Map // map[int]*roleCacheEntry
 }
+
+// roleCacheEntry 角色缓存条目
+type roleCacheEntry struct {
+	role     string
+	cachedAt time.Time
+}
+
+// roleCacheTTL 角色缓存有效期。
+// 60 秒的权衡：性能（避免每请求查 DB）vs 变更传播（降权 60s 内生效）。
+// 主动 invalidate 后基本立即生效。
+const roleCacheTTL = 60 * time.Second
 
 // NewAuthManager 创建认证管理器（PSQL）
 func NewAuthManager(pool *pgxpool.Pool) (*AuthManager, error) {
@@ -165,6 +182,41 @@ func (am *AuthManager) ListUsers(ctx context.Context) ([]User, error) {
 	return users, nil
 }
 
+// GetUserByID 按 ID 查用户（BUG-007：用于授权时取 DB 最新 role）
+func (am *AuthManager) GetUserByID(ctx context.Context, id int) (*User, error) {
+	var u User
+	err := am.pool.QueryRow(ctx,
+		`SELECT id, username, role FROM users WHERE id = $1`, id).
+		Scan(&u.ID, &u.Username, &u.Role)
+	if err != nil {
+		return nil, fmt.Errorf("用户不存在: %w", err)
+	}
+	return &u, nil
+}
+
+// getRoleCached 取 user_id 的最新 role（带 60s 缓存）
+func (am *AuthManager) getRoleCached(ctx context.Context, userID int) (string, error) {
+	if v, ok := am.roleCache.Load(userID); ok {
+		if e, ok := v.(*roleCacheEntry); ok {
+			if time.Since(e.cachedAt) < roleCacheTTL {
+				return e.role, nil
+			}
+		}
+	}
+
+	u, err := am.GetUserByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	am.roleCache.Store(userID, &roleCacheEntry{role: u.Role, cachedAt: time.Now()})
+	return u.Role, nil
+}
+
+// invalidateRoleCache 清除指定 user 的 role 缓存
+func (am *AuthManager) invalidateRoleCache(userID int) {
+	am.roleCache.Delete(userID)
+}
+
 func getEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -193,14 +245,25 @@ func (am *AuthManager) UpdateUserRole(ctx context.Context, userID int, role stri
 	if err != nil {
 		return fmt.Errorf("修改角色失败: %w", err)
 	}
+	// BUG-007 配套：role 变更立即生效（不等缓存过期）
+	am.invalidateRoleCache(userID)
 	return nil
 }
 
 // DeleteUser 删除用户
+//
+// 配套（BUG-007 + BUG-013）：
+//   - 失效 role 缓存
+//   - 撤销该用户所有会话（否则已登录的 JWT 仍有效直到 exp）
 func (am *AuthManager) DeleteUser(ctx context.Context, userID int) error {
 	_, err := am.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("删除用户失败: %w", err)
+	}
+	am.invalidateRoleCache(userID)
+	// 撤销所有会话（失败不阻塞删除，只记日志）
+	if err := am.sessionStore.RevokeByUserID(ctx, userID); err != nil {
+		fmt.Printf("⚠️ 撤销用户 %d 的会话失败: %v\n", userID, err)
 	}
 	return nil
 }
