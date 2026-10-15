@@ -766,7 +766,172 @@ AsterTrack 设计定稿
     - 待办：baseline.json 加密见 PROJECT.txt §4 B11
 
 
-【六、文档定位说明】
+【六、关联键与协议（BUG-045 整改）】
+
+  6.1 背景
+
+    correlation_key 是 8 字节 uint64，C 层生成，贯穿 Go 层与 Server 层。
+    设计初衷：标识"同一个逻辑进程实例"，用于星轨关联。
+
+    现状（v3 之前）：
+      [ agent_hash(32) | pid(32) ]
+
+    缺陷：
+      1. pid 会重用——旧进程退出、新进程复用同 pid，
+         两者 corr_key 相同 → 星轨串链、告警误关联
+      2. agent_hash 冗余——Server 收到的事件天然带 agent_id
+         （来自 mTLS 证书身份），不需要 C 层在 key 里编码
+      3. 三层语义不一致：
+           C 层：correlation_key 编码 (agent_hash, pid)
+           Server：correlation_key 不透明，用 "agentID:pid_N" 重建 key
+           两者对不上 → 跨主机关联不可能正确
+
+    设计目标（DESIGN §1.2 早已要求）：
+      Key = (pid, start_time_ns) 复合键，防 PID 重用
+
+  6.2 correlation_key 重定义
+
+    新布局：
+      [ start_time_ticks 低 32 位(32) | pid(32) ]
+
+    理由：
+      - start_time 是进程实例唯一标识（配合 pid）
+      - 32 位 ticks（HZ=100，10ms/tick）覆盖约 497 天
+      - pid 在同一 tick 内不会重用
+      - agent_hash 去掉，Server 用 agent_id 分组
+
+    ticks 来源：
+      与 P1.9 的 agent_pids 一致——task->start_time / 1e7
+      注：BUG-051（USER_HZ≠100 的内核上失效）是独立遗留问题，本次不动
+
+  6.3 事件头协议变更
+
+    sentinel_event_header：320 → 328 字节
+
+      struct sentinel_event_header {
+          __u32 pid;
+          __u32 ppid;
+          __u32 uid;
+          __u32 event_type;
+          __u64 timestamp;
+          char  comm[16];
+          char  parent_comm[16];
+          char  data[256];
+          __u64 correlation_key;
+          __u64 start_time_ns;   // v3.1 新增（末尾追加）
+      } __attribute__((packed));
+
+    追加在末尾，不打乱现有偏移：
+      - 前 320 字节布局不变，Go 侧解析只改常量与末 8 字节
+      - 好处：将来若再扩字段，同样追加末尾即可
+
+    为什么不加 padding / version：
+      - padding 浪费字节，且不知道下次加什么
+      - version 字段引入双版本解析复杂度，收益低于成本
+      - 协议变更走一次完整升级流程的成本可控
+
+  6.4 Server 侧 key 变更
+
+    GlobalCorrelationMap（star_service.go）的 key：
+
+      旧：fmt.Sprintf("%s:pid_%d", agentID, pid)
+      新：fmt.Sprintf("%s:ck_%d", agentID, correlationKey)
+
+    影响：
+      - 单机内：同进程实例 → 同 correlation_key → 合并正确
+      - 跨主机：agentID 前缀不同 → 不会误合并
+      - 跨主机关联（C5）：将来靠五元组匹配建立 agentID 之间的桥
+        （注：需先补 TCP SRC，见 BUG-068）
+
+    HandleMutation 签名变更：
+
+      旧：func (s *StarActivationService) HandleMutation(agentID string, pid int32) string
+      新：func (s *StarActivationService) HandleMutation(agentID string, correlationKey uint64, pid int32) string
+
+    corrToPid 反向索引结构不变（仍记 pid，供下发星轨激活命令时携带 root_pid）
+
+  6.5 兼容性与升级
+
+    ⚠️ 破坏性变更。Agent 与 Server 必须同时升级。
+
+    不兼容点：
+      - 老 Agent 发 320 字节事件 → 新 Server 拒收（HeaderSize 检查）
+      - 新 Agent 发 328 字节事件 → 老 Server 截断到 320
+        （丢 start_time_ns，但 correlation_key 仍在）
+
+    升级流程：
+      1. 停所有 Agent
+      2. 升级 Server + 跑 migration 016（events 加 start_time_ns 列）
+      3. 升级 Agent
+      4. 启动
+
+    回滚：
+      - 代码回滚即可；DB 的 start_time_ns 列保留（NULL 不影响）
+      - 老事件该列为 NULL，查询时 WHERE start_time_ns IS NOT NULL 过滤
+
+  6.6 施工清单
+
+    A. Proto 层
+      - proto/split/agent_service.proto：
+          ProbeEvent 加 uint64 start_time_ns = 11
+      - regen：make proto（见仓库根 Makefile）
+      - 依赖：protoc 3.12.4 + protoc-gen-go v1.36.12 + protoc-gen-go-grpc
+
+    B. C 层
+      - sentinel_common.h：
+          sentinel_event_header 加 __u64 start_time_ns
+          注释 HeaderSize 320 → 328
+          make_correlation_key(pid) → make_correlation_key(pid, st_ticks)
+      - 5 个探针（exec/bash/file/tcp/xdp）：
+          填充 evt->start_time_ns
+          调新 make_correlation_key
+      - 重编 5 个 .o
+
+    C. Go 层（v3_loader）
+      - decoder.go：
+          HeaderSize 320 → 328
+          SentinelEventHeader 加 StartTimeNS uint64
+          解析 data[320:328]
+      - 所有 pb.ProbeEvent{...} 调用点：加 StartTimeNs: header.StartTimeNS
+
+    D. Server 层
+      - star_service.go：HandleMutation 签名变更 + key 构造
+      - grpcservice/service.go：事件落库带 start_time_ns
+      - psql/event_repo.go：INSERT 加列
+
+    E. DB
+      - migration 016：
+          ALTER TABLE events ADD COLUMN start_time_ns BIGINT;
+          CREATE INDEX idx_events_start_time ON events(agent_id, start_time_ns);
+
+  6.7 与血缘表的关系
+
+    BUG-045 是血缘表的数据地基，不是血缘表本身。
+
+    本整改提供：
+      - 进程实例唯一标识（correlation_key）
+      - 完整的 start_time_ns（落库）
+      - 三层对齐的语义（C / Go / Server）
+
+    血缘表（B1）要做（另开）：
+      - 索引结构改 (pid, start_time_ns)
+      - is_anchor 字段
+      - 锚点生成规则
+      - 跨进程父子关系
+      - 跨主机关联
+
+    两者独立推进，互不阻塞：
+      - BUG-045 做完 → 数据正确
+      - B1 做完 → 关系正确
+
+    不做的事（避免过度设计）：
+      - 不加 padding（不知道下次加什么）
+      - 不加 version 字段（收益低于成本）
+      - 不在本次做 TCP SRC（BUG-068，跨主机关联前置）
+      - 不改 GlobalCorrelationMap 的 dstIP:dstPort key（BUG-041）
+
+
+【七、文档定位说明】
 
   本文件（DESIGN.txt）：设计参考
   PROJECT.txt：现状 / 事实源 / 待办 / 清理计划

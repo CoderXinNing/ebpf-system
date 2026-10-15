@@ -129,6 +129,16 @@ AsterTrack 项目主文档
       - 提交：21dfac6（规则加密）+ dfc93fb（探针名单加密 + 离线加载）
       - 待办：baseline.json 加密（等软基线修复完成后，见 §4 B11）
 
+    关联键整改（BUG-045，设计完成，待施工）
+      - 文档：DESIGN.txt §6
+      - 目标：correlation_key 从 [agent_hash|pid] 改为 [start_time_ticks_low32|pid]
+      - 协议：sentinel_event_header 320 → 328（末尾追加 start_time_ns）
+      - 三层：C 层 / Go 层 / Server 层语义对齐
+      - 影响：Agent + Server 必须同时升级（破坏性变更）
+      - 是血缘表（B1）的数据地基；B1 机制另开
+      - 不在本次：padding / version / TCP SRC（BUG-068）/ GlobalCorrelationMap
+        key（BUG-041）
+
     探针排除三维度（后端，2026-10-09）
       - migration 007 已应用
       - C 层 sentinel_xip（LPM_TRIE）已加载
