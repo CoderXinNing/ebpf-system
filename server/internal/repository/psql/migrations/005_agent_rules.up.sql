@@ -9,14 +9,16 @@
 -- 设计：
 --   - version 单调递增，取最大值为当前生效
 --   - 保留历史（审计用）
---   - content 用 JSONB，支持未来扩展
+--   - content 用 TEXT，字节级保留（canonical JSON 签名要求）
 --   - 签名范围 = sha256(canonical_json(content))
+--   - ⚠️ 必须用 TEXT，不能用 JSONB：JSONB 会重排/去空格，
+--       往返后字节不一致 → Agent 验签失败（BUG-023）
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS agent_rules (
     id          BIGSERIAL PRIMARY KEY,
     version     BIGINT NOT NULL,
-    content     JSONB NOT NULL,
+    content     TEXT NOT NULL,
     sha256      VARCHAR(64) NOT NULL,
     signature   TEXT NOT NULL,
     created_by  VARCHAR(64),
@@ -26,7 +28,7 @@ CREATE TABLE IF NOT EXISTS agent_rules (
 CREATE INDEX IF NOT EXISTS idx_agent_rules_version ON agent_rules(version DESC);
 
 COMMENT ON TABLE agent_rules IS 'Agent 动态规则（敏感路径等），version 最大者为当前生效';
-COMMENT ON COLUMN agent_rules.content IS '规则内容 JSONB（sensitive_paths 等）';
+COMMENT ON COLUMN agent_rules.content IS '规则内容 canonical JSON（TEXT 字节级保留；BUG-023 禁用 JSONB）';
 COMMENT ON COLUMN agent_rules.sha256 IS 'canonical JSON 的 SHA256';
 COMMENT ON COLUMN agent_rules.signature IS 'CA 私钥对 sha256 的签名（base64）';
 
