@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -22,6 +23,19 @@ const (
 	RulesStatusSynced  = "synced"
 	RulesStatusStale   = "stale"
 	RulesStatusUnknown = "unknown"
+)
+
+// 规则闸门哨兵错误（BUG-027）
+//
+// 调用方需区分三态：
+//
+//	nil                → 应用成功
+//	ErrGateSkipped     → 闸门跳过（不是失败，也不算成功，保持现状）
+//	ErrGateClosed      → 熔断中，冷却期未过
+//	其他 error          → 应用失败
+var (
+	ErrGateSkipped = errors.New("rules gate: 跳过（防抖）")
+	ErrGateClosed  = errors.New("rules gate: 熔断中")
 )
 
 // syncRulesOnStartup 启动时：优先加载本地缓存（已验签），避免启动期"裸奔"
@@ -117,8 +131,9 @@ func (a *Agent) syncRulesFromServer(ctx context.Context, force bool) error {
 
 	// 4. 检查闸门（防抖 + 熔断）
 	if err := a.checkApplyGate(force); err != nil {
-		log.Printf("⚠️ 规则应用被闸门拦截: %v", err)
-		return nil // 不算失败——不是应用本身失败
+		// BUG-027：返回哨兵错误，让调用方区分「跳过」与「成功」，避免 failures 归零
+		log.Printf("⏭️ 规则应用跳过: %v", err)
+		return err
 	}
 
 	// 5. 验签 + 应用
@@ -233,14 +248,20 @@ func (a *Agent) checkApplyGate(force bool) error {
 	defer a.rulesMu.Unlock()
 
 	if a.rulesGateClosed {
-		return fmt.Errorf("规则应用已熔断（连续失败 %d 次）", a.rulesApplyFailures)
+		// BUG-028 半开：冷却期过后允许一次尝试
+		if time.Since(a.rulesGateOpenedAt) < RulesGateCooldown {
+			return fmt.Errorf("%w（连续失败 %d 次，冷却中）",
+				ErrGateClosed, a.rulesApplyFailures)
+		}
+		log.Printf("🔓 规则熔断进入半开状态，尝试一次")
+		// 半开通过，继续走 MinInterval 检查
 	}
 
 	if !force && !a.rulesLastApplyAt.IsZero() {
 		elapsed := time.Since(a.rulesLastApplyAt)
 		if elapsed < RulesApplyMinInterval {
-			return fmt.Errorf("距上次应用 %v < %v，跳过",
-				elapsed.Round(time.Millisecond), RulesApplyMinInterval)
+			return fmt.Errorf("%w（距上次 %v）", ErrGateSkipped,
+				elapsed.Round(time.Millisecond))
 		}
 	}
 
@@ -268,6 +289,7 @@ func (a *Agent) markApplyFailure() {
 	a.rulesApplyFailures++
 	if a.rulesApplyFailures >= RulesApplyFailThreshold && !a.rulesGateClosed {
 		a.rulesGateClosed = true
+		a.rulesGateOpenedAt = time.Now()
 		log.Printf("❌ 规则应用连续失败 %d 次，熔断（需人工介入）", a.rulesApplyFailures)
 	}
 }
@@ -407,7 +429,10 @@ func (a *Agent) rulesSyncLoop(ctx context.Context) {
 	}
 
 	if err := a.syncRulesFromServer(ctx, false); err != nil {
-		log.Printf("⚠️ 首次规则同步失败: %v", err)
+		// BUG-027：跳过/熔断不是真失败，不打「失败」日志
+		if !errors.Is(err, ErrGateSkipped) && !errors.Is(err, ErrGateClosed) {
+			log.Printf("⚠️ 首次规则同步失败: %v", err)
+		}
 	}
 
 	// 退避参数
@@ -430,10 +455,16 @@ func (a *Agent) rulesSyncLoop(ctx context.Context) {
 		case <-time.After(interval):
 		}
 
-		if err := a.syncRulesFromServer(ctx, force); err != nil {
+		err := a.syncRulesFromServer(ctx, force)
+		switch {
+		case errors.Is(err, ErrGateSkipped):
+			// BUG-027：跳过不算失败也不算成功，保持 failures
+		case errors.Is(err, ErrGateClosed):
+			// 熔断冷却中，不计入 failures（避免误触指数退避）
+		case err != nil:
 			failures++
 			log.Printf("⚠️ 规则同步失败 (第%d次): %v", failures, err)
-		} else {
+		default:
 			if failures > 0 {
 				log.Printf("✅ 规则同步恢复（前 %d 次失败）", failures)
 			}

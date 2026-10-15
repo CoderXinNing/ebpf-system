@@ -84,6 +84,7 @@ type Agent struct {
 	rulesLastApplyAt   time.Time // 上次成功 apply 时间（防抖）
 	rulesApplyFailures int       // 连续失败次数（熔断）
 	rulesGateClosed    bool      // 熔断状态
+	rulesGateOpenedAt  time.Time // 熔断开启时间（BUG-028 半开冷却判定）
 
 	// P1.9 A1 收尾：上轮清理的死 PID 数（心跳上报）
 	agentPidCleanedLast atomic.Int32

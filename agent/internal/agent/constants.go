@@ -69,6 +69,10 @@ const (
 	// RulesApplyFailThreshold 连续失败阈值（触发熔断）
 	RulesApplyFailThreshold = 3
 
+	// RulesGateCooldown 熔断后冷却时间（BUG-028 半开恢复）
+	// 冷却期过后允许一次尝试，成功即完全复位。
+	RulesGateCooldown = 5 * time.Minute
+
 	// ========== 事件上报 ==========
 
 	// EventFlushInterval 事件队列 flush 周期
