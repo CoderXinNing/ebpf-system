@@ -25,7 +25,6 @@ import (
 	"github.com/CoderXinNing/ebpf-system/agent/internal/v3_loader"
 	pb "github.com/CoderXinNing/ebpf-system/proto/pb"
 	"github.com/cilium/ebpf"
-	ciliumebpf "github.com/cilium/ebpf"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -365,7 +364,8 @@ func (a *Agent) register() error {
 		},
 		KernelInfo:      &pb.KernelInfo{Version: a.capabilities.KernelVersion, Arch: a.capabilities.Arch, BtfEnabled: a.capabilities.BTFEnabled},
 		CapabilityLevel: mapToProtoCapability(a.level),
-		ActiveProbes:    int32(len(a.cfg.Autoload)),
+		// BUG-025：按实际注册的探针数上报（配置里的 Autoload 与实际注册不一致）
+		ActiveProbes: int32(len(a.probeManager.List())),
 	}
 
 	resp, err := a.client.Register(ctx, req)
@@ -488,48 +488,12 @@ func cstring(b []byte) string {
 	return string(b)
 }
 
-func updateHeartbeatMap() {
-	hbMap, err := ciliumebpf.LoadPinnedMap(paths.PinMap("agent_heartbeat"), nil)
-	if err != nil {
-		return
-	}
-	defer hbMap.Close()
-	var key uint32 = 0
-	var val uint64 = uint64(time.Now().UnixNano())
-	hbMap.Put(&key, &val)
-}
-
 // getAuthContext 返回带 token 的 context，如果 authContext 未设置则使用传入的 ctx
 func (a *Agent) getAuthContext(fallback context.Context) context.Context {
 	if a.authContext != nil {
 		return a.authContext
 	}
 	return fallback
-}
-
-func (a *Agent) getProbePath(name string) string {
-	// 路径是相对静态的，直接从配置读，不走 Actor
-	for _, p := range a.cfg.Autoload {
-		if p.Name == name && p.Path != "" {
-			return p.Path
-		}
-	}
-	// 默认路径
-	paths := map[string]string{
-		"exec_monitor": "probes/new/exec_monitor/exec_monitor.o",
-		"bash_monitor": "probes/new/bash_monitor/bash_monitor.o",
-		"tcp_monitor":  "probes/new/tcp_monitor/tcp_monitor.o",
-	}
-	return paths[name]
-}
-
-func (a *Agent) isProbeEnabled(name string) bool {
-	for _, p := range a.cfg.Autoload {
-		if p.Name == name {
-			return p.Enabled
-		}
-	}
-	return false
 }
 
 func (a *Agent) fetchProbeList() []*pb.ProbeInfo {
