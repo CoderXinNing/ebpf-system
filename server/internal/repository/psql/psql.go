@@ -24,12 +24,21 @@ type Config struct {
 	User     string
 	Password string
 	DBName   string
+	// SSLMode libpq sslmode 参数。留空默认 "prefer"。
+	// 取值：disable / allow / prefer / require / verify-ca / verify-full
+	// 安全建议：生产用 require 或更高。
+	SSLMode string
 }
 
 // New 创建 PSQL 连接池
 func New(cfg Config) (*PSQL, error) {
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName)
+	sslMode := cfg.SSLMode
+	if sslMode == "" {
+		sslMode = "prefer"
+	}
+	// 注：postgres 的 sslmode 来自 libpq 约定，非用户输入，无注入风险。
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName, sslMode)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

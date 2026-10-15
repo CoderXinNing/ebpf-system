@@ -28,6 +28,13 @@ type Config struct {
 	Token      string // 注册 Token（ATK-xxx）
 	InstallDir string // 安装目录，默认 /opt/astertrack
 	Hostname   string // 可选，默认自动获取
+
+	// CAFingerprint 期望的 CA 证书 SHA256 指纹（hex，可含冒号/空格）。
+	//
+	// 用途（BUG-009）：HTTP enrollment 场景必须提供，
+	// 用于校验 Server 返回的 ca_crt 未被中间人替换。
+	// HTTPS 场景可省略（由系统 CA 兜底），提供时也会校验。
+	CAFingerprint string
 }
 
 // Result enroll 结果
@@ -104,6 +111,20 @@ func Run(cfg Config) (*Result, error) {
 		return nil, fmt.Errorf("enrollment 失败: %w", err)
 	}
 
+	// 5.5 信任根校验（BUG-009）
+	//
+	// 校验顺序（任一失败即拒绝，不落盘）：
+	//   a. resp.AgentID 必须与本地计算值一致
+	//   b. resp.CACRT 必须能解析为 x509 证书
+	//   c. HTTP 场景必须提供期望指纹，且与返回 CA 匹配
+	//   d. HTTPS 场景若提供了指纹，也校验
+	if resp.AgentID != agentID {
+		return nil, fmt.Errorf("agent_id 不一致：响应=%s 本地=%s（疑似中间人）", resp.AgentID, agentID)
+	}
+	if err := verifyCACert(resp.CACRT, cfg.CAFingerprint, cfg.ServerURL); err != nil {
+		return nil, fmt.Errorf("CA 信任校验失败: %w", err)
+	}
+
 	// 6. 保存证书
 	certDir := filepath.Join(cfg.InstallDir, "certs")
 	if err := os.MkdirAll(certDir, 0700); err != nil {
@@ -122,13 +143,13 @@ func Run(cfg Config) (*Result, error) {
 
 	// 6.2 证书（644）
 	certPath := filepath.Join(certDir, "agent.crt")
-	if err := os.WriteFile(certPath, []byte(resp.AgentCRT), 0644); err != nil {
+	if err := os.WriteFile(certPath, []byte(resp.AgentCRT), 0600); err != nil {
 		return nil, fmt.Errorf("保存证书失败: %w", err)
 	}
 
 	// 6.3 CA 证书（644）
 	caPath := filepath.Join(certDir, "ca.crt")
-	if err := os.WriteFile(caPath, []byte(resp.CACRT), 0644); err != nil {
+	if err := os.WriteFile(caPath, []byte(resp.CACRT), 0600); err != nil {
 		return nil, fmt.Errorf("保存 CA 失败: %w", err)
 	}
 
@@ -338,4 +359,49 @@ func detectIface() string {
 	}
 
 	return candidates[0]
+}
+
+// verifyCACert 校验 Server 返回的 CA 证书（BUG-009）
+//
+// 规则：
+//   - CACRT 必须能解析为合法 x509 证书
+//   - 若提供了期望指纹（含 HTTP 强制场景），必须匹配
+//   - HTTP + 无期望指纹 → 拒绝（fail-closed）
+//
+// 注：HTTPS 场景信任链由系统 CA 兜底；HTTP 场景无此依托，
+// 必须 out-of-band 提供指纹。
+func verifyCACert(caCRTPEM, expectedFP, serverURL string) error {
+	block, _ := pem.Decode([]byte(caCRTPEM))
+	if block == nil {
+		return fmt.Errorf("ca_crt 不是合法 PEM")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("ca_crt 不是合法证书: %w", err)
+	}
+
+	isHTTPS := strings.HasPrefix(serverURL, "https://")
+	expected := normalizeFingerprint(expectedFP)
+
+	if !isHTTPS && expected == "" {
+		return fmt.Errorf("HTTP enrollment 必须通过 --ca-fingerprint 提供 CA 指纹")
+	}
+	if expected == "" {
+		// HTTPS 且未提供指纹：放行（信任系统 CA）
+		return nil
+	}
+
+	actual := sha256.Sum256(cert.Raw)
+	actualHex := fmt.Sprintf("%x", actual[:])
+	if actualHex != expected {
+		return fmt.Errorf("CA 指纹不匹配（期望 %s...，实际 %s...）", expected[:16], actualHex[:16])
+	}
+	return nil
+}
+
+// normalizeFingerprint 规范化指纹格式（去冒号/空格，转小写）
+func normalizeFingerprint(s string) string {
+	s = strings.ReplaceAll(s, ":", "")
+	s = strings.ReplaceAll(s, " ", "")
+	return strings.ToLower(s)
 }

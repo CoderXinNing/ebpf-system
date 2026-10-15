@@ -7,8 +7,13 @@ type = "postgres"
 host = "localhost"
 port = 5432
 user = "sentinel"
-password = "sentinel_dev_2026"
+# 口令不写在此处。优先环境变量 SENTINEL_DB_PASSWORD。
+# 若确需写在配置文件，请将本文件权限设为 0600。
+password = ""
 dbname = "sentinel"
+# libpq sslmode：disable / allow / prefer / require / verify-ca / verify-full
+# 默认 prefer（能用加密就用）。生产建议 require 或更高。
+sslmode = "prefer"
 
 [tls]
 cert_file = "certs/server.crt"

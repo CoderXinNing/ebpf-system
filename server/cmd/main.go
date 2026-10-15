@@ -47,6 +47,7 @@ type ServerConfig struct {
 		User     string `toml:"user"`
 		Password string `toml:"password"`
 		DBName   string `toml:"dbname"`
+		SSLMode  string `toml:"sslmode"`
 	} `toml:"database"`
 	TLS struct {
 		CertFile            string `toml:"cert_file"`
@@ -71,6 +72,11 @@ func main() {
 		cfg = defaultConfig()
 	}
 
+	// 环境变量优先级高于配置文件（BUG-015）：便于容器/CI 注入口令
+	if pw := os.Getenv("SENTINEL_DB_PASSWORD"); pw != "" {
+		cfg.Database.Password = pw
+	}
+
 	// 编译 Agent（源码变化才重编）
 	if err := build.EnsureAgentBinary(build.Config{
 		GoPath:         cfg.Build.GoPath,
@@ -89,6 +95,7 @@ func main() {
 			User:     cfg.Database.User,
 			Password: cfg.Database.Password,
 			DBName:   cfg.Database.DBName,
+			SSLMode:  cfg.Database.SSLMode,
 		})
 		if err != nil {
 			log.Fatalf("❌ PSQL 初始化失败: %v", err)
@@ -708,8 +715,11 @@ func defaultConfig() *ServerConfig {
 	cfg.Database.Host = "localhost"
 	cfg.Database.Port = 5432
 	cfg.Database.User = "sentinel"
-	cfg.Database.Password = "sentinel_dev_2026"
+	// 口令不再硬编码。优先环境变量 SENTINEL_DB_PASSWORD，其次配置文件。
+	// 两者都空时由 psql 连接失败暴露，不静默使用弱口令。
+	cfg.Database.Password = os.Getenv("SENTINEL_DB_PASSWORD")
 	cfg.Database.DBName = "sentinel"
+	cfg.Database.SSLMode = "prefer"
 	cfg.TLS.CertFile = paths.Cert("server.crt")
 	cfg.TLS.KeyFile = paths.Cert("server.key")
 	cfg.TLS.CAFile = paths.Cert("ca.crt")

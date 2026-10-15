@@ -10,6 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+	"log"
 )
 
 // AuthConfig 认证配置
@@ -21,14 +22,45 @@ type AuthConfig struct {
 	OperatorPass string
 }
 
-// DefaultAuthConfig 返回默认配置（开发用，生产用环境变量）
+// DefaultAuthConfig 返回默认配置。
+//
+// BUG-015：
+//   - 默认口令不再内置明文
+//   - 首次启动必须由环境变量提供 ADMIN_PASS，否则 log.Fatalf
+//   - JWT_SECRET 若为空/过短，log.Fatalf（原默认 "dev-secret-change-me" 视为硬编码漏洞）
+//
+// 注：BUG-007 修的是「授权以 DB role 为准」，不解决密钥强度；
+// 本函数只做「弱口令/弱密钥拒绝启动」，JWT 机制本身等 JWE 设计。
 func DefaultAuthConfig() AuthConfig {
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if len(jwtSecret) < 32 {
+		log.Fatalf("❌ JWT_SECRET 未设置或过短（需 ≥32 字节）。请设置环境变量 JWT_SECRET。")
+	}
+
+	adminUser := getEnvOrDefault("ADMIN_USER", "admin")
+	adminPass := os.Getenv("ADMIN_PASS")
+	if adminPass == "" {
+		log.Fatalf("❌ ADMIN_PASS 未设置。请设置环境变量 ADMIN_PASS（首次启动密码）。")
+	}
+	if len(adminPass) < 8 {
+		log.Fatalf("❌ ADMIN_PASS 过短（需 ≥8 字节）。")
+	}
+
+	operatorUser := getEnvOrDefault("OPERATOR_USER", "operator")
+	operatorPass := os.Getenv("OPERATOR_PASS")
+	if operatorPass == "" {
+		log.Fatalf("❌ OPERATOR_PASS 未设置。请设置环境变量 OPERATOR_PASS。")
+	}
+	if len(operatorPass) < 8 {
+		log.Fatalf("❌ OPERATOR_PASS 过短（需 ≥8 字节）。")
+	}
+
 	return AuthConfig{
-		JWTSecret:    getEnvOrDefault("JWT_SECRET", "dev-secret-change-me"),
-		AdminUser:    getEnvOrDefault("ADMIN_USER", "admin"),
-		AdminPass:    getEnvOrDefault("ADMIN_PASS", "admin123"),
-		OperatorUser: getEnvOrDefault("OPERATOR_USER", "operator"),
-		OperatorPass: getEnvOrDefault("OPERATOR_PASS", "operator123"),
+		JWTSecret:    jwtSecret,
+		AdminUser:    adminUser,
+		AdminPass:    adminPass,
+		OperatorUser: operatorUser,
+		OperatorPass: operatorPass,
 	}
 }
 

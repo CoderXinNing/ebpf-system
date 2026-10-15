@@ -25,6 +25,7 @@ INSTALL_DIR="/opt/astertrack"
 HOSTNAME_ARG=""
 BIN_URL=""
 ALLOW_HTTP=0
+CA_FINGERPRINT=""
 
 # ============================================
 # 解析参数
@@ -49,6 +50,10 @@ while [[ $# -gt 0 ]]; do
             HOSTNAME_ARG="$2"; shift 2 ;;
         --allow-http)
             ALLOW_HTTP=1; shift ;;
+        --ca-fingerprint=*)
+            CA_FINGERPRINT="${1#*=}"; shift ;;
+        --ca-fingerprint)
+            CA_FINGERPRINT="$2"; shift 2 ;;
         *)
             echo "未知参数: $1"; exit 1 ;;
     esac
@@ -150,6 +155,13 @@ if [[ "$SERVER_URL" != https://* ]]; then
     echo "⚠️  警告：使用 HTTP（非加密通道）"
     echo "    token 和 Agent 二进制可能被中间人截获/替换"
     echo ""
+    # BUG-009：HTTP 场景无 HTTPS 信任根，必须 out-of-band 提供 CA 指纹
+    if [[ -z "$CA_FINGERPRINT" ]]; then
+        echo "❌ HTTP 场景必须通过 --ca-fingerprint 提供 CA 指纹"
+        echo "   获取方式：在 Server 上执行"
+        echo "     openssl x509 -in certs/ca.crt -fingerprint -sha256 -noout"
+        exit 1
+    fi
 fi
 
 # ============================================
@@ -210,6 +222,9 @@ echo "🔧 执行 Enrollment..."
 ENROLL_ARGS="--server=$SERVER_URL --token=$TOKEN --install-dir=$INSTALL_DIR"
 if [[ -n "$HOSTNAME_ARG" ]]; then
     ENROLL_ARGS="$ENROLL_ARGS --hostname=$HOSTNAME_ARG"
+fi
+if [[ -n "$CA_FINGERPRINT" ]]; then
+    ENROLL_ARGS="$ENROLL_ARGS --ca-fingerprint=$CA_FINGERPRINT"
 fi
 
 ${INSTALL_DIR}/bin/agent enroll $ENROLL_ARGS

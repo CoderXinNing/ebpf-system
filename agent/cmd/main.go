@@ -42,6 +42,7 @@ func runEnroll(args []string) {
 	token := fs.String("token", "", "注册 Token（ATK-xxx）")
 	installDir := fs.String("install-dir", "/opt/astertrack", "安装目录")
 	hostname := fs.String("hostname", "", "主机名（默认自动获取）")
+	caFingerprint := fs.String("ca-fingerprint", "", "CA 证书 SHA256 指纹（HTTP 场景必填）")
 	fs.Parse(args)
 
 	if *serverURL == "" || *token == "" {
@@ -51,10 +52,11 @@ func runEnroll(args []string) {
 	}
 
 	_, err := enroll.Run(enroll.Config{
-		ServerURL:  *serverURL,
-		Token:      *token,
-		InstallDir: *installDir,
-		Hostname:   *hostname,
+		ServerURL:     *serverURL,
+		Token:         *token,
+		InstallDir:    *installDir,
+		Hostname:      *hostname,
+		CAFingerprint: *caFingerprint,
 	})
 	if err != nil {
 		log.Fatalf("❌ Enrollment 失败: %v", err)
