@@ -35,9 +35,10 @@ func (p *PSQL) SaveAsset(ctx context.Context, agentID string, processesJSON, use
 	}
 
 	if systemJSON != nil && len(systemJSON) > 2 {
+		// BUG-018：写入 'system'（不是 'service'），与 getOS 的读侧对齐。
 		_, err := p.pool.Exec(ctx,
 			`INSERT INTO cmdb_assets (agent_id, asset_type, asset_name, asset_info, updated_at)
-			 VALUES ($1, 'service', 'all', $2, NOW())
+			 VALUES ($1, 'system', 'all', $2, NOW())
 			 ON CONFLICT (agent_id, asset_type, asset_name) DO UPDATE SET asset_info = EXCLUDED.asset_info, updated_at = NOW()`,
 			agentID, systemJSON)
 		if err != nil {

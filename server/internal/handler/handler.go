@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -652,13 +653,25 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 			if h.ListAuditFunc != nil {
 				logs, _ = h.ListAuditFunc(10000)
 			}
-			c.Header("Content-Type", "text/csv")
+			c.Header("Content-Type", "text/csv; charset=utf-8")
 			c.Header("Content-Disposition", "attachment; filename=audit_logs.csv")
-			c.String(200, "id,username,action,detail,ip,created_at\n")
+
+			// BUG-030：
+			//   - 用 encoding/csv 处理字段内的逗号/引号/换行（避免格式破坏）
+			//   - sanitizeCSVCell 防 Excel 公式注入（= + - @ 开头）
+			w := csv.NewWriter(c.Writer)
+			_ = w.Write([]string{"id", "username", "action", "detail", "ip", "created_at"})
 			for _, l := range logs {
-				c.String(200, "%v,%s,%s,%s,%s,%v\n",
-					l["id"], l["username"], l["action"], l["detail"], l["ip"], l["created_at"])
+				_ = w.Write([]string{
+					sanitizeCSVCell(fmt.Sprintf("%v", l["id"])),
+					sanitizeCSVCell(fmt.Sprintf("%v", l["username"])),
+					sanitizeCSVCell(fmt.Sprintf("%v", l["action"])),
+					sanitizeCSVCell(fmt.Sprintf("%v", l["detail"])),
+					sanitizeCSVCell(fmt.Sprintf("%v", l["ip"])),
+					sanitizeCSVCell(fmt.Sprintf("%v", l["created_at"])),
+				})
 			}
+			w.Flush()
 		})
 
 		api.GET("/logs", h.rbacMiddleware("audit", "read"), func(c *gin.Context) {
@@ -967,3 +980,19 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 // ListProbeConfigs 查询探针配置
 // DeployProbe 下发/更新探针配置
 // DestroyProbe 销毁探针配置
+
+// sanitizeCSVCell 防 Excel 公式注入（BUG-030）
+//
+// 规则：字段以 = + - @ 或制表符/回车开头时，前缀单引号，
+// 避免 Excel / LibreOffice 把它当公式执行。
+// 这是 OWASP 推荐做法；代价是极少数本身以这些字符开头的合法值会多一个前导 '。
+func sanitizeCSVCell(s string) string {
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + s
+	}
+	return s
+}
