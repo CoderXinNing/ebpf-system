@@ -8,8 +8,22 @@ import (
 	"github.com/CoderXinNing/ebpf-system/server/internal/model"
 )
 
+// normalizeCapabilityLevel 归一化 capability_level 到 CHECK 允许的值集
+//
+// BUG-032：远端可控字段直传 DB，非法值使每次持久化失败。
+// 允许值：lsm / xdp / ebpf / cmdb。未知值兜底为 cmdb（最保守）。
+func normalizeCapabilityLevel(level string) string {
+	switch level {
+	case "lsm", "xdp", "ebpf", "cmdb":
+		return level
+	default:
+		return "cmdb"
+	}
+}
+
 // SaveAgent 保存或更新 Agent
 func (p *PSQL) SaveAgent(ctx context.Context, agent *model.Agent) error {
+	agent.CapabilityLevel = normalizeCapabilityLevel(agent.CapabilityLevel)
 	_, err := p.pool.Exec(ctx,
 		`INSERT INTO agents (agent_id, hostname, display_name, ip_addr, location, owner, version, group_id, token_hash, capability_level, active_probes, probe_details, baseline_state, learning_started_at, learning_duration, first_seen, last_seen, framework, kernel_info)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
