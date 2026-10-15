@@ -545,7 +545,10 @@ func main() {
 	if enableStrictMTLS && psqlDB != nil {
 		mtlsInterceptor := middleware.NewMTLSIdentityInterceptor(psqlDB)
 		unaryInterceptors = append(unaryInterceptors, mtlsInterceptor.UnaryInterceptor)
-		log.Println("🔐 [L1-L4] mTLS 四层校验已启用（跳过 Token 校验）")
+		// 证书身份覆写 req.AgentId（BUG-008）：必须排 MTLS 之后，业务之前
+		overrideInterceptor := middleware.NewAgentIDOverrideInterceptor()
+		unaryInterceptors = append(unaryInterceptors, overrideInterceptor.UnaryInterceptor)
+		log.Println("🔐 [L1-L4] mTLS 四层校验已启用 + AgentId 覆写（跳过 Token 校验）")
 	} else {
 		// 过渡期：使用 Token 校验
 		unaryInterceptors = append(unaryInterceptors, agentAuth.UnaryInterceptor)

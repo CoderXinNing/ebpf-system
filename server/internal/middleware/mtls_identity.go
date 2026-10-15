@@ -46,9 +46,15 @@ func (i *MTLSIdentityInterceptor) UnaryInterceptor(
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler,
 ) (interface{}, error) {
-	// Register 和 Enroll 免校验（首次连接还没有证书）
-	if info.FullMethod == "/sentinel.Sentinel/Register" ||
-		info.FullMethod == "/sentinel.Sentinel/Enroll" {
+	// 仅豁免真正的未认证入口。
+	//
+	// 注：
+	//   - Register 不再豁免（BUG-010）：
+	//     Agent 必须先走 HTTP enrollment 拿到证书（enrollment 已写 pubkey_der），
+	//     再用证书连 gRPC Register。此时 L3 公钥绑定能过，身份可信。
+	//   - Enroll 豁免保留（防御性）：
+	//     当前 Enroll 是 HTTP 路径（gin），不在 gRPC 上；此豁免为将来预留。
+	if info.FullMethod == "/sentinel.Sentinel/Enroll" {
 		return handler(ctx, req)
 	}
 
