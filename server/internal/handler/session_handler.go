@@ -36,6 +36,37 @@ func (h *Handler) SessionConfig(c *gin.Context) {
 	})
 }
 
+// SessionConfigUpdate 写入会话配置（admin only，BUG-021）
+func (h *Handler) SessionConfigUpdate(c *gin.Context) {
+	var req struct {
+		IdleMinutes              int `json:"idle_minutes"`
+		AbsoluteHours            int `json:"absolute_hours"`
+		HeartbeatIntervalSeconds int `json:"heartbeat_interval_seconds"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "请求格式错误"})
+		return
+	}
+
+	// 兜底：未提供的字段用当前值
+	curIdle, _, curHB := h.Auth.GetSessionConfig(c.Request.Context())
+	if req.IdleMinutes == 0 {
+		req.IdleMinutes = curIdle
+	}
+	if req.HeartbeatIntervalSeconds == 0 {
+		req.HeartbeatIntervalSeconds = curHB
+	}
+	// AbsoluteHours 显式允许 0（禁用），不兜底
+
+	if err := h.Auth.SetSessionConfig(c.Request.Context(),
+		req.IdleMinutes, req.AbsoluteHours, req.HeartbeatIntervalSeconds); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"success": true})
+}
+
 // SessionHeartbeat 切换心跳开关
 func (h *Handler) SessionHeartbeat(c *gin.Context) {
 	var req struct {

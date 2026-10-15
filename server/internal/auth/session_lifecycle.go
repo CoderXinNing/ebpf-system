@@ -45,7 +45,8 @@ func defaultReadIntConf(pool *pgxpool.Pool) func(ctx context.Context, namespace,
 			return defaultVal
 		}
 		n, err := strconv.Atoi(v)
-		if err != nil || n <= 0 {
+		// BUG-020：允许 0（0 是合法值，如 absolute_hours=0 表示禁用）
+		if err != nil || n < 0 {
 			cache.Store(cacheKey, &configCacheEntry{value: defaultVal, cachedAt: time.Now()})
 			return defaultVal
 		}
@@ -173,6 +174,45 @@ func (am *AuthManager) GetSessionConfig(ctx context.Context) (int, int, int) {
 	absoluteHours := am.readIntConf(ctx, "session", "absolute_hours", 0)
 	heartbeatInterval := am.readIntConf(ctx, "session", "heartbeat_interval_seconds", 180)
 	return idleMinutes, absoluteHours, heartbeatInterval
+}
+
+// SetSessionConfig 写入会话配置到 system_config（BUG-021）
+//
+// 只允许这三个键。其他键（如 security.*）走各自的 API。
+// 写入后清 readIntConf 缓存立即生效（通过 5 分钟 TTL 上限，非立即）。
+// 注：readIntConf 缓存无法从这里 invalidate（在闭包内），
+// 最坏情况 5 分钟后生效。
+func (am *AuthManager) SetSessionConfig(ctx context.Context, idleMinutes, absoluteHours, heartbeatInterval int) error {
+	if idleMinutes <= 0 {
+		return fmt.Errorf("idle_minutes 必须 > 0")
+	}
+	if absoluteHours < 0 {
+		return fmt.Errorf("absolute_hours 不能为负（0 表示禁用）")
+	}
+	if heartbeatInterval <= 0 {
+		return fmt.Errorf("heartbeat_interval_seconds 必须 > 0")
+	}
+	if heartbeatInterval >= idleMinutes*30 {
+		return fmt.Errorf("heartbeat_interval_seconds 必须 < idle_minutes*30（留 2 次窗口容忍丢包）")
+	}
+
+	kv := map[string]int{
+		"idle_minutes":               idleMinutes,
+		"absolute_hours":             absoluteHours,
+		"heartbeat_interval_seconds": heartbeatInterval,
+	}
+	for k, v := range kv {
+		_, err := am.pool.Exec(ctx,
+			`INSERT INTO system_config (namespace, key, value, value_type, updated_by, updated_at)
+			 VALUES ('session', $1, $2, 'int', 'admin', NOW())
+			 ON CONFLICT (namespace, key) DO UPDATE
+			 SET value = EXCLUDED.value, updated_at = NOW()`,
+			k, fmt.Sprintf("%d", v))
+		if err != nil {
+			return fmt.Errorf("写入 %s 失败: %w", k, err)
+		}
+	}
+	return nil
 }
 
 // UpdateSessionHeartbeat 切换会话心跳开关

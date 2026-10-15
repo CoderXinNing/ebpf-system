@@ -157,16 +157,23 @@ func (am *AuthManager) VerifyPassword(ctx context.Context, username, password st
 
 // GenerateToken 生成 JWT（携带 session_id）
 //
-// TTL = session.absolute_hours（默认 8 小时）
+// TTL = session.absolute_hours（默认 0 = 禁用绝对超时，token 不过期）
+//
+// BUG-022：默认值从 8 改为 0，与 GetSessionConfig / CreateSession 三处统一。
+// absolute_hours <= 0 时不设置 exp 字段，token 无绝对超时；
+// 会话生命周期仍受 sessions.expires_at + idle 超时约束。
 func (am *AuthManager) GenerateToken(user *User, sessionID string) (string, error) {
-	absoluteHours := am.readIntConf(context.Background(), "session", "absolute_hours", 8)
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	absoluteHours := am.readIntConf(context.Background(), "session", "absolute_hours", 0)
+	claims := jwt.MapClaims{
 		"user_id":    user.ID,
 		"username":   user.Username,
 		"role":       user.Role,
 		"session_id": sessionID,
-		"exp":        time.Now().Add(time.Duration(absoluteHours) * time.Hour).Unix(),
-	})
+	}
+	if absoluteHours > 0 {
+		claims["exp"] = time.Now().Add(time.Duration(absoluteHours) * time.Hour).Unix()
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(am.config.JWTSecret))
 }
 
